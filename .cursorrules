@@ -1,0 +1,87 @@
+# Frameval — Cursor Rules
+
+## Project Context
+
+Frameval is a polyglot project: Go (engine), Python (grader), TypeScript (frontend). When working on any file, apply the conventions for that language below. Cross-service changes (e.g., adding a gRPC method) require coordinated edits across Go, Python, and protobuf.
+
+## General Rules
+
+- Always respond in the user's language (Turkish by default).
+- All git commit messages MUST be written in English. Use imperative mood ("add feature", not "added feature" or "adds feature").
+- Read the relevant CLAUDE.md section before making changes to understand the architecture.
+- Never commit API keys, secrets, or credentials. Environment variables only.
+- Use descriptive variable/function names. Avoid abbreviations except for widely accepted ones (ctx, err, req, res, db, id).
+- Every public function/method must have a clear purpose obvious from its name. Add a doc comment only if the name alone is insufficient.
+- When adding a new feature, check if it touches multiple services (engine, grader, frontend). If so, start with the protobuf/API contract, then implement backend, then frontend.
+
+## Go Rules (engine/)
+
+- Target Go 1.22+. Use standard library where possible.
+- All packages under `engine/internal/` — nothing exported outside the module.
+- Error handling: always wrap with context using `fmt.Errorf("doing X: %w", err)`. Never use `_` to discard errors.
+- Use `context.Context` as the first parameter of any function that does I/O or may be cancelled.
+- HTTP handlers: use Chi router. Return JSON via a consistent `render.JSON(w, status, payload)` helper. Never write raw `w.Write()` in handlers.
+- Database: raw SQL with `database/sql`. Use `?` placeholders for all user inputs. No string concatenation in queries.
+- Concurrency: use `errgroup.Group` for parallel operations. Use channels only when goroutines need to communicate, not for synchronization (use sync primitives instead).
+- Testing: table-driven tests. Use `testify/assert` and `testify/require`. Name test functions `TestFunctionName_scenario`.
+- Docker SDK: always set a timeout context for container operations. Always clean up containers in defer blocks.
+- Naming: follow Go conventions — `MixedCaps` for exported, `mixedCaps` for unexported. Interfaces describe behavior (`Executor`, `Store`, `Reader`), not identity.
+- File organization: one primary type per file. `executor.go` defines the interface, `claude.go` implements it for Claude.
+- Prefer returning errors over panicking. Reserve panic for truly unrecoverable programmer errors.
+
+## Python Rules (grader/)
+
+- Target Python 3.11+. Full type annotations on all functions (parameters and return types).
+- Use `uv` for dependency management. Pin versions in `pyproject.toml`.
+- gRPC server: one service class implementing the generated interface. Each grader module exposes a single `grade()` function.
+- LLM calls: use `instructor` library for structured output. Define Pydantic models for all LLM responses.
+- Statistical functions: use scipy for hypothesis testing, numpy for basic computation. Document which statistical test is used and why.
+- Error handling: raise specific exceptions with descriptive messages. The gRPC server catches and converts to appropriate gRPC status codes.
+- Testing: use pytest. For LLM-dependent tests, use recorded fixtures (JSON files with request/response pairs), not mocks.
+- Naming: snake_case for functions and variables, PascalCase for classes. Module names are snake_case.
+- Avoid global state. Pass configuration via function parameters or dataclasses.
+- Each grader module (code_grader/, llm_judge/, process_grader/, spec_adherence/, stats/) is self-contained. No cross-module imports except shared types.
+
+## TypeScript/React Rules (frontend/)
+
+- Next.js 15 App Router. Server Components by default. Only add `"use client"` when the component needs browser APIs, state, or event handlers.
+- Use shadcn/ui for all base components. Never build custom buttons, inputs, dialogs, etc. from scratch.
+- Data fetching: TanStack Query for all API calls. Define query keys as constants. Use mutations for writes.
+- State management: React state + TanStack Query cache. No Redux, Zustand, or other state libraries.
+- Styling: Tailwind CSS only. No CSS modules, styled-components, or inline styles.
+- Types: define shared API types in `lib/types.ts`. Components receive typed props, never `any`.
+- File naming: kebab-case for files (`experiment-config.tsx`), PascalCase for components (`ExperimentConfig`), camelCase for hooks (`useExperiment`).
+- Component structure: exported component at the top, helper functions below, types at the bottom (or in a separate types file if shared).
+- Charts: Recharts for all visualizations. Wrap each chart in a typed component that accepts data props.
+- Monaco Editor: use for artifact editing and diff views. Configure language mode based on artifact type.
+- Prefer small, focused components. If a component exceeds ~150 lines, extract sub-components.
+- WebSocket: single connection per experiment monitor page. Reconnect with exponential backoff on disconnect.
+
+## Protobuf Rules (proto/)
+
+- `proto/grader.proto` is the single source of truth for the Go-Python interface.
+- After editing, run `buf generate` from the `proto/` directory.
+- Use specific message types (not generic maps or Any) for all fields.
+- Field numbers are stable — never reuse a deleted field number.
+- Add new fields to the end of messages to maintain backward compatibility.
+
+## Cross-Service Change Checklist
+
+When a change spans services:
+
+1. Start with `proto/grader.proto` if the gRPC interface changes
+2. Run `buf generate` to update Go and Python stubs
+3. Implement the Go engine changes (API handler + orchestration logic)
+4. Implement the Python grader changes (grading logic)
+5. Update SQLite schema via a new migration if data model changes
+6. Update the frontend API client types and UI components
+7. Update this file and CLAUDE.md if conventions change
+
+## Database Migration Rules
+
+- Migrations: `engine/internal/storage/migrations/NNN_description.sql`
+- Sequential numbering. Never modify an existing migration.
+- Every CREATE TABLE must include a PRIMARY KEY.
+- Use TEXT for UUIDs and timestamps (ISO-8601). Use REAL for floats. Use INTEGER for bools (0/1).
+- Add indexes for foreign keys and commonly filtered columns.
+- Test migrations on an empty database before committing.
