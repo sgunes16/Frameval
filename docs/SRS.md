@@ -118,7 +118,7 @@ graph TD
 
 **Relationship to existing systems:**
 - **Spec-Kit**: Frameval evaluates spec-kit artifacts but is not part of spec-kit itself. It consumes spec-kit's output (templates, commands, presets) as test subjects.
-- **ASD-Eval**: Frameval shares the grading engine schema with ASD-Eval. ASD-Eval varies the technical approach (which tool/technique); Frameval varies the context artifact (which instructions). They are sibling projects with compatible data formats.
+
 
 ### 2.2 User Classes
 
