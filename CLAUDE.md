@@ -9,7 +9,7 @@ Frameval is an open-source, local-first context engineering evaluation tool. It 
 Three-service architecture communicating over well-defined boundaries:
 
 ```
-frontend/   → Next.js 15 (TypeScript, shadcn/ui, Recharts, TanStack Query)
+frontend/   → Vite + React (TypeScript, shadcn/ui, Recharts, TanStack Query, React Router)
 engine/     → Go core engine (Chi router, Docker SDK, SQLite, gRPC client)
 grader/     → Python sidecar (gRPC server, LLM SDKs, scipy, instructor)
 proto/      → Shared protobuf definitions
@@ -25,12 +25,17 @@ proto/      → Shared protobuf definitions
 
 ```
 frameval/
-├── frontend/                # Next.js 15 app
-│   ├── app/                 # App router pages
-│   ├── components/          # shadcn/ui + custom components
-│   │   ├── ui/              # shadcn primitives (don't edit directly)
-│   │   └── ...              # Custom composite components
-│   └── lib/                 # API client, hooks, types, utils
+├── frontend/                # Vite + React SPA
+│   ├── src/
+│   │   ├── pages/           # Route page components
+│   │   ├── components/      # shadcn/ui + custom components
+│   │   │   ├── ui/          # shadcn primitives (don't edit directly)
+│   │   │   └── ...          # Custom composite components
+│   │   ├── lib/             # API client, hooks, types, utils
+│   │   ├── routes.tsx       # React Router route definitions
+│   │   ├── App.tsx          # Root layout + router outlet
+│   │   └── main.tsx         # Entry point + providers
+│   └── index.html           # Vite entry HTML
 ├── engine/                  # Go core engine
 │   ├── cmd/server/          # main.go entry point
 │   ├── internal/
@@ -85,12 +90,13 @@ frameval/
 
 ### TypeScript (frontend/)
 
-- Next.js 15 App Router (server components by default, `"use client"` only when needed)
+- Vite + React SPA with React Router for client-side routing
+- All components are client-side (no SSR/server components)
 - shadcn/ui for all base components — never build primitives from scratch
 - TanStack Query for all API calls (queries + mutations)
 - Recharts for charts; Monaco Editor for code editing and diff
 - Tailwind CSS for styling, no CSS modules
-- Types: shared API types in `lib/types.ts`, generated from Go API responses
+- Types: shared API types in `src/lib/types.ts`, generated from Go API responses
 - Naming: PascalCase for components, camelCase for hooks/utils, kebab-case for files
 
 ## Key Interfaces

@@ -44,18 +44,19 @@ Frameval is a polyglot project: Go (engine), Python (grader), TypeScript (fronte
 
 ## TypeScript/React Rules (frontend/)
 
-- Next.js 15 App Router. Server Components by default. Only add `"use client"` when the component needs browser APIs, state, or event handlers.
+- Vite + React SPA with React Router for client-side routing. All components are client-side.
 - Use shadcn/ui for all base components. Never build custom buttons, inputs, dialogs, etc. from scratch.
 - Data fetching: TanStack Query for all API calls. Define query keys as constants. Use mutations for writes.
 - State management: React state + TanStack Query cache. No Redux, Zustand, or other state libraries.
 - Styling: Tailwind CSS only. No CSS modules, styled-components, or inline styles.
-- Types: define shared API types in `lib/types.ts`. Components receive typed props, never `any`.
+- Types: define shared API types in `src/lib/types.ts`. Components receive typed props, never `any`.
 - File naming: kebab-case for files (`experiment-config.tsx`), PascalCase for components (`ExperimentConfig`), camelCase for hooks (`useExperiment`).
 - Component structure: exported component at the top, helper functions below, types at the bottom (or in a separate types file if shared).
 - Charts: Recharts for all visualizations. Wrap each chart in a typed component that accepts data props.
 - Monaco Editor: use for artifact editing and diff views. Configure language mode based on artifact type.
 - Prefer small, focused components. If a component exceeds ~150 lines, extract sub-components.
 - WebSocket: single connection per experiment monitor page. Reconnect with exponential backoff on disconnect.
+- Vite dev server proxy: configure `vite.config.ts` proxy to forward `/api` requests to Go engine at `localhost:8080`.
 
 ## Protobuf Rules (proto/)
 

@@ -166,7 +166,7 @@ graph TB
     User["User (Browser)"]
 
     subgraph compose [Docker Compose]
-        Frontend["Frontend<br/>Next.js 15<br/>Port 3000"]
+        Frontend["Frontend<br/>Vite js<br/>Port 5173"]
         Engine["Core Engine<br/>Go<br/>Port 8080"]
         Grader["Grader Sidecar<br/>Python<br/>Port 50051"]
         DB["SQLite<br/>frameval.db"]
@@ -204,7 +204,7 @@ graph TB
 
 | Service | Language | Responsibility |
 |---|---|---|
-| **Frontend** | TypeScript (Next.js 15) | UI for artifact editing, experiment configuration, run monitoring, results visualization |
+| **Frontend** | TypeScript (Vite) | UI for artifact editing, experiment configuration, run monitoring, results visualization |
 | **Core Engine** | Go | REST API, WebSocket hub, experiment orchestration, job queue, Docker sandbox lifecycle, SQLite storage |
 | **Grader Sidecar** | Python | Code grading, LLM-as-Judge, process metrics extraction, spec adherence scoring, statistical analysis |
 | **Sandboxes** | Docker containers | Isolated agent execution environments with spec-kit and agent CLIs installed |

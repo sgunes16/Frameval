@@ -9,8 +9,8 @@ Frameval is an open-source, local-first tool for empirically evaluating context 
 ```
 ┌──────────────┐    REST/WS     ┌──────────────┐    gRPC      ┌──────────────┐
 │   Frontend   │ ◄────────────► │  Go Engine   │ ◄──────────► │ Python Grader│
-│  (Next.js)   │                │  (Chi, SQLite)│              │ (LLM Judge,  │
-│  Port 3000   │                │  Port 8080   │              │  Stats, Code)│
+│ (Vite+React) │                │  (Chi, SQLite)│              │ (LLM Judge,  │
+│  Port 5173   │                │  Port 8080   │              │  Stats, Code)│
 └──────────────┘                └──────┬───────┘              │  Port 50051  │
                                        │ Docker SDK           └──────────────┘
                                        ▼
@@ -59,10 +59,15 @@ grader/                     # Python — grader sidecar
 ├── stats/                  # Mann-Whitney U, Cohen's d, bootstrap CI, power analysis
 └── proto/                  # Generated gRPC server stubs
 
-frontend/                   # TypeScript — Next.js 15
-├── app/                    # App router pages
-├── components/             # UI components (shadcn/ui base + custom)
-└── lib/                    # API client, hooks, types, utilities
+frontend/                   # TypeScript — Vite + React SPA
+├── src/
+│   ├── pages/              # Route page components
+│   ├── components/         # UI components (shadcn/ui base + custom)
+│   ├── lib/                # API client, hooks, types, utilities
+│   ├── routes.tsx          # React Router route definitions
+│   ├── App.tsx             # Root layout + router outlet
+│   └── main.tsx            # Entry point + providers
+└── index.html              # Vite entry HTML
 
 proto/                      # Shared protobuf definitions
 └── grader.proto            # Single source of truth for gRPC interface
