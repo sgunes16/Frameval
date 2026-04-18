@@ -1,0 +1,61 @@
+services:
+  engine:
+    build:
+      context: .
+      dockerfile: docker/engine/Dockerfile
+    environment:
+      FRAMEVAL_DB_PATH: /data/frameval.db
+      FRAMEVAL_GRADER_ADDR: grader:50051
+      FRAMEVAL_PORT: 8080
+      FRAMEVAL_SANDBOX_IMAGE: frameval-sandbox:local
+      FRAMEVAL_MAX_CONCURRENT: 3
+      FRAMEVAL_TASKS_ROOT: /app/tasks
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - frameval_data:/data
+      - ./tasks:/app/tasks:ro
+      - ./baselines:/app/baselines:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    depends_on:
+      grader:
+        condition: service_started
+
+  grader:
+    build:
+      context: .
+      dockerfile: docker/grader/Dockerfile
+    environment:
+      GRADER_PORT: 50051
+      FRAMEVAL_DB_PATH: /data/frameval.db
+      FRAMEVAL_ENABLE_LLM_JUDGE: ${FRAMEVAL_ENABLE_LLM_JUDGE:-false}
+      FRAMEVAL_ENABLE_SPEC_ADHERENCE: ${FRAMEVAL_ENABLE_SPEC_ADHERENCE:-false}
+    volumes:
+      - frameval_data:/data
+    ports:
+      - "50051:50051"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/engine/Dockerfile
+      target: frontend-dev
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080/api
+      VITE_WS_BASE_URL: ws://localhost:8080/ws
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    depends_on:
+      engine:
+        condition: service_started
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+volumes:
+  frameval_data:

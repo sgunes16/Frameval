@@ -1,0 +1,110 @@
+[
+  {
+    "id": "greenfield-go-cli",
+    "name": "Scaffold a Go CLI",
+    "description": "Greenfield Go task. Workspace starts empty. The agent must scaffold a minimal Go CLI that compiles cleanly with `go build ./...`.",
+    "category": "greenfield",
+    "template_kind": "builtin",
+    "workspace": { "mode": "empty" },
+    "complexity_score": 3.0,
+    "codebase_type": "go",
+    "prompt": "You are starting a fresh Go module. From an empty workspace, scaffold a minimal Go CLI named `frameval-demo`. Create (at minimum): `go.mod` declaring module `frameval-demo` (Go 1.22+), and `main.go` implementing `package main` with a `main` function that parses a `-name` string flag using the standard `flag` package and prints `Hello, <name>!` to stdout. The project must build with `go build ./...` and no extra dependencies are allowed.",
+    "technical_details": "Compile check: `go build ./...` must exit with code 0 in the generated workspace.",
+    "test_cases": [
+      {
+        "name": "Project compiles with go build",
+        "test_command": "go build ./...",
+        "expected_result": "exit 0",
+        "ordering": 0
+      }
+    ]
+  },
+  {
+    "id": "greenfield-node-express",
+    "name": "Scaffold an Express app",
+    "description": "Greenfield Node.js task. Workspace starts empty. The agent must scaffold an Express server that starts without syntax errors.",
+    "category": "greenfield",
+    "template_kind": "builtin",
+    "workspace": { "mode": "empty" },
+    "complexity_score": 3.0,
+    "codebase_type": "javascript",
+    "prompt": "From an empty workspace, scaffold a minimal Node.js Express application. Deliverables: (1) `package.json` declaring `express` as a dependency, (2) `server.js` that requires `express`, creates an app, defines `GET /api/v1/status` returning JSON `{ status: 'ok' }`, and listens on `process.env.PORT || 3000`. Do not start the server at module load time in a way that would block `node --check`. The file `server.js` must pass `node --check server.js` (syntax check).",
+    "technical_details": "Deterministic check: `node --check server.js` must succeed (syntax only, no execution).",
+    "test_cases": [
+      {
+        "name": "server.js passes node --check",
+        "test_command": "node --check server.js",
+        "expected_result": "exit 0",
+        "ordering": 0
+      }
+    ]
+  },
+  {
+    "id": "greenfield-python-module",
+    "name": "Scaffold a Python module",
+    "description": "Greenfield Python task. Workspace starts empty. The agent must produce an importable Python package.",
+    "category": "greenfield",
+    "template_kind": "builtin",
+    "workspace": { "mode": "empty" },
+    "complexity_score": 2.0,
+    "codebase_type": "python",
+    "prompt": "From an empty workspace, create a Python package named `frameval_demo` with the following layout: `frameval_demo/__init__.py` that defines `def greet(name: str) -> str: return f'Hello, {name}!'`. No other files are strictly required. The package must import cleanly with `python3 -c \"import frameval_demo; print(frameval_demo.greet('frameval'))\"` — the command must exit 0.",
+    "technical_details": "Deterministic check: `python3 -c` import statement must succeed.",
+    "test_cases": [
+      {
+        "name": "Package imports and greet() works",
+        "test_command": "python3 -c 'import frameval_demo; assert frameval_demo.greet(\"x\") == \"Hello, x!\"'",
+        "expected_result": "exit 0",
+        "ordering": 0
+      }
+    ]
+  },
+  {
+    "id": "brownfield-octocat-readme",
+    "name": "Extend octocat/Hello-World README",
+    "description": "Brownfield task. The workspace is a shallow clone of `octocat/Hello-World`. The agent must add an `## About` section to README without breaking the file.",
+    "category": "brownfield",
+    "template_kind": "builtin",
+    "workspace": {
+      "mode": "git",
+      "git_url": "https://github.com/octocat/Hello-World.git",
+      "git_ref": "master"
+    },
+    "complexity_score": 2.0,
+    "codebase_type": "markdown",
+    "prompt": "You are in a shallow clone of https://github.com/octocat/Hello-World. Add a new top-level section titled exactly `## About` to `README` (append it to the end of the file). The section body must contain at least one sentence describing what the project is. Do not delete or modify any other lines.",
+    "technical_details": "Deterministic check verifies README still exists and now contains `## About`.",
+    "test_cases": [
+      {
+        "name": "README contains the new About section",
+        "test_command": "test -f README && grep -q '## About' README",
+        "expected_result": "exit 0",
+        "ordering": 0
+      }
+    ]
+  },
+  {
+    "id": "brownfield-expressjs-hello",
+    "name": "Add route to expressjs/hello-world",
+    "description": "Brownfield Node.js task. Clones the official Express hello-world example and asks the agent to add a `/health` route that still lets the file pass `node --check`.",
+    "category": "brownfield",
+    "template_kind": "builtin",
+    "workspace": {
+      "mode": "git",
+      "git_url": "https://github.com/expressjs/express.git",
+      "git_ref": "master"
+    },
+    "complexity_score": 4.0,
+    "codebase_type": "javascript",
+    "prompt": "This workspace is a shallow clone of the Express repository. Navigate to `examples/hello-world/index.js` and add a new route `app.get('/health', (req, res) => res.json({ status: 'ok' }))` BEFORE the existing `app.listen(...)` call. Do not remove any existing routes. The edited file must still pass `node --check examples/hello-world/index.js`.",
+    "technical_details": "Deterministic check: the modified hello-world example must still be syntactically valid JavaScript.",
+    "test_cases": [
+      {
+        "name": "hello-world example still parses",
+        "test_command": "node --check examples/hello-world/index.js && grep -q \"/health\" examples/hello-world/index.js",
+        "expected_result": "exit 0",
+        "ordering": 0
+      }
+    ]
+  }
+]

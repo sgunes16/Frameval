@@ -1,0 +1,22 @@
+import type { APIKey } from '../../lib/types';
+import { Card, CardHeader } from '../ui/card';
+
+export function ApiKeysPanel({ keys }: { keys: APIKey[] }) {
+  return (
+    <Card>
+      <CardHeader title="API keys" description="Set these via environment variables before starting the engine." />
+      <div className="space-y-2">
+        {keys.map((key) => (
+          <div
+            key={key.id}
+            className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+          >
+            <div className="font-medium capitalize text-slate-900">{key.provider}</div>
+            <code className="rounded bg-slate-50 px-2 py-1 text-[11px] text-slate-600">{key.redacted_key}</code>
+          </div>
+        ))}
+        {keys.length === 0 && <div className="text-xs text-slate-500">No API keys detected in the environment.</div>}
+      </div>
+    </Card>
+  );
+}

@@ -1,0 +1,182 @@
+syntax = "proto3";
+
+package frameval.grader;
+
+option go_package = "github.com/mustafaselman/frameval/engine/proto;graderpb";
+
+service GraderService {
+  rpc GradeRun(GradeRunRequest) returns (GradeRunResponse);
+  rpc ComputeStats(ComputeStatsRequest) returns (ComputeStatsResponse);
+  rpc ClassifyDimensions(ClassifyDimensionsRequest) returns (ClassifyDimensionsResponse);
+  rpc HealthCheck(Empty) returns (HealthResponse);
+}
+
+message Empty {}
+
+message HealthResponse {
+  bool healthy = 1;
+  string version = 2;
+}
+
+message GradeRunRequest {
+  string run_id = 1;
+  string transcript_json = 2;
+  repeated OutputFile output_files = 3;
+  string filesystem_diff = 4;
+  TaskSpec task = 5;
+  ArtifactSpec artifact = 6;
+  JudgeConfig judge_config = 7;
+}
+
+message OutputFile {
+  string path = 1;
+  bytes content = 2;
+}
+
+message TaskSpec {
+  string id = 1;
+  string prompt = 2;
+  string codebase_type = 3;
+  repeated TestCase test_cases = 4;
+  string setup_script = 5;
+}
+
+message TestCase {
+  string name = 1;
+  string command = 2;
+  string expected_result = 3;
+}
+
+message ArtifactSpec {
+  string content = 1;
+  string type = 2;
+}
+
+message JudgeConfig {
+  string model = 1;
+  string provider = 2;
+  string api_key = 3;
+  repeated RubricDimension rubric = 4;
+  int32 judge_rounds = 5;
+}
+
+message RubricDimension {
+  string name = 1;
+  string criteria = 2;
+  int32 min_score = 3;
+  int32 max_score = 4;
+}
+
+message GradeRunResponse {
+  CodeGradeResult code = 1;
+  ProcessGradeResult process = 2;
+  JudgeGradeResult judge = 3;
+  SpecAdherenceResult adherence = 4;
+  float composite_score = 5;
+}
+
+message CodeGradeResult {
+  float test_pass_rate = 1;
+  int32 test_pass_count = 2;
+  int32 test_fail_count = 3;
+  float lint_score = 4;
+  bool type_check_pass = 5;
+  bool file_state_valid = 6;
+  repeated TestResult test_results = 7;
+}
+
+message TestResult {
+  string name = 1;
+  bool passed = 2;
+  string output = 3;
+}
+
+message ProcessGradeResult {
+  int32 turn_count = 1;
+  int32 total_tokens = 2;
+  float cost_usd = 3;
+  float token_efficiency = 4;
+  int32 backtrack_count = 5;
+  float self_validation_rate = 6;
+  bool premature_completion = 7;
+  int32 idle_turns = 8;
+  int32 error_recovery_count = 9;
+  float tool_call_accuracy = 10;
+  float context_utilization = 11;
+}
+
+message JudgeGradeResult {
+  float correctness = 1;
+  float maintainability = 2;
+  float completeness = 3;
+  float best_practices = 4;
+  float error_handling = 5;
+  float irr_alpha = 6;
+  repeated string raw_responses = 7;
+}
+
+message SpecAdherenceResult {
+  float instruction_compliance = 1;
+  int32 constraint_violations = 2;
+  float convention_adherence = 3;
+  repeated InstructionResult per_instruction = 4;
+}
+
+message InstructionResult {
+  string instruction = 1;
+  string status = 2;
+  string reasoning = 3;
+}
+
+message ComputeStatsRequest {
+  string experiment_id = 1;
+  repeated VariantGrades variant_grades = 2;
+}
+
+message VariantGrades {
+  string variant_id = 1;
+  repeated GradeRunResponse grades = 2;
+}
+
+message ComputeStatsResponse {
+  repeated PairwiseStat stats = 1;
+}
+
+message PairwiseStat {
+  string variant_a_id = 1;
+  string variant_b_id = 2;
+  string metric_name = 3;
+  float mean_a = 4;
+  float mean_b = 5;
+  float median_a = 6;
+  float median_b = 7;
+  float std_a = 8;
+  float std_b = 9;
+  float mann_whitney_u = 10;
+  float p_value = 11;
+  float cohens_d = 12;
+  float ci_lower = 13;
+  float ci_upper = 14;
+  bool is_significant = 15;
+  float observed_power = 16;
+}
+
+message ClassifyDimensionsRequest {
+  string content = 1;
+  string artifact_type = 2;
+  string api_key = 3;
+  string model = 4;
+}
+
+message ClassifyDimensionsResponse {
+  string framing = 1;
+  string specificity = 2;
+  string structure = 3;
+  string scope = 4;
+  string tone = 5;
+  float constraint_density = 6;
+  string example_presence = 7;
+  string priority_signaling = 8;
+  string tool_guidance = 9;
+  string error_handling = 10;
+}
