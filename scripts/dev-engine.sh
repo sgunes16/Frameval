@@ -14,6 +14,10 @@ export FRAMEVAL_DB_PATH="${FRAMEVAL_DB_PATH:-$ROOT_DIR/frameval.db}"
 export FRAMEVAL_GRADER_ADDR="${FRAMEVAL_GRADER_ADDR:-localhost:50051}"
 export FRAMEVAL_PORT="${FRAMEVAL_PORT:-8080}"
 export FRAMEVAL_SANDBOX_IMAGE="${FRAMEVAL_SANDBOX_IMAGE:-frameval-sandbox:local}"
+if [[ -z "${DOCKER_HOST:-}" ]] && command -v docker >/dev/null 2>&1; then
+  DOCKER_HOST="$(docker context inspect --format '{{json .Endpoints.docker.Host}}' 2>/dev/null | tr -d '"')"
+  export DOCKER_HOST
+fi
 # Always resolve tasks root to an absolute path, even if .env supplies a relative one,
 # because the engine binary runs from engine/ under air.
 if [[ -n "${FRAMEVAL_TASKS_ROOT:-}" ]]; then

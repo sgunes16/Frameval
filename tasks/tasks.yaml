@@ -1,0 +1,244 @@
+tasks:
+  - id: greenfield-go-cli
+    name: Scaffold a Go CLI
+    description: Greenfield Go task. Workspace starts empty. The agent must scaffold a minimal Go CLI that compiles cleanly with `go build ./...`.
+    category: greenfield
+    template_kind: builtin
+    workspace:
+      mode: empty
+    complexity_score: 3.0
+    codebase_type: go
+    prompt: |
+      You are starting a fresh Go module. From an empty workspace, scaffold a minimal Go CLI named `frameval-demo`.
+
+      Create at minimum:
+      - `go.mod` declaring module `frameval-demo` with Go 1.22+
+      - `main.go` implementing `package main`
+      - a `main` function that parses a `-name` string flag using the standard `flag` package
+      - output exactly `Hello, <name>!` to stdout
+
+      The project must build with `go build ./...` and no extra dependencies are allowed.
+    technical_details: "Compile check: `go build ./...` must exit with code 0 in the generated workspace."
+    test_cases:
+      - name: Project compiles with go build
+        test_command: go build ./...
+        expected_result: exit 0
+        ordering: 0
+
+  - id: greenfield-node-express
+    name: Scaffold an Express app
+    description: Greenfield Node.js task. Workspace starts empty. The agent must scaffold an Express server that starts without syntax errors.
+    category: greenfield
+    template_kind: builtin
+    workspace:
+      mode: empty
+    complexity_score: 3.0
+    codebase_type: javascript
+    prompt: |
+      From an empty workspace, scaffold a minimal Node.js Express application.
+
+      Deliverables:
+      - `package.json` declaring `express` as a dependency
+      - `server.js` that requires `express`, creates an app, defines `GET /api/v1/status` returning JSON `{ status: 'ok' }`, and listens on `process.env.PORT || 3000`
+
+      Do not start the server at module load time in a way that would block `node --check`.
+      The file `server.js` must pass `node --check server.js`.
+    technical_details: "Deterministic check: `node --check server.js` must succeed (syntax only, no execution)."
+    test_cases:
+      - name: server.js passes node --check
+        test_command: node --check server.js
+        expected_result: exit 0
+        ordering: 0
+
+  - id: greenfield-python-module
+    name: Scaffold a Python module
+    description: Greenfield Python task. Workspace starts empty. The agent must produce an importable Python package.
+    category: greenfield
+    template_kind: builtin
+    workspace:
+      mode: empty
+    complexity_score: 2.0
+    codebase_type: python
+    prompt: |
+      From an empty workspace, create a Python package named `frameval_demo`.
+
+      Required layout:
+      - `frameval_demo/__init__.py`
+
+      Required behavior:
+      - define `def greet(name: str) -> str`
+      - return exactly `Hello, {name}!`
+
+      The package must import cleanly with `python3 -c "import frameval_demo; print(frameval_demo.greet('frameval'))"`.
+    technical_details: "Deterministic check: `python3 -c` import statement must succeed."
+    test_cases:
+      - name: Package imports and greet() works
+        test_command: python3 -c 'import frameval_demo; assert frameval_demo.greet("x") == "Hello, x!"'
+        expected_result: exit 0
+        ordering: 0
+
+  - id: brownfield-octocat-readme
+    name: Extend octocat/Hello-World README
+    description: Brownfield task. The workspace is a shallow clone of `octocat/Hello-World`. The agent must add an `## About` section to README without breaking the file.
+    category: brownfield
+    template_kind: builtin
+    workspace:
+      mode: git
+      git_url: https://github.com/octocat/Hello-World.git
+      git_ref: master
+    complexity_score: 2.0
+    codebase_type: markdown
+    prompt: |
+      You are in a shallow clone of https://github.com/octocat/Hello-World.
+
+      Add a new top-level section titled exactly `## About` to `README` by appending it to the end of the file.
+      The section body must contain at least one sentence describing what the project is.
+      Do not delete or modify any existing lines.
+    technical_details: "Deterministic check verifies README still exists and now contains `## About`."
+    test_cases:
+      - name: README contains the new About section
+        test_command: test -f README && grep -q '## About' README
+        expected_result: exit 0
+        ordering: 0
+
+  - id: brownfield-expressjs-hello
+    name: Add route to expressjs/hello-world
+    description: Brownfield Node.js task. Clones the official Express hello-world example and asks the agent to add a `/health` route that still lets the file pass `node --check`.
+    category: brownfield
+    template_kind: builtin
+    workspace:
+      mode: git
+      git_url: https://github.com/expressjs/express.git
+      git_ref: master
+    complexity_score: 4.0
+    codebase_type: javascript
+    prompt: |
+      This workspace is a shallow clone of the Express repository.
+
+      Navigate to `examples/hello-world/index.js` and add a new route:
+
+      ```javascript
+      app.get('/health', (req, res) => res.json({ status: 'ok' }))
+      ```
+
+      Add it before the existing `app.listen(...)` call.
+      Do not remove existing routes.
+      The edited file must still pass `node --check examples/hello-world/index.js`.
+    technical_details: "Deterministic check: the modified hello-world example must still be syntactically valid JavaScript."
+    test_cases:
+      - name: hello-world example still parses
+        test_command: node --check examples/hello-world/index.js && grep -q "/health" examples/hello-world/index.js
+        expected_result: exit 0
+        ordering: 0
+
+  - id: greenfield-js-rate-limiter
+    name: Build an in-memory rate limiter
+    description: Greenfield JavaScript task with behavioral tests. The agent must create a small dependency-free rate limiter module and prove window reset behavior.
+    category: greenfield
+    template_kind: builtin
+    workspace:
+      mode: empty
+    complexity_score: 6.0
+    codebase_type: javascript
+    prompt: |
+      From an empty workspace, create a dependency-free Node.js module implementing an in-memory fixed-window rate limiter.
+
+      Required files:
+      - `package.json`
+      - `rate-limiter.js`
+      - `rate-limiter.test.js`
+
+      Required API:
+      - export `createRateLimiter({ limit, windowMs, now })`
+      - `now` is an optional function returning milliseconds; default to `Date.now`
+      - the returned limiter exposes `allow(key)`
+      - `allow(key)` returns `{ allowed: boolean, remaining: number, resetAt: number }`
+
+      Behavior:
+      - each key has an independent window
+      - first request in a window is allowed
+      - after `limit` allowed requests, further requests in the same window are rejected
+      - when `now()` reaches the reset time, the key gets a fresh window
+
+      Write tests in `rate-limiter.test.js` using only Node's built-in `node:test` and `node:assert/strict`.
+      `npm test` must run those tests.
+    technical_details: "The task-owned test command runs the agent-written tests and a syntax check. The AI may write tests, but the manifest still defines the verification command."
+    test_cases:
+      - name: Rate limiter tests pass
+        test_command: npm test
+        expected_result: exit 0
+        ordering: 0
+      - name: Rate limiter module parses
+        test_command: node --check rate-limiter.js
+        expected_result: exit 0
+        ordering: 1
+
+  - id: brownfield-lodash-clamp-docs
+    name: Add a documented clamp utility to lodash
+    description: Brownfield JavaScript task. Clones lodash and asks for a small utility plus tests using the repository's existing style.
+    category: brownfield
+    template_kind: builtin
+    workspace:
+      mode: git
+      git_url: https://github.com/lodash/lodash.git
+      git_ref: main
+    complexity_score: 7.0
+    codebase_type: javascript
+    prompt: |
+      This workspace is a shallow clone of lodash.
+
+      Add a small `clamp` utility following the local module style:
+      - create `clamp.js` at the repository root if it does not already exist
+      - export a function that returns `lower` when the number is below lower, `upper` when above upper, otherwise the original number
+      - handle swapped bounds by normalizing `lower` and `upper`
+      - add a focused test file `test/clamp.test.js` using Node's built-in `assert`
+      - do not run package installation or introduce dependencies
+
+      Keep the change minimal and consistent with the repository's existing CommonJS style.
+    technical_details: "Verification is intentionally local and dependency-free because the upstream repo may have a large historical test harness."
+    test_cases:
+      - name: clamp module parses
+        test_command: node --check clamp.js
+        expected_result: exit 0
+        ordering: 0
+      - name: clamp behavior works
+        test_command: node -e "const assert=require('assert'); const clamp=require('./clamp'); assert.strictEqual(clamp(5,1,10),5); assert.strictEqual(clamp(-1,1,10),1); assert.strictEqual(clamp(20,1,10),10); assert.strictEqual(clamp(0,10,1),1)"
+        expected_result: exit 0
+        ordering: 1
+
+  - id: brownfield-react-todo-filter
+    name: Add filtering to a React todo app
+    description: Brownfield frontend task. Clones a small public React todo app and asks the agent to add all/active/completed filtering with lightweight verification.
+    category: brownfield
+    template_kind: builtin
+    workspace:
+      mode: git
+      git_url: https://github.com/kentcdodds/react-fundamentals.git
+      git_ref: main
+    complexity_score: 8.0
+    codebase_type: typescript
+    prompt: |
+      This workspace is a shallow clone of `kentcdodds/react-fundamentals`.
+
+      Find the todo example or the closest existing todo-like exercise. Add a small filter UI that lets users switch between:
+      - all
+      - active
+      - completed
+
+      Requirements:
+      - keep the implementation inside the existing example structure
+      - preserve existing behavior
+      - avoid adding new runtime dependencies
+      - include a short note in a nearby README or comments explaining how to use the filter
+
+      If the repository layout has changed and there is no todo example, create a minimal `examples/todo-filter/` React component that demonstrates the behavior.
+    technical_details: "Verification focuses on changed artifact presence and TypeScript/JavaScript syntax where possible; full project install is intentionally avoided."
+    test_cases:
+      - name: Todo filter implementation exists
+        test_command: test -d examples/todo-filter -o -n "$(grep -R \"completed\" -l . --exclude-dir=.git --exclude-dir=node_modules | head -n 1)"
+        expected_result: exit 0
+        ordering: 0
+      - name: No obvious merge markers
+        test_command: "! grep -R '<<<<<<<\\|>>>>>>>' . --exclude-dir=.git --exclude-dir=node_modules"
+        expected_result: exit 0
+        ordering: 1
