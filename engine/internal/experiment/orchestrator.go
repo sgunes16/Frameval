@@ -174,12 +174,22 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	}
 	defer func() { _ = os.RemoveAll(workspace) }()
 	_ = o.store.UpdateRunStatus(ctx, run.ID, "running", "")
-	o.broadcast("run.status", map[string]any{"run_id": run.ID, "status": "running", "variant_id": run.VariantID})
-	result, execErr := execImpl.Execute(ctx, executor.RunConfig{WorkspacePath: workspace, Prompt: task.TaskPrompt, Environment: map[string]string{"FRAMEVAL_TASK_ID": task.ID}})
+	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "running", "variant_id": run.VariantID})
+	result, execErr := execImpl.Execute(ctx, executor.RunConfig{
+		WorkspacePath: workspace,
+		Prompt:        task.TaskPrompt,
+		Model:         experiment.Model,
+		Environment:   map[string]string{"FRAMEVAL_TASK_ID": task.ID},
+		OnOutput: func(line string) {
+			o.broadcastRunLog(*experiment, *run, "executor", line)
+		},
+	})
 	if result == nil {
 		result = &executor.RunResult{}
 	}
-	o.broadcastLogBlock(*experiment, *run, "executor", result.RawOutput)
+	if !result.StreamedOutput {
+		o.broadcastLogBlock(*experiment, *run, "executor", result.RawOutput)
+	}
 	if execErr != nil && strings.TrimSpace(result.RawOutput) == "" {
 		o.broadcastRunLog(*experiment, *run, "executor", execErr.Error())
 	}
@@ -197,6 +207,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	// compilers/interpreters), not in the grader container.
 	testResults, passed, failed := o.runTaskVerifications(ctx, *experiment, *run, workspace, task.TestCases)
 	_ = o.store.UpdateRunStatus(ctx, run.ID, "grading", "")
+	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "grading", "variant_id": run.VariantID})
 	o.broadcast("grading.progress", map[string]any{"run_id": run.ID, "grader": "composite", "status": "running"})
 	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript)
 	if gradeErr != nil {
@@ -227,7 +238,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	if err := o.store.UpdateRunStatus(ctx, run.ID, status, errorMessage); err != nil {
 		return err
 	}
-	o.broadcast("run.status", map[string]any{"run_id": run.ID, "status": status, "variant_id": run.VariantID})
+	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": status, "variant_id": run.VariantID})
 	_ = o.refreshExperimentState(ctx, experiment.ID)
 	return nil
 }

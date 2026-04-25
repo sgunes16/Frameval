@@ -12,32 +12,39 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mustafaselman/frameval/engine/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 type taskManifestWorkspace struct {
-	Mode   string `json:"mode"`
-	GitURL string `json:"git_url"`
-	GitRef string `json:"git_ref"`
+	Mode   string `json:"mode" yaml:"mode"`
+	GitURL string `json:"git_url" yaml:"git_url"`
+	GitRef string `json:"git_ref" yaml:"git_ref"`
 }
 
 type taskManifest struct {
-	ID              string                 `json:"id"`
-	Name            string                 `json:"name"`
-	Description     string                 `json:"description"`
-	Category        string                 `json:"category"`
-	TemplateKind    string                 `json:"template_kind"`
-	WorkspaceMode   string                 `json:"workspace_mode"`
-	WorkspaceGitURL string                 `json:"workspace_git_url"`
-	WorkspaceGitRef string                 `json:"workspace_git_ref"`
-	Workspace       *taskManifestWorkspace `json:"workspace,omitempty"`
-	ComplexityScore float64                `json:"complexity_score"`
-	CodebaseType    string                 `json:"codebase_type"`
-	Prompt          string                 `json:"prompt"`
-	TechnicalDetail string                 `json:"technical_details"`
-	TestCases       []models.TestCase      `json:"test_cases"`
+	ID              string                 `json:"id" yaml:"id"`
+	Name            string                 `json:"name" yaml:"name"`
+	Description     string                 `json:"description" yaml:"description"`
+	Category        string                 `json:"category" yaml:"category"`
+	TemplateKind    string                 `json:"template_kind" yaml:"template_kind"`
+	WorkspaceMode   string                 `json:"workspace_mode" yaml:"workspace_mode"`
+	WorkspaceGitURL string                 `json:"workspace_git_url" yaml:"workspace_git_url"`
+	WorkspaceGitRef string                 `json:"workspace_git_ref" yaml:"workspace_git_ref"`
+	Workspace       *taskManifestWorkspace `json:"workspace,omitempty" yaml:"workspace,omitempty"`
+	ComplexityScore float64                `json:"complexity_score" yaml:"complexity_score"`
+	CodebaseType    string                 `json:"codebase_type" yaml:"codebase_type"`
+	Prompt          string                 `json:"prompt" yaml:"prompt"`
+	TechnicalDetail string                 `json:"technical_details" yaml:"technical_details"`
+	SetupScript     string                 `json:"setup_script" yaml:"setup_script"`
+	CodebasePath    string                 `json:"codebase_path" yaml:"codebase_path"`
+	TestCases       []models.TestCase      `json:"test_cases" yaml:"test_cases"`
 }
 
-// SeedBuiltinTasks reads the single tasks.json manifest at tasksRoot/tasks.json
+type taskManifestFile struct {
+	Tasks []taskManifest `json:"tasks" yaml:"tasks"`
+}
+
+// SeedBuiltinTasks reads a tasks.yaml/tasks.yml/tasks.json manifest from tasksRoot
 // (or, as a convenience, tasksRoot itself if it points directly at a file) and
 // upserts every entry into the database. No per-task directories or tests/
 // folders are required any more — each task declares its own verification
@@ -49,14 +56,18 @@ func (s *Store) SeedBuiltinTasks(ctx context.Context, tasksRoot string) error {
 		return fmt.Errorf("stat tasks root: %w", err)
 	}
 	if info.IsDir() {
-		manifestPath = filepath.Join(tasksRoot, "tasks.json")
+		resolved, resolveErr := resolveTasksManifestPath(tasksRoot)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		manifestPath = resolved
 	}
 	raw, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return fmt.Errorf("read tasks manifest %s: %w", manifestPath, err)
 	}
-	var manifests []taskManifest
-	if err := json.Unmarshal(raw, &manifests); err != nil {
+	manifests, err := parseTaskManifests(manifestPath, raw)
+	if err != nil {
 		return fmt.Errorf("parse tasks manifest %s: %w", manifestPath, err)
 	}
 	sort.SliceStable(manifests, func(i, j int) bool { return manifests[i].ID < manifests[j].ID })
@@ -99,6 +110,8 @@ func (s *Store) SeedBuiltinTasks(ctx context.Context, tasksRoot string) error {
 			CodebaseType:    manifest.CodebaseType,
 			TaskPrompt:      manifest.Prompt,
 			TechnicalDetail: manifest.TechnicalDetail,
+			SetupScript:     manifest.SetupScript,
+			CodebasePath:    manifest.CodebasePath,
 			IsBuiltin:       true,
 			TestCases:       manifest.TestCases,
 		}
@@ -107,6 +120,41 @@ func (s *Store) SeedBuiltinTasks(ctx context.Context, tasksRoot string) error {
 		}
 	}
 	return nil
+}
+
+func resolveTasksManifestPath(tasksRoot string) (string, error) {
+	for _, name := range []string{"tasks.yaml", "tasks.yml", "tasks.json"} {
+		candidate := filepath.Join(tasksRoot, name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("tasks manifest not found under %s; expected tasks.yaml, tasks.yml, or tasks.json", tasksRoot)
+}
+
+func parseTaskManifests(manifestPath string, raw []byte) ([]taskManifest, error) {
+	switch strings.ToLower(filepath.Ext(manifestPath)) {
+	case ".yaml", ".yml":
+		var wrapped taskManifestFile
+		if err := yaml.Unmarshal(raw, &wrapped); err == nil && len(wrapped.Tasks) > 0 {
+			return wrapped.Tasks, nil
+		}
+		var manifests []taskManifest
+		if err := yaml.Unmarshal(raw, &manifests); err != nil {
+			return nil, err
+		}
+		return manifests, nil
+	default:
+		var wrapped taskManifestFile
+		if err := json.Unmarshal(raw, &wrapped); err == nil && len(wrapped.Tasks) > 0 {
+			return wrapped.Tasks, nil
+		}
+		var manifests []taskManifest
+		if err := json.Unmarshal(raw, &manifests); err != nil {
+			return nil, err
+		}
+		return manifests, nil
+	}
 }
 
 func (s *Store) UpsertTask(ctx context.Context, task models.Task) (*models.Task, error) {

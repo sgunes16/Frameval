@@ -20,7 +20,7 @@ type Queue struct {
 
 func NewQueue(parent context.Context, maxWorkers int) *Queue {
 	if maxWorkers <= 0 {
-		maxWorkers = 3
+		maxWorkers = 1
 	}
 	ctx, cancel := context.WithCancel(parent)
 	q := &Queue{jobs: make(chan Job, 256), maxWorkers: maxWorkers, cancel: cancel}

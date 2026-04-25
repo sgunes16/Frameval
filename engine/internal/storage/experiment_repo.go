@@ -21,7 +21,7 @@ func (s *Store) CreateExperiment(ctx context.Context, req models.ExperimentReque
 		req.ExecutionMode = "cli"
 	}
 	if req.MaxConcurrent == 0 {
-		req.MaxConcurrent = 3
+		req.MaxConcurrent = 1
 	}
 	if req.TimeoutSeconds == 0 {
 		req.TimeoutSeconds = 600

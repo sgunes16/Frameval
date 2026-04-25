@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -25,6 +26,7 @@ func main() {
 	port := getenv("FRAMEVAL_PORT", "8080")
 	sandboxImage := getenv("FRAMEVAL_SANDBOX_IMAGE", "frameval-sandbox:local")
 	tasksRoot := getenv("FRAMEVAL_TASKS_ROOT", "../tasks")
+	maxConcurrent := getenvInt("FRAMEVAL_MAX_CONCURRENT", 1)
 
 	store, err := storage.Open(ctx, dbPath)
 	if err != nil {
@@ -41,7 +43,7 @@ func main() {
 	hub := api.NewHub()
 	go hub.Run(ctx)
 	manager := sandbox.NewManager(ctx, sandboxImage)
-	queue := experiment.NewQueue(ctx, 3)
+	queue := experiment.NewQueue(ctx, maxConcurrent)
 	defer queue.Close()
 	registry := executor.NewRegistry(manager)
 	graderClient := experiment.NewGraderClient(graderAddr)
@@ -67,4 +69,16 @@ func getenv(key string, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func getenvInt(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }

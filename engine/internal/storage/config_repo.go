@@ -14,6 +14,8 @@ import (
 
 func (s *Store) SeedModelConfigs(ctx context.Context) error {
 	defaults := []models.ModelConfig{
+		{Provider: "cursor", ModelID: "auto", DisplayName: "Cursor Auto", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 0, SupportsStructuredOutput: false, SupportsSeed: false},
+		{Provider: "cursor", ModelID: "premium", DisplayName: "Cursor Premium", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 0, SupportsStructuredOutput: false, SupportsSeed: false},
 		{Provider: "openai", ModelID: "gpt-5.4", DisplayName: "GPT-5.4", InputPricePer1K: 0.01, OutputPricePer1K: 0.03, MaxContextTokens: 256000, SupportsStructuredOutput: true, SupportsSeed: true},
 		{Provider: "anthropic", ModelID: "claude-opus-4.7", DisplayName: "Claude Opus 4.7", InputPricePer1K: 0.015, OutputPricePer1K: 0.075, MaxContextTokens: 200000, SupportsStructuredOutput: false, SupportsSeed: false},
 		{Provider: "anthropic", ModelID: "claude-sonnet-4.6", DisplayName: "Claude Sonnet 4.6", InputPricePer1K: 0.003, OutputPricePer1K: 0.015, MaxContextTokens: 200000, SupportsStructuredOutput: false, SupportsSeed: false},

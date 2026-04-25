@@ -2,9 +2,11 @@ package sandbox
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
@@ -26,10 +29,11 @@ import (
 type Manager struct {
 	dockerClient *client.Client
 	sandboxImage string
+	mu           sync.Mutex
 }
 
 func NewManager(ctx context.Context, sandboxImage string) *Manager {
-	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	dockerClient, err := newDockerClient(ctx)
 	if err != nil {
 		return &Manager{sandboxImage: sandboxImage}
 	}
@@ -41,13 +45,18 @@ func NewManager(ctx context.Context, sandboxImage string) *Manager {
 
 func (m *Manager) Health(ctx context.Context) map[string]any {
 	status := map[string]any{"healthy": false, "mode": "local", "sandbox_image": m.sandboxImage}
-	if m.dockerClient == nil {
+	dockerClient := m.ensureDockerClient(ctx)
+	if dockerClient == nil {
 		status["message"] = "docker daemon unavailable, using local fallback"
 		return status
 	}
-	ping, err := m.dockerClient.Ping(ctx)
+	ping, err := dockerClient.Ping(ctx)
 	if err != nil {
 		status["message"] = err.Error()
+		return status
+	}
+	if _, _, err := dockerClient.ImageInspectWithRaw(ctx, m.sandboxImage); err != nil {
+		status["message"] = fmt.Sprintf("sandbox image %q unavailable: %v", m.sandboxImage, err)
 		return status
 	}
 	status["healthy"] = true
@@ -131,24 +140,120 @@ func (m *Manager) PrepareWorkspace(ctx context.Context, experiment models.Experi
 }
 
 func (m *Manager) RunShell(ctx context.Context, workspace string, env map[string]string, script string) (string, error) {
-	if m.dockerClient != nil {
-		return m.runInDocker(ctx, workspace, env, script)
-	}
-	return m.runLocalShell(ctx, workspace, env, script)
+	return m.RunShellWithOutput(ctx, workspace, env, script, nil)
 }
 
-func (m *Manager) runLocalShell(ctx context.Context, workspace string, env map[string]string, script string) (string, error) {
+func (m *Manager) RunShellWithOutput(ctx context.Context, workspace string, env map[string]string, script string, onOutput func(string)) (string, error) {
+	if m.ensureDockerClient(ctx) != nil {
+		return m.runInDocker(ctx, workspace, env, script, onOutput)
+	}
+	return m.runLocalShell(ctx, workspace, env, script, onOutput)
+}
+
+func (m *Manager) ensureDockerClient(ctx context.Context) *client.Client {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.dockerClient != nil {
+		return m.dockerClient
+	}
+	dockerClient, err := newDockerClient(ctx)
+	if err != nil {
+		return nil
+	}
+	if _, err := dockerClient.Ping(ctx); err != nil {
+		_ = dockerClient.Close()
+		return nil
+	}
+	m.dockerClient = dockerClient
+	return m.dockerClient
+}
+
+func newDockerClient(ctx context.Context) (*client.Client, error) {
+	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err == nil {
+		if _, pingErr := dockerClient.Ping(ctx); pingErr == nil {
+			return dockerClient, nil
+		}
+		_ = dockerClient.Close()
+	}
+	if host := dockerContextHost(ctx); host != "" {
+		dockerClient, err = client.NewClientWithOpts(client.WithHost(host), client.WithAPIVersionNegotiation())
+		if err == nil {
+			if _, pingErr := dockerClient.Ping(ctx); pingErr == nil {
+				return dockerClient, nil
+			}
+			_ = dockerClient.Close()
+		}
+	}
+	if home, homeErr := os.UserHomeDir(); homeErr == nil {
+		socketPath := filepath.Join(home, ".docker", "run", "docker.sock")
+		if _, statErr := os.Stat(socketPath); statErr == nil {
+			dockerClient, err = client.NewClientWithOpts(client.WithHost("unix://"+socketPath), client.WithAPIVersionNegotiation())
+			if err == nil {
+				if _, pingErr := dockerClient.Ping(ctx); pingErr == nil {
+					return dockerClient, nil
+				}
+				_ = dockerClient.Close()
+			}
+		}
+	}
+	return nil, fmt.Errorf("docker daemon unavailable")
+}
+
+func dockerContextHost(ctx context.Context) string {
+	if _, err := exec.LookPath("docker"); err != nil {
+		return ""
+	}
+	output, err := exec.CommandContext(ctx, "docker", "context", "inspect", "--format", "{{json .Endpoints.docker.Host}}").Output()
+	if err != nil {
+		return ""
+	}
+	var host string
+	if err := json.Unmarshal(bytes.TrimSpace(output), &host); err != nil {
+		return ""
+	}
+	return host
+}
+
+func (m *Manager) runLocalShell(ctx context.Context, workspace string, env map[string]string, script string, onOutput func(string)) (string, error) {
 	cmd := exec.CommandContext(ctx, "sh", "-c", script)
 	cmd.Dir = workspace
 	cmd.Env = os.Environ()
 	for key, value := range env {
 		cmd.Env = append(cmd.Env, key+"="+value)
 	}
-	output, err := cmd.CombinedOutput()
-	return string(output), err
+	if onOutput == nil {
+		output, err := cmd.CombinedOutput()
+		return string(output), err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("open stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("open stderr pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("start local command: %w", err)
+	}
+	collector := newOutputCollector(onOutput)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		collector.scan(stdout)
+	}()
+	go func() {
+		defer wg.Done()
+		collector.scan(stderr)
+	}()
+	err = cmd.Wait()
+	wg.Wait()
+	return collector.String(), err
 }
 
-func (m *Manager) runInDocker(ctx context.Context, workspace string, env map[string]string, script string) (string, error) {
+func (m *Manager) runInDocker(ctx context.Context, workspace string, env map[string]string, script string, onOutput func(string)) (string, error) {
 	resp, err := m.dockerClient.ContainerCreate(
 		ctx,
 		&container.Config{
@@ -175,15 +280,39 @@ func (m *Manager) runInDocker(ctx context.Context, workspace string, env map[str
 	if err := m.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 		return "", fmt.Errorf("start sandbox container: %w", err)
 	}
+	collector := newOutputCollector(onOutput)
+	logsCtx, cancelLogs := context.WithCancel(ctx)
+	logsReader, logsErr := m.dockerClient.ContainerLogs(logsCtx, containerID, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     true,
+	})
+	var wg sync.WaitGroup
+	if logsErr == nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer logsReader.Close()
+			collector.copyDockerLogs(logsReader)
+		}()
+	}
 	statusCh, errCh := m.dockerClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
 	select {
 	case waitErr := <-errCh:
+		cancelLogs()
+		wg.Wait()
 		if waitErr != nil {
 			return "", fmt.Errorf("wait for sandbox container: %w", waitErr)
 		}
 	case <-statusCh:
 	}
-	output, logErr := m.readContainerLogs(ctx, containerID)
+	cancelLogs()
+	wg.Wait()
+	output := collector.String()
+	logErr := logsErr
+	if logsErr != nil {
+		output, logErr = m.readContainerLogs(ctx, containerID)
+	}
 	if err := m.copyWorkspaceFromContainer(ctx, containerID, workspace); err != nil {
 		return output, err
 	}
@@ -232,6 +361,76 @@ func (m *Manager) CollectOutputFiles(workspace string) ([]models.OutputFile, err
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil
+}
+
+type outputCollector struct {
+	mu       sync.Mutex
+	output   bytes.Buffer
+	onOutput func(string)
+}
+
+func newOutputCollector(onOutput func(string)) *outputCollector {
+	return &outputCollector{onOutput: onOutput}
+}
+
+func (c *outputCollector) String() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.output.String()
+}
+
+func (c *outputCollector) scan(reader io.Reader) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		c.writeLine(scanner.Text())
+	}
+}
+
+func (c *outputCollector) copyDockerLogs(reader io.Reader) {
+	stdout := &lineWriter{collector: c}
+	stderr := &lineWriter{collector: c}
+	_, _ = stdcopy.StdCopy(stdout, stderr, reader)
+	stdout.flush()
+	stderr.flush()
+}
+
+func (c *outputCollector) writeLine(line string) {
+	c.mu.Lock()
+	c.output.WriteString(line)
+	c.output.WriteByte('\n')
+	c.mu.Unlock()
+	if c.onOutput != nil && strings.TrimSpace(line) != "" {
+		c.onOutput(line)
+	}
+}
+
+type lineWriter struct {
+	collector *outputCollector
+	partial   bytes.Buffer
+}
+
+func (w *lineWriter) Write(p []byte) (int, error) {
+	for _, chunk := range bytes.SplitAfter(p, []byte("\n")) {
+		if len(chunk) == 0 {
+			continue
+		}
+		w.partial.Write(chunk)
+		if bytes.HasSuffix(chunk, []byte("\n")) {
+			line := strings.TrimRight(w.partial.String(), "\r\n")
+			w.partial.Reset()
+			w.collector.writeLine(line)
+		}
+	}
+	return len(p), nil
+}
+
+func (w *lineWriter) flush() {
+	if w.partial.Len() == 0 {
+		return
+	}
+	w.collector.writeLine(strings.TrimRight(w.partial.String(), "\r\n"))
+	w.partial.Reset()
 }
 
 func (m *Manager) DiffSnapshots(before map[string]string, files []models.OutputFile) string {

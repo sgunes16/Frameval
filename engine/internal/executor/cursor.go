@@ -31,11 +31,11 @@ func (e *CursorExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult
 			transcript, _ := e.ParseTranscript([]byte(raw))
 			return &RunResult{RawOutput: raw, ParsedTurns: transcript.ParsedTurns}, nil
 		}
-		command = `agent -p --force --output-format json "$FRAMEVAL_PROMPT"`
+		command = `agent -p --force --output-format stream-json --stream-partial-output --model "$FRAMEVAL_MODEL_ID" "$FRAMEVAL_PROMPT"`
 	}
-	output, err := e.sandbox.RunShell(ctx, cfg.WorkspacePath, mergeEnv(cfg.Environment, map[string]string{"FRAMEVAL_PROMPT": cfg.Prompt}), command)
+	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, mergeEnv(cfg.Environment, map[string]string{"FRAMEVAL_PROMPT": cfg.Prompt, "FRAMEVAL_MODEL_ID": fallbackModel(cfg.Model)}), command, cfg.OnOutput)
 	transcript, _ := e.ParseTranscript([]byte(output))
-	return &RunResult{RawOutput: output, ParsedTurns: transcript.ParsedTurns}, err
+	return &RunResult{RawOutput: output, ParsedTurns: transcript.ParsedTurns, StreamedOutput: cfg.OnOutput != nil}, err
 }
 
 func (e *CursorExecutor) ParseTranscript(raw []byte) (*models.Transcript, error) {
@@ -72,4 +72,11 @@ func mergeEnv(base map[string]string, additions map[string]string) map[string]st
 		merged[key] = value
 	}
 	return merged
+}
+
+func fallbackModel(model string) string {
+	if strings.TrimSpace(model) == "" {
+		return "auto"
+	}
+	return model
 }
