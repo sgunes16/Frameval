@@ -6,7 +6,7 @@ Frameval is a polyglot project: Go (engine), Python (grader), TypeScript (fronte
 
 ## General Rules
 
-- Always respond in the user's language (Turkish by default).
+- Always respond in English.
 - All git commit messages MUST be written in English. Use imperative mood ("add feature", not "added feature" or "adds feature").
 - Read the relevant CLAUDE.md section before making changes to understand the architecture.
 - Never commit API keys, secrets, or credentials. Environment variables only.
