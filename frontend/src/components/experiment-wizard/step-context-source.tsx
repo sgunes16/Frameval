@@ -60,10 +60,12 @@ const CATEGORY_FILTERS: Array<{ id: string; label: string; tags?: string[] }> = 
 export function StepContextSource({
   variant,
   catalogExtensions,
+  contextDisabled = false,
   onChange,
 }: {
   variant: DraftVariantContext;
   catalogExtensions: CatalogExtension[];
+  contextDisabled?: boolean;
   onChange: (variant: DraftVariantContext) => void;
 }) {
   const [query, setQuery] = useState('');
@@ -97,7 +99,14 @@ export function StepContextSource({
           <input
             type="checkbox"
             checked={variant.is_control}
-            onChange={(event) => onChange({ ...variant, is_control: event.target.checked })}
+            onChange={(event) =>
+              onChange({
+                ...variant,
+                is_control: event.target.checked,
+                catalogExtensionIds: event.target.checked ? [] : variant.catalogExtensionIds,
+                customFiles: event.target.checked ? [] : variant.customFiles,
+              })
+            }
           />
           Mark as control variant
         </label>
@@ -109,7 +118,13 @@ export function StepContextSource({
         placeholder="What is this variant testing?"
       />
 
-      <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+      {contextDisabled ? (
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
+          Control variants intentionally run without catalog extensions or custom context files.
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-sm font-semibold text-slate-900">Spec-kit catalog</div>
@@ -180,7 +195,7 @@ export function StepContextSource({
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <div className="text-sm font-semibold text-slate-900">Custom context files</div>
@@ -189,8 +204,10 @@ export function StepContextSource({
         </div>
         <StepCustomArtifacts files={variant.customFiles} onChange={(customFiles) => onChange({ ...variant, customFiles })} />
       </div>
+        </>
+      )}
 
-      {!variant.catalogExtensionIds.length && !variant.customFiles.length && (
+      {!contextDisabled && !variant.catalogExtensionIds.length && !variant.customFiles.length && (
         <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
           This variant has no extra context yet. That&apos;s fine for a control variant.
         </div>

@@ -164,3 +164,17 @@ export type CatalogResponse = {
   updated_at: string;
   extensions: CatalogExtension[];
 };
+
+export type DockerStatus = {
+  healthy: boolean;
+  mode: string;
+  sandbox_image: string;
+  message?: string;
+  api_version?: string;
+};
+
+export type QueueStatus = {
+  depth: number;
+  active_workers: number;
+  max_workers: number;
+};

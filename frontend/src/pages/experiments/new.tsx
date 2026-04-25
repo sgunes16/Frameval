@@ -14,6 +14,7 @@ import {
   useCatalogExtensions,
   useCreateArtifact,
   useCreateExperiment,
+  useDockerStatus,
   useImportCatalogExtensions,
   useModels,
   useStartExperiment,
@@ -26,6 +27,7 @@ export function NewExperimentPage() {
   const { data: agents = [] } = useAgents();
   const { data: models = [] } = useModels();
   const { data: catalog } = useCatalogExtensions();
+  const { data: dockerStatus } = useDockerStatus();
   const createExperiment = useCreateExperiment();
   const createArtifact = useCreateArtifact();
   const importCatalogExtensions = useImportCatalogExtensions();
@@ -43,6 +45,7 @@ export function NewExperimentPage() {
   const [selectedModel, setSelectedModel] = useState('gpt-5.4');
   const [runsPerVariant, setRunsPerVariant] = useState(5);
   const [timeoutSeconds, setTimeoutSeconds] = useState(600);
+  const [maxConcurrent] = useState(1);
   const [variants, setVariants] = useState<DraftVariantContext[]>([createDraftVariant('Control', true)]);
   const [submitError, setSubmitError] = useState('');
 
@@ -72,7 +75,7 @@ export function NewExperimentPage() {
       runs_per_variant: runsPerVariant,
       temperature: 0,
       timeout_seconds: timeoutSeconds,
-      max_concurrent: 3,
+      max_concurrent: maxConcurrent,
       variants: variants.map((variant, index) => ({
         name: variant.name || `Variant ${index + 1}`,
         description: variant.description,
@@ -87,6 +90,7 @@ export function NewExperimentPage() {
       gitURL,
       localPath,
       models,
+      maxConcurrent,
       name,
       runsPerVariant,
       selectedAgent,
@@ -98,6 +102,30 @@ export function NewExperimentPage() {
       workspaceSourceType,
     ],
   );
+
+  function updateVariant(index: number, nextVariant: DraftVariantContext) {
+    setVariants((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) {
+          return nextVariant.is_control ? { ...item, is_control: false } : item;
+        }
+        if (!nextVariant.is_control) {
+          return nextVariant;
+        }
+        return { ...nextVariant, catalogExtensionIds: [], customFiles: [] };
+      }),
+    );
+  }
+
+  function removeVariant(index: number) {
+    setVariants((current) => {
+      const next = current.filter((_, itemIndex) => itemIndex !== index);
+      if (next.some((variant) => variant.is_control) || next.length === 0) {
+        return next;
+      }
+      return next.map((variant, itemIndex) => (itemIndex === 0 ? { ...variant, is_control: true } : variant));
+    });
+  }
 
   async function handleSubmit(startAfterCreate: boolean) {
     setSubmitError('');
@@ -217,7 +245,9 @@ export function NewExperimentPage() {
                     {variant.is_control && <Badge tone="info">Control</Badge>}
                   </div>
                   <div className="text-xs text-slate-500">
-                    {variant.is_control ? 'Baseline reference without extra context.' : 'Comparison variant with added context.'}
+                    {variant.is_control
+                      ? 'Baseline reference. Context extensions are disabled for control variants.'
+                      : 'Comparison variant with added context.'}
                   </div>
                 </div>
                 {variants.length > 1 && (
@@ -225,7 +255,7 @@ export function NewExperimentPage() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setVariants((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    onClick={() => removeVariant(index)}
                   >
                     Remove
                   </Button>
@@ -234,9 +264,8 @@ export function NewExperimentPage() {
               <StepContextSource
                 variant={variant}
                 catalogExtensions={catalog?.extensions ?? []}
-                onChange={(nextVariant) =>
-                  setVariants((current) => current.map((item, itemIndex) => (itemIndex === index ? nextVariant : item)))
-                }
+                contextDisabled={variant.is_control}
+                onChange={(nextVariant) => updateVariant(index, nextVariant)}
               />
             </Card>
           ))}
@@ -259,6 +288,19 @@ export function NewExperimentPage() {
             onRunsChange={setRunsPerVariant}
             onTimeoutChange={setTimeoutSeconds}
           />
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            Runs execute one at a time to avoid local CLI credential conflicts.
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium text-slate-900">Sandbox runtime</span>
+              <Badge tone={dockerStatus?.healthy ? 'success' : 'warning'}>
+                {dockerStatus?.healthy ? 'Docker sandbox' : 'Local fallback'}
+              </Badge>
+              {dockerStatus?.sandbox_image && <span>{dockerStatus.sandbox_image}</span>}
+            </div>
+            {dockerStatus?.message && <div className="mt-1 text-slate-500">{dockerStatus.message}</div>}
+          </div>
         </div>
       </StepCard>
 

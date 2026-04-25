@@ -1,7 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
-import type { AgentInfo, APIKey, ArtifactVersion, Baseline, CatalogResponse, Experiment, ExperimentStat, Grade, ModelConfig, Run, Task, Transcript, Variant } from './types';
+import type {
+  AgentInfo,
+  APIKey,
+  ArtifactVersion,
+  Baseline,
+  CatalogResponse,
+  DockerStatus,
+  Experiment,
+  ExperimentStat,
+  Grade,
+  ModelConfig,
+  QueueStatus,
+  Run,
+  Task,
+  Transcript,
+  Variant,
+} from './types';
 
 export function useExperiments() {
   return useQuery({ queryKey: ['experiments'], queryFn: () => api.get<Experiment[]>('/experiments') });
@@ -25,6 +41,19 @@ export function useRun(runId?: string) {
 
 export function useTranscript(runId?: string) {
   return useQuery({ queryKey: ['transcript', runId], enabled: Boolean(runId), queryFn: () => api.get<Transcript>(`/runs/${runId}/transcript`) });
+}
+
+export function useTranscripts(runIds: string[]) {
+  return useQuery({
+    queryKey: ['transcripts', ...runIds],
+    enabled: runIds.length > 0,
+    queryFn: async () => {
+      const results = await Promise.all(
+        runIds.map((id) => api.get<Transcript>(`/runs/${id}/transcript`).catch(() => null)),
+      );
+      return results.filter((t): t is Transcript => t !== null);
+    },
+  });
 }
 
 export function useGrade(runId?: string) {
@@ -71,6 +100,14 @@ export function useCatalogExtensions() {
   return useQuery({ queryKey: ['catalog-extensions'], queryFn: () => api.get<CatalogResponse>('/config/catalog/extensions') });
 }
 
+export function useDockerStatus() {
+  return useQuery({ queryKey: ['docker-status'], queryFn: () => api.get<DockerStatus>('/system/docker') });
+}
+
+export function useQueueStatus() {
+  return useQuery({ queryKey: ['queue-status'], queryFn: () => api.get<QueueStatus>('/system/queue') });
+}
+
 export function useCreateExperiment() {
   const client = useQueryClient();
   return useMutation({
@@ -110,12 +147,15 @@ export function useImportCatalogExtensions() {
 
 export function useWebSocket() {
   const wsBase = import.meta.env.VITE_WS_BASE_URL || `${window.location.origin.replace(/^http/, 'ws')}/ws`;
-  const [events, setEvents] = useState<Array<{ type: string; payload: unknown }>>([]);
+  const nextEventID = useRef(0);
+  const [events, setEvents] = useState<Array<{ id: number; type: string; payload: unknown }>>([]);
   useEffect(() => {
     const socket = new WebSocket(wsBase);
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data) as { type: string; payload: unknown };
-      setEvents((current) => [...current.slice(-49), data]);
+      const eventID = nextEventID.current;
+      nextEventID.current += 1;
+      setEvents((current) => [...current.slice(-199), { ...data, id: eventID }]);
     };
     return () => socket.close();
   }, [wsBase]);
