@@ -24,16 +24,17 @@ func (e *CursorExecutor) Name() string { return "cursor" }
 func (e *CursorExecutor) SupportedModes() []ExecutionMode { return []ExecutionMode{ExecutionModeCLI} }
 
 func (e *CursorExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult, error) {
+	prompt := promptWithDefaultCLILanguage(cfg.Prompt)
 	command := os.Getenv("FRAMEVAL_CURSOR_COMMAND")
 	if command == "" {
 		if _, err := exec.LookPath("agent"); err != nil {
-			raw := "cursor agent binary not found; execution skipped\nPrompt:\n" + cfg.Prompt
+			raw := "cursor agent binary not found; execution skipped\nPrompt:\n" + prompt
 			transcript, _ := e.ParseTranscript([]byte(raw))
 			return &RunResult{RawOutput: raw, ParsedTurns: transcript.ParsedTurns}, nil
 		}
 		command = `agent -p --force --output-format stream-json --stream-partial-output --model "$FRAMEVAL_MODEL_ID" "$FRAMEVAL_PROMPT"`
 	}
-	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, mergeEnv(cfg.Environment, map[string]string{"FRAMEVAL_PROMPT": cfg.Prompt, "FRAMEVAL_MODEL_ID": fallbackModel(cfg.Model)}), command, cfg.OnOutput)
+	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, mergeEnv(cfg.Environment, map[string]string{"FRAMEVAL_PROMPT": prompt, "FRAMEVAL_MODEL_ID": fallbackModel(cfg.Model)}), command, cfg.OnOutput)
 	transcript, _ := e.ParseTranscript([]byte(output))
 	return &RunResult{RawOutput: output, ParsedTurns: transcript.ParsedTurns, StreamedOutput: cfg.OnOutput != nil}, err
 }

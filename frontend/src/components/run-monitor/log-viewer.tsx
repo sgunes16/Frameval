@@ -492,13 +492,11 @@ function parseAgentEvents(events: AgentLogEvent[], runs: Run[]): { items: Timeli
 
     const item = toTimelineItem(parsed, event);
     if (item) {
-      if (item.kind === 'assistant') {
-        usage.liveOutputTokens += estimateTokens(item.body);
-      }
       appendItem(items, item);
     }
   }
 
+  usage.liveOutputTokens = items.reduce((sum, item) => item.kind === 'assistant' ? sum + estimateTokens(item.body) : sum, 0);
   if (usage.totalTokens === 0) {
     usage.totalTokens = usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheWriteTokens + usage.liveOutputTokens;
   }
@@ -514,7 +512,7 @@ function appendItem(items: TimelineItem[], item: TimelineItem) {
     (item.kind === 'assistant' || item.kind === 'thinking') &&
     previous.runNumber === item.runNumber
   ) {
-    previous.body += item.body;
+    previous.body = mergeStreamingBody(previous.body, item.body);
     previous.status = item.status ?? previous.status;
     previous.timestamp = item.timestamp ?? previous.timestamp;
     return;
@@ -538,6 +536,15 @@ function appendItem(items: TimelineItem[], item: TimelineItem) {
   }
 
   items.push(item);
+}
+
+function mergeStreamingBody(previousBody: string, nextBody: string) {
+  if (!nextBody) return previousBody;
+  if (!previousBody) return nextBody;
+  if (previousBody === nextBody) return previousBody;
+  if (nextBody.startsWith(previousBody)) return nextBody;
+  if (previousBody.endsWith(nextBody)) return previousBody;
+  return previousBody + nextBody;
 }
 
 function parseJSONLine(line: string): Record<string, unknown> | null {

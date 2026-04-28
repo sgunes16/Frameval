@@ -27,6 +27,12 @@ type RunResult struct {
 	StreamedOutput bool
 }
 
+const defaultCLILanguageInstruction = "Frameval evaluation instruction: respond in English unless the task explicitly asks for another language."
+
+func promptWithDefaultCLILanguage(prompt string) string {
+	return defaultCLILanguageInstruction + "\n\n" + prompt
+}
+
 type AgentExecutor interface {
 	Name() string
 	SupportedModes() []ExecutionMode
