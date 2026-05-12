@@ -10,6 +10,8 @@ services:
       FRAMEVAL_SANDBOX_IMAGE: frameval-sandbox:local
       FRAMEVAL_MAX_CONCURRENT: 3
       FRAMEVAL_TASKS_ROOT: /app/tasks
+      FRAMEVAL_TERMINAL_BENCH_ROOT: /app/benchmarks/terminal-bench/original-tasks
+      FRAMEVAL_SWE_BENCH_PATH: /app/benchmarks/SWE-bench_Lite.jsonl
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -18,6 +20,7 @@ services:
       - frameval_data:/data
       - ./tasks:/app/tasks:ro
       - ./baselines:/app/baselines:ro
+      - ./benchmarks:/app/benchmarks:ro
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8080:8080"

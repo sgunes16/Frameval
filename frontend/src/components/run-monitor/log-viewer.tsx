@@ -323,7 +323,7 @@ function ReadToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
 }
 
 function DiffView({ diff }: { diff: string }) {
-  const lines = diff.split('\n').slice(0, 200);
+  const lines = diff.split('\n');
   return (
     <div className="max-h-80 overflow-auto bg-slate-950 font-mono text-[11px] leading-5">
       {lines.map((line, i) => {
@@ -629,7 +629,7 @@ function extractToolMeta(event: Record<string, unknown>): ToolMeta {
       command: str(args?.command),
       description: str(shell.description),
       exitCode: num(success?.exitCode ?? failure?.exitCode),
-      output: truncate(str(success?.interleavedOutput ?? failure?.interleavedOutput ?? success?.stdout ?? failure?.stdout ?? ''), 3000),
+      output: str(success?.interleavedOutput ?? failure?.interleavedOutput ?? success?.stdout ?? failure?.stdout ?? ''),
     };
   }
 
@@ -643,8 +643,8 @@ function extractToolMeta(event: Record<string, unknown>): ToolMeta {
       path: str(success?.path ?? args?.path),
       linesAdded: num(success?.linesAdded),
       linesRemoved: num(success?.linesRemoved),
-      diffString: truncate(str(success?.diffString ?? ''), 4000),
-      content: truncate(str(args?.streamContent ?? ''), 4000),
+      diffString: str(success?.diffString ?? ''),
+      content: str(args?.streamContent ?? ''),
     };
   }
 
@@ -695,7 +695,7 @@ function extractToolMeta(event: Record<string, unknown>): ToolMeta {
       toolKind: 'read',
       path: str(success?.path ?? args?.path),
       totalLines: num(success?.totalLines),
-      content: truncate(str(success?.content ?? ''), 4000),
+      content: str(success?.content ?? ''),
     };
   }
 
@@ -704,7 +704,7 @@ function extractToolMeta(event: Record<string, unknown>): ToolMeta {
 }
 
 function toolBodyFallback(event: Record<string, unknown>): string {
-  return truncate(JSON.stringify(event, null, 2), 2000);
+  return JSON.stringify(event, null, 2);
 }
 
 function readUsage(event: Record<string, unknown>): Usage | null {

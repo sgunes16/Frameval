@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { CancelButton } from '../../components/run-monitor/cancel-button';
 import { AgentEventViewer, LogViewer, type AgentLogEvent } from '../../components/run-monitor/log-viewer';
+import { PatchViewer } from '../../components/run-monitor/patch-viewer';
 import { RunProgressBar } from '../../components/run-monitor/progress-bar';
 import { RunGrid } from '../../components/run-monitor/run-grid';
 import { Badge } from '../../components/ui/badge';
@@ -79,7 +80,19 @@ export function ExperimentMonitorPage() {
     return evts;
   }, [transcripts, runs]);
 
-  const allLogEvents = liveLogEvents.length > 0 ? liveLogEvents : transcriptLogEvents;
+  const allLogEvents = useMemo(() => {
+    const seen = new Set<string>();
+    const combined: AgentLogEvent[] = [];
+    for (const event of [...transcriptLogEvents, ...liveLogEvents]) {
+      const key = `${event.runId ?? ''}:${event.stage ?? ''}:${event.line}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      combined.push(event);
+    }
+    return combined;
+  }, [liveLogEvents, transcriptLogEvents]);
 
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
@@ -126,6 +139,11 @@ export function ExperimentMonitorPage() {
     const variant = experiment?.variants?.find((v) => v.id === run.variant_id);
     return variant ? `${variant.name} · Run #${run.run_number}` : `Run #${run.run_number}`;
   }, [selectedRunId, runs, experiment]);
+
+  const selectedTranscript = useMemo(() => {
+    if (!selectedRunId) return undefined;
+    return transcripts.find((transcript) => transcript.run_id === selectedRunId);
+  }, [selectedRunId, transcripts]);
 
   const completed = runs.filter((run) => ['completed', 'failed'].includes(run.status)).length;
 
@@ -234,6 +252,10 @@ export function ExperimentMonitorPage() {
       <Card>
         <CardHeader title="Agent timeline" description={selectedRunLabel} />
         <AgentEventViewer events={rawLogEvents} runs={filteredRuns} />
+      </Card>
+      <Card>
+        <CardHeader title="Patch" description={selectedRunLabel} />
+        <PatchViewer transcript={selectedTranscript} runLabel={selectedRunLabel} />
       </Card>
       <Card>
         <CardHeader title="Raw stream" description={selectedRunLabel} />

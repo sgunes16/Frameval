@@ -30,6 +30,10 @@ type taskManifest struct {
 	WorkspaceMode   string                 `json:"workspace_mode" yaml:"workspace_mode"`
 	WorkspaceGitURL string                 `json:"workspace_git_url" yaml:"workspace_git_url"`
 	WorkspaceGitRef string                 `json:"workspace_git_ref" yaml:"workspace_git_ref"`
+	ExternalSource  string                 `json:"external_source" yaml:"external_source"`
+	ExternalID      string                 `json:"external_id" yaml:"external_id"`
+	ExternalURL     string                 `json:"external_url" yaml:"external_url"`
+	Metadata        map[string]any         `json:"metadata" yaml:"metadata"`
 	Workspace       *taskManifestWorkspace `json:"workspace,omitempty" yaml:"workspace,omitempty"`
 	ComplexityScore float64                `json:"complexity_score" yaml:"complexity_score"`
 	CodebaseType    string                 `json:"codebase_type" yaml:"codebase_type"`
@@ -106,6 +110,10 @@ func (s *Store) SeedBuiltinTasks(ctx context.Context, tasksRoot string) error {
 			WorkspaceMode:   workspaceMode,
 			WorkspaceGitURL: gitURL,
 			WorkspaceGitRef: gitRef,
+			ExternalSource:  manifest.ExternalSource,
+			ExternalID:      manifest.ExternalID,
+			ExternalURL:     manifest.ExternalURL,
+			Metadata:        manifest.Metadata,
 			ComplexityScore: manifest.ComplexityScore,
 			CodebaseType:    manifest.CodebaseType,
 			TaskPrompt:      manifest.Prompt,
@@ -167,8 +175,8 @@ func (s *Store) UpsertTask(ctx context.Context, task models.Task) (*models.Task,
 		task.ID = uuid.NewString()
 	}
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO tasks (id, name, description, category, template_kind, workspace_mode, workspace_git_url, workspace_git_ref, complexity_score, codebase_type, task_prompt, technical_details, setup_script, codebase_path, task_root_path, is_builtin)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO tasks (id, name, description, category, template_kind, workspace_mode, workspace_git_url, workspace_git_ref, external_source, external_id, external_url, metadata_json, complexity_score, codebase_type, task_prompt, technical_details, setup_script, codebase_path, task_root_path, is_builtin)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name = excluded.name,
 			description = excluded.description,
@@ -177,6 +185,10 @@ func (s *Store) UpsertTask(ctx context.Context, task models.Task) (*models.Task,
 			workspace_mode = excluded.workspace_mode,
 			workspace_git_url = excluded.workspace_git_url,
 			workspace_git_ref = excluded.workspace_git_ref,
+			external_source = excluded.external_source,
+			external_id = excluded.external_id,
+			external_url = excluded.external_url,
+			metadata_json = excluded.metadata_json,
 			complexity_score = excluded.complexity_score,
 			codebase_type = excluded.codebase_type,
 			task_prompt = excluded.task_prompt,
@@ -185,7 +197,7 @@ func (s *Store) UpsertTask(ctx context.Context, task models.Task) (*models.Task,
 			codebase_path = excluded.codebase_path,
 			task_root_path = excluded.task_root_path,
 			is_builtin = excluded.is_builtin
-	`, task.ID, task.Name, task.Description, task.Category, fallbackString(task.TemplateKind, "builtin"), fallbackString(task.WorkspaceMode, "empty"), nullableString(task.WorkspaceGitURL), nullableString(task.WorkspaceGitRef), task.ComplexityScore, task.CodebaseType, task.TaskPrompt, task.TechnicalDetail, task.SetupScript, task.CodebasePath, task.TaskRootPath, boolToInt(task.IsBuiltin))
+	`, task.ID, task.Name, task.Description, task.Category, fallbackString(task.TemplateKind, "builtin"), fallbackString(task.WorkspaceMode, "empty"), nullableString(task.WorkspaceGitURL), nullableString(task.WorkspaceGitRef), nullableString(task.ExternalSource), nullableString(task.ExternalID), nullableString(task.ExternalURL), marshalJSON(task.Metadata), task.ComplexityScore, task.CodebaseType, task.TaskPrompt, task.TechnicalDetail, task.SetupScript, task.CodebasePath, task.TaskRootPath, boolToInt(task.IsBuiltin))
 	if err != nil {
 		return nil, fmt.Errorf("upsert task: %w", err)
 	}
@@ -197,9 +209,9 @@ func (s *Store) UpsertTask(ctx context.Context, task models.Task) (*models.Task,
 			testCase.ID = uuid.NewString()
 		}
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO test_cases (id, task_id, name, test_command, expected_result, ordering)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, testCase.ID, task.ID, testCase.Name, testCase.TestCommand, testCase.ExpectedResult, maxInt(testCase.Ordering, idx))
+			INSERT INTO test_cases (id, task_id, name, test_command, expected_result, visibility, timeout_seconds, setup_script, ordering)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, testCase.ID, task.ID, testCase.Name, testCase.TestCommand, testCase.ExpectedResult, nullableString(fallbackString(testCase.Visibility, "public")), maxInt(testCase.TimeoutSeconds, 120), nullableString(testCase.SetupScript), maxInt(testCase.Ordering, idx))
 		if err != nil {
 			return nil, fmt.Errorf("insert test case: %w", err)
 		}
@@ -212,7 +224,7 @@ func (s *Store) UpsertTask(ctx context.Context, task models.Task) (*models.Task,
 
 func (s *Store) ListTasks(ctx context.Context) ([]models.Task, error) {
 	rows, err := s.DB.QueryContext(ctx, `
-		SELECT id, name, description, category, template_kind, workspace_mode, workspace_git_url, workspace_git_ref, complexity_score, codebase_type, task_prompt, technical_details, setup_script, codebase_path, task_root_path, is_builtin, created_at
+		SELECT id, name, description, category, template_kind, workspace_mode, workspace_git_url, workspace_git_ref, external_source, external_id, external_url, '{}', complexity_score, codebase_type, task_prompt, technical_details, setup_script, codebase_path, task_root_path, is_builtin, created_at
 		FROM tasks ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -230,19 +242,12 @@ func (s *Store) ListTasks(ctx context.Context) ([]models.Task, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	for idx := range tasks {
-		testCases, casesErr := s.listTestCases(ctx, tasks[idx].ID)
-		if casesErr != nil {
-			return nil, casesErr
-		}
-		tasks[idx].TestCases = testCases
-	}
 	return tasks, nil
 }
 
 func (s *Store) GetTask(ctx context.Context, taskID string) (*models.Task, error) {
 	row := s.DB.QueryRowContext(ctx, `
-		SELECT id, name, description, category, template_kind, workspace_mode, workspace_git_url, workspace_git_ref, complexity_score, codebase_type, task_prompt, technical_details, setup_script, codebase_path, task_root_path, is_builtin, created_at
+		SELECT id, name, description, category, template_kind, workspace_mode, workspace_git_url, workspace_git_ref, external_source, external_id, external_url, metadata_json, complexity_score, codebase_type, task_prompt, technical_details, setup_script, codebase_path, task_root_path, is_builtin, created_at
 		FROM tasks WHERE id = ?
 	`, taskID)
 	task, err := scanTask(row)
@@ -258,7 +263,7 @@ func (s *Store) GetTask(ctx context.Context, taskID string) (*models.Task, error
 }
 
 func (s *Store) listTestCases(ctx context.Context, taskID string) ([]models.TestCase, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id, task_id, name, test_command, expected_result, ordering FROM test_cases WHERE task_id = ? ORDER BY ordering ASC`, taskID)
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, task_id, name, test_command, expected_result, visibility, timeout_seconds, setup_script, ordering FROM test_cases WHERE task_id = ? ORDER BY ordering ASC`, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("list test cases: %w", err)
 	}
@@ -266,11 +271,17 @@ func (s *Store) listTestCases(ctx context.Context, taskID string) ([]models.Test
 	cases := make([]models.TestCase, 0)
 	for rows.Next() {
 		var testCase models.TestCase
-		var expected sql.NullString
-		if err := rows.Scan(&testCase.ID, &testCase.TaskID, &testCase.Name, &testCase.TestCommand, &expected, &testCase.Ordering); err != nil {
+		var expected, visibility, setupScript sql.NullString
+		var timeout sql.NullInt64
+		if err := rows.Scan(&testCase.ID, &testCase.TaskID, &testCase.Name, &testCase.TestCommand, &expected, &visibility, &timeout, &setupScript, &testCase.Ordering); err != nil {
 			return nil, fmt.Errorf("scan test case: %w", err)
 		}
 		testCase.ExpectedResult = expected.String
+		testCase.Visibility = visibility.String
+		if timeout.Valid {
+			testCase.TimeoutSeconds = int(timeout.Int64)
+		}
+		testCase.SetupScript = setupScript.String
 		cases = append(cases, testCase)
 	}
 	return cases, rows.Err()
@@ -279,15 +290,20 @@ func (s *Store) listTestCases(ctx context.Context, taskID string) ([]models.Test
 func scanTask(scanner interface{ Scan(dest ...any) error }) (models.Task, error) {
 	var task models.Task
 	var technicalDetail, setupScript, codebasePath, taskRootPath, gitURL, gitRef sql.NullString
+	var externalSource, externalID, externalURL, metadata sql.NullString
 	var templateKind, workspaceMode string
 	var isBuiltin int
-	if err := scanner.Scan(&task.ID, &task.Name, &task.Description, &task.Category, &templateKind, &workspaceMode, &gitURL, &gitRef, &task.ComplexityScore, &task.CodebaseType, &task.TaskPrompt, &technicalDetail, &setupScript, &codebasePath, &taskRootPath, &isBuiltin, &task.CreatedAt); err != nil {
+	if err := scanner.Scan(&task.ID, &task.Name, &task.Description, &task.Category, &templateKind, &workspaceMode, &gitURL, &gitRef, &externalSource, &externalID, &externalURL, &metadata, &task.ComplexityScore, &task.CodebaseType, &task.TaskPrompt, &technicalDetail, &setupScript, &codebasePath, &taskRootPath, &isBuiltin, &task.CreatedAt); err != nil {
 		return task, fmt.Errorf("scan task: %w", err)
 	}
 	task.TemplateKind = templateKind
 	task.WorkspaceMode = workspaceMode
 	task.WorkspaceGitURL = gitURL.String
 	task.WorkspaceGitRef = gitRef.String
+	task.ExternalSource = externalSource.String
+	task.ExternalID = externalID.String
+	task.ExternalURL = externalURL.String
+	task.Metadata = unmarshalJSON(metadata.String, map[string]any{})
 	task.TechnicalDetail = technicalDetail.String
 	task.SetupScript = setupScript.String
 	task.CodebasePath = codebasePath.String

@@ -155,7 +155,12 @@ export function useWebSocket() {
       const data = JSON.parse(event.data) as { type: string; payload: unknown };
       const eventID = nextEventID.current;
       nextEventID.current += 1;
-      setEvents((current) => [...current.slice(-199), { ...data, id: eventID }]);
+      setEvents((current) => {
+        const next = [...current, { ...data, id: eventID }];
+        const runLogs = next.filter((item) => item.type === 'run.log');
+        const otherEvents = next.filter((item) => item.type !== 'run.log').slice(-199);
+        return [...runLogs, ...otherEvents].sort((a, b) => a.id - b.id);
+      });
     };
     return () => socket.close();
   }, [wsBase]);

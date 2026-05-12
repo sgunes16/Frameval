@@ -32,6 +32,16 @@ type Manager struct {
 	mu           sync.Mutex
 }
 
+type metadataWorkspaceFile struct {
+	Path       string `json:"path"`
+	Content    string `json:"content"`
+	Executable bool   `json:"executable"`
+}
+
+type metadataWorkspacePayload struct {
+	WorkspaceFiles []metadataWorkspaceFile `json:"workspace_files"`
+}
+
 func NewManager(ctx context.Context, sandboxImage string) *Manager {
 	dockerClient, err := newDockerClient(ctx)
 	if err != nil {
@@ -115,6 +125,9 @@ func (m *Manager) PrepareWorkspace(ctx context.Context, experiment models.Experi
 	}
 	// Tasks no longer ship with per-task tests/ folders — each task encodes its
 	// verification inside its `test_cases[*].test_command` (e.g. `go build ./...`).
+	if err := materializeWorkspaceFiles(workspace, task.Metadata); err != nil {
+		return "", nil, err
+	}
 	for _, artifact := range artifacts {
 		if artifact.FilePath == "" {
 			continue
@@ -128,9 +141,13 @@ func (m *Manager) PrepareWorkspace(ctx context.Context, experiment models.Experi
 		}
 	}
 	if strings.TrimSpace(task.SetupScript) != "" {
-		if _, err := m.RunShell(ctx, workspace, nil, task.SetupScript); err != nil {
-			return "", nil, fmt.Errorf("run setup script: %w", err)
+		output, err := m.RunShell(ctx, workspace, nil, task.SetupScript)
+		if err != nil {
+			return "", nil, fmt.Errorf("run setup script: %w (%s)", err, strings.TrimSpace(output))
 		}
+	}
+	if err := ensureWorkspaceGitBaseline(ctx, workspace); err != nil {
+		return "", nil, fmt.Errorf("prepare workspace git baseline: %w", err)
 	}
 	snapshot, err := snapshotFiles(workspace)
 	if err != nil {
@@ -340,7 +357,7 @@ func (m *Manager) CollectOutputFiles(workspace string) ([]models.OutputFile, err
 		}
 		if d.IsDir() {
 			name := d.Name()
-			if name == ".git" || name == "node_modules" || name == ".venv" || name == "__pycache__" {
+			if name == ".git" || name == "node_modules" || name == ".venv" || name == ".frameval-venv" || name == "__pycache__" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -503,7 +520,7 @@ func snapshotFiles(root string) (map[string]string, error) {
 		}
 		if d.IsDir() {
 			name := d.Name()
-			if name == ".git" || name == "node_modules" || name == ".venv" || name == "__pycache__" {
+			if name == ".git" || name == "node_modules" || name == ".venv" || name == ".frameval-venv" || name == "__pycache__" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -527,15 +544,130 @@ func snapshotFiles(root string) (map[string]string, error) {
 }
 
 func cloneGitWorkspace(ctx context.Context, gitURL string, gitRef string, workspace string) error {
-	args := []string{"clone", "--depth", "1"}
-	if gitRef != "" {
-		args = append(args, "--branch", gitRef)
+	if strings.TrimSpace(gitRef) == "" {
+		if output, err := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitURL, workspace).CombinedOutput(); err != nil {
+			return fmt.Errorf("clone git workspace: %w (%s)", err, strings.TrimSpace(string(output)))
+		}
+		return nil
 	}
-	args = append(args, gitURL, workspace)
+	if output, err := exec.CommandContext(ctx, "git", "clone", "--no-checkout", "--filter=blob:none", gitURL, workspace).CombinedOutput(); err != nil {
+		return fmt.Errorf("clone git workspace: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	if output, err := exec.CommandContext(ctx, "git", "-C", workspace, "checkout", gitRef).CombinedOutput(); err != nil {
+		return fmt.Errorf("checkout git ref %s: %w (%s)", gitRef, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func materializeWorkspaceFiles(workspace string, metadata map[string]any) error {
+	if len(metadata) == 0 {
+		return nil
+	}
+	payload, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("marshal task metadata: %w", err)
+	}
+	var files metadataWorkspacePayload
+	if err := json.Unmarshal(payload, &files); err != nil {
+		return fmt.Errorf("decode workspace files: %w", err)
+	}
+	for _, file := range files.WorkspaceFiles {
+		if err := writeMetadataWorkspaceFile(workspace, file); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeMetadataWorkspaceFile(workspace string, file metadataWorkspaceFile) error {
+	relativePath := filepath.Clean(file.Path)
+	if relativePath == "." || relativePath == "" || strings.HasPrefix(relativePath, "..") || filepath.IsAbs(relativePath) {
+		return fmt.Errorf("invalid workspace file path %q", file.Path)
+	}
+	targetPath := filepath.Join(workspace, relativePath)
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("create workspace file dir: %w", err)
+	}
+	mode := os.FileMode(0o644)
+	if file.Executable {
+		mode = 0o755
+	}
+	if err := os.WriteFile(targetPath, []byte(file.Content), mode); err != nil {
+		return fmt.Errorf("write workspace file %s: %w", file.Path, err)
+	}
+	return nil
+}
+
+func (m *Manager) CapturePatch(ctx context.Context, workspace string) (string, error) {
+	if err := runGitCommand(ctx, workspace, nil, "add", "-A"); err != nil {
+		return "", err
+	}
+	output, err := exec.CommandContext(ctx, "git", "-C", workspace, "diff", "--cached", "--binary", "--no-ext-diff", "--no-color").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("capture git patch: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func ensureWorkspaceGitBaseline(ctx context.Context, workspace string) error {
+	if err := os.RemoveAll(filepath.Join(workspace, ".git")); err != nil {
+		return fmt.Errorf("remove existing git metadata: %w", err)
+	}
+	if err := runGitCommand(ctx, workspace, nil, "init", "-q"); err != nil {
+		return err
+	}
+	if err := writeGitInfoExclude(workspace); err != nil {
+		return err
+	}
+	if err := runGitCommand(ctx, workspace, nil, "add", "-A"); err != nil {
+		return err
+	}
+	if err := runGitCommand(ctx, workspace, gitIdentityEnv(), "commit", "--allow-empty", "-qm", "frameval baseline"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeGitInfoExclude(workspace string) error {
+	excludePath := filepath.Join(workspace, ".git", "info", "exclude")
+	if err := os.MkdirAll(filepath.Dir(excludePath), 0o755); err != nil {
+		return fmt.Errorf("create git info dir: %w", err)
+	}
+	content := strings.Join([]string{
+		".frameval-venv/",
+		".venv/",
+		"node_modules/",
+		"__pycache__/",
+		".pytest_cache/",
+		".mypy_cache/",
+		"*.pyc",
+		"",
+	}, "\n")
+	if err := os.WriteFile(excludePath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write git exclude: %w", err)
+	}
+	return nil
+}
+
+func gitIdentityEnv() map[string]string {
+	return map[string]string{
+		"GIT_AUTHOR_NAME":     "Frameval",
+		"GIT_AUTHOR_EMAIL":    "frameval@example.com",
+		"GIT_COMMITTER_NAME":  "Frameval",
+		"GIT_COMMITTER_EMAIL": "frameval@example.com",
+	}
+}
+
+func runGitCommand(ctx context.Context, workspace string, env map[string]string, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = workspace
+	cmd.Env = os.Environ()
+	for key, value := range env {
+		cmd.Env = append(cmd.Env, key+"="+value)
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("clone git workspace: %w (%s)", err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("git %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
@@ -607,9 +739,27 @@ func tarDirectory(root string) ([]byte, error) {
 		if err != nil {
 			return err
 		}
+		if shouldSkipArchivePath(relPath, d) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		info, err := d.Info()
 		if err != nil {
 			return err
+		}
+		var input *os.File
+		if !d.IsDir() {
+			input, err = os.Open(currentPath)
+			if err != nil {
+				return err
+			}
+			defer input.Close()
+			info, err = input.Stat()
+			if err != nil {
+				return err
+			}
 		}
 		header, err := tar.FileInfoHeader(info, "")
 		if err != nil {
@@ -625,11 +775,7 @@ func tarDirectory(root string) ([]byte, error) {
 		if d.IsDir() {
 			return nil
 		}
-		content, err := os.ReadFile(currentPath)
-		if err != nil {
-			return err
-		}
-		if _, err := writer.Write(content); err != nil {
+		if _, err := io.Copy(writer, input); err != nil {
 			return err
 		}
 		return nil
@@ -642,6 +788,14 @@ func tarDirectory(root string) ([]byte, error) {
 		return nil, err
 	}
 	return buffer.Bytes(), nil
+}
+
+func shouldSkipArchivePath(relPath string, d fs.DirEntry) bool {
+	name := d.Name()
+	if d.IsDir() {
+		return name == "__pycache__" || name == ".mypy_cache" || name == ".pytest_cache"
+	}
+	return strings.HasSuffix(name, ".pyc")
 }
 
 func extractTarToDir(reader io.Reader, targetDir string, prefixToStrip string) error {

@@ -22,6 +22,7 @@ type Transcript struct {
 	RawOutput      string       `json:"raw_output"`
 	ParsedTurns    []ParsedTurn `json:"parsed_turns,omitempty"`
 	FilesystemDiff string       `json:"filesystem_diff,omitempty"`
+	Patch          string       `json:"patch,omitempty"`
 	TotalTurns     int          `json:"total_turns"`
 	TotalTokens    int          `json:"total_tokens"`
 	CostUSD        float64      `json:"cost_usd"`

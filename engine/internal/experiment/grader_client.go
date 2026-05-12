@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/mustafaselman/frameval/engine/internal/models"
@@ -40,6 +41,9 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 		JudgeConfig:    &graderpb.JudgeConfig{Model: "gpt-5.4", Provider: "openai", JudgeRounds: 1},
 	}
 	for _, testCase := range task.TestCases {
+		if strings.EqualFold(strings.TrimSpace(testCase.Visibility), "hidden") || strings.TrimSpace(testCase.SetupScript) != "" {
+			continue
+		}
 		request.Task.TestCases = append(request.Task.TestCases, &graderpb.TestCase{Name: testCase.Name, Command: testCase.TestCommand, ExpectedResult: testCase.ExpectedResult})
 	}
 	for _, outputFile := range transcript.OutputFiles {

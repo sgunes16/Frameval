@@ -64,6 +64,7 @@ export type Transcript = {
   run_id: string;
   raw_output: string;
   filesystem_diff?: string;
+  patch?: string;
   total_turns: number;
   total_tokens: number;
   output_files?: Array<{ path: string; content: string }>;
@@ -91,13 +92,17 @@ export type Task = {
   workspace_mode?: string;
   workspace_git_url?: string;
   workspace_git_ref?: string;
+  external_source?: string;
+  external_id?: string;
+  external_url?: string;
+  metadata?: Record<string, unknown>;
   complexity_score: number;
   codebase_type: string;
   task_prompt: string;
   setup_script?: string;
   codebase_path?: string;
   task_root_path?: string;
-  test_cases?: Array<{ id?: string; name: string; test_command: string; expected_result?: string; ordering: number }>;
+  test_cases?: Array<{ id?: string; name: string; test_command: string; expected_result?: string; visibility?: string; timeout_seconds?: number; setup_script?: string; ordering: number }>;
 };
 
 export type Baseline = {

@@ -30,6 +30,22 @@ else
 fi
 export FRAMEVAL_TASKS_ROOT
 
+if [[ -n "${FRAMEVAL_TERMINAL_BENCH_ROOT:-}" ]]; then
+  case "$FRAMEVAL_TERMINAL_BENCH_ROOT" in
+    /*) : ;;
+    *) FRAMEVAL_TERMINAL_BENCH_ROOT="$ROOT_DIR/${FRAMEVAL_TERMINAL_BENCH_ROOT#./}" ;;
+  esac
+  export FRAMEVAL_TERMINAL_BENCH_ROOT
+fi
+
+if [[ -n "${FRAMEVAL_SWE_BENCH_PATH:-}" ]]; then
+  case "$FRAMEVAL_SWE_BENCH_PATH" in
+    /*) : ;;
+    *) FRAMEVAL_SWE_BENCH_PATH="$ROOT_DIR/${FRAMEVAL_SWE_BENCH_PATH#./}" ;;
+  esac
+  export FRAMEVAL_SWE_BENCH_PATH
+fi
+
 if command -v docker >/dev/null 2>&1 && ! docker image inspect "$FRAMEVAL_SANDBOX_IMAGE" >/dev/null 2>&1; then
   echo "Missing sandbox image: $FRAMEVAL_SANDBOX_IMAGE" >&2
   echo "Build it once with: docker build -t $FRAMEVAL_SANDBOX_IMAGE -f docker/sandbox/Dockerfile ." >&2

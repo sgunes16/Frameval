@@ -135,6 +135,32 @@ func (s *Store) UpdateExperimentStatus(ctx context.Context, experimentID string,
 	return nil
 }
 
+func (s *Store) ReconcileCompletedExperiments(ctx context.Context) (int64, error) {
+	result, err := s.DB.ExecContext(ctx, `
+		UPDATE experiments
+		SET status = 'completed',
+		    completed_at = COALESCE(completed_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+		WHERE status = 'running'
+		  AND EXISTS (
+		      SELECT 1 FROM runs
+		      WHERE runs.experiment_id = experiments.id
+		  )
+		  AND NOT EXISTS (
+		      SELECT 1 FROM runs
+		      WHERE runs.experiment_id = experiments.id
+		        AND runs.status NOT IN ('completed', 'failed', 'cancelled', 'timeout')
+		  )
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("reconcile completed experiments: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("read reconciled experiment count: %w", err)
+	}
+	return count, nil
+}
+
 func (s *Store) SetExperimentEstimate(ctx context.Context, experimentID string, amount float64) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE experiments SET estimated_cost_usd = ?, status = 'ready' WHERE id = ?`, amount, experimentID)
 	if err != nil {
