@@ -49,7 +49,7 @@ test_cases:
     test_command: pytest -q tests/test_cli.py::test_missing_file
     expected_result: exit 0
     ordering: 3
-  - name: Output line format matches WORD: COUNT
+  - name: "Output line format matches WORD: COUNT"
     test_command: pytest -q tests/test_cli.py::test_output_format
     expected_result: exit 0
     ordering: 4

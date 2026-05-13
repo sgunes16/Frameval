@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"math"
-	"sort"
 	"strings"
 	"time"
 
@@ -155,40 +154,6 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 	return gradeFromProto(response), nil
 }
 
-func (c *GraderClient) ComputeStats(ctx context.Context, experimentID string, variantGrades map[string][]models.Grade) ([]models.ExperimentStat, error) {
-	if c.addr == "" {
-		return fallbackStats(experimentID, variantGrades), nil
-	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	conn, err := grpc.NewClient(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return fallbackStats(experimentID, variantGrades), nil
-	}
-	defer conn.Close()
-	client := graderpb.NewGraderServiceClient(conn)
-	request := &graderpb.ComputeStatsRequest{ExperimentId: experimentID}
-	for variantID, grades := range variantGrades {
-		variant := &graderpb.VariantGrades{VariantId: variantID}
-		for _, grade := range grades {
-			variant.Grades = append(variant.Grades, protoGrade(grade))
-		}
-		request.VariantGrades = append(request.VariantGrades, variant)
-	}
-	response, err := client.ComputeStats(ctx, request)
-	if err != nil {
-		return fallbackStats(experimentID, variantGrades), nil
-	}
-	stats := make([]models.ExperimentStat, 0, len(response.Stats))
-	for _, stat := range response.Stats {
-		stats = append(stats, models.ExperimentStat{VariantAID: stat.VariantAId, VariantBID: stat.VariantBId, MetricName: stat.MetricName, MeanA: float64(stat.MeanA), MeanB: float64(stat.MeanB), MedianA: float64(stat.MedianA), MedianB: float64(stat.MedianB), StdA: float64(stat.StdA), StdB: float64(stat.StdB), MannWhitneyU: float64(stat.MannWhitneyU), PValue: float64(stat.PValue), CohensD: float64(stat.CohensD), CILower: float64(stat.CiLower), CIUpper: float64(stat.CiUpper), IsSignificant: stat.IsSignificant, ObservedPower: float64(stat.ObservedPower)})
-	}
-	if len(stats) == 0 {
-		return fallbackStats(experimentID, variantGrades), nil
-	}
-	return stats, nil
-}
-
 func fallbackGrade(transcript models.Transcript) models.Grade {
 	tokenEfficiency := 0.0
 	if transcript.TotalTokens > 0 {
@@ -268,118 +233,9 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 	return grade
 }
 
-func protoGrade(grade models.Grade) *graderpb.GradeRunResponse {
-	response := &graderpb.GradeRunResponse{CompositeScore: float32(grade.CompositeScore)}
-	response.Code = &graderpb.CodeGradeResult{TestPassRate: float32(grade.TestPassRate), TestPassCount: int32(grade.TestPassCount), TestFailCount: int32(grade.TestFailCount), LintScore: float32(grade.LintScore), TypeCheckPass: grade.TypeCheckPass, FileStateValid: grade.FileStateValid}
-	response.Process = &graderpb.ProcessGradeResult{TurnCount: int32(grade.TurnCount), TotalTokens: int32(grade.TotalTokens), CostUsd: float32(grade.CostUSD), TokenEfficiency: float32(grade.TokenEfficiency), BacktrackCount: int32(grade.BacktrackCount), SelfValidationRate: float32(grade.SelfValidationRate), PrematureCompletion: grade.PrematureCompletion, IdleTurns: int32(grade.IdleTurns), ErrorRecoveryCount: int32(grade.ErrorRecoveryCount), ToolCallAccuracy: float32(grade.ToolCallAccuracy), ContextUtilization: float32(grade.ContextUtilization)}
-	response.Judge = &graderpb.JudgeGradeResult{Correctness: float32(grade.JudgeCorrectness), Maintainability: float32(grade.JudgeMaintainability), Completeness: float32(grade.JudgeCompleteness), BestPractices: float32(grade.JudgeBestPractices), ErrorHandling: float32(grade.JudgeErrorHandling), IrrAlpha: float32(grade.JudgeIRRAlpha), RawResponses: grade.RawJudgeResponses}
-	response.Adherence = &graderpb.SpecAdherenceResult{InstructionCompliance: float32(grade.SpecInstructionCompliance), ConstraintViolations: int32(grade.SpecConstraintViolations), ConventionAdherence: float32(grade.SpecConventionAdherence)}
-	return response
-}
-
-func fallbackStats(experimentID string, variantGrades map[string][]models.Grade) []models.ExperimentStat {
-	variantIDs := make([]string, 0, len(variantGrades))
-	for variantID := range variantGrades {
-		variantIDs = append(variantIDs, variantID)
-	}
-	sort.Strings(variantIDs)
-	if len(variantIDs) < 2 {
-		return []models.ExperimentStat{}
-	}
-	metrics := []struct {
-		name    string
-		extract func(models.Grade) float64
-	}{
-		{name: "composite_score", extract: func(grade models.Grade) float64 { return grade.CompositeScore }},
-		{name: "test_pass_rate", extract: func(grade models.Grade) float64 { return grade.TestPassRate }},
-		{name: "token_efficiency", extract: func(grade models.Grade) float64 { return grade.TokenEfficiency }},
-		{name: "context_utilization", extract: func(grade models.Grade) float64 { return grade.ContextUtilization }},
-	}
-	stats := make([]models.ExperimentStat, 0, len(metrics))
-	leftID, rightID := variantIDs[0], variantIDs[1]
-	for _, metric := range metrics {
-		valuesA := collectMetricValues(variantGrades[leftID], metric.extract)
-		valuesB := collectMetricValues(variantGrades[rightID], metric.extract)
-		if len(valuesA) == 0 || len(valuesB) == 0 {
-			continue
-		}
-		stats = append(stats, models.ExperimentStat{
-			ExperimentID:  experimentID,
-			VariantAID:    leftID,
-			VariantBID:    rightID,
-			MetricName:    metric.name,
-			MeanA:         mean(valuesA),
-			MeanB:         mean(valuesB),
-			MedianA:       median(valuesA),
-			MedianB:       median(valuesB),
-			StdA:          stddev(valuesA),
-			StdB:          stddev(valuesB),
-			PValue:        math.NaN(),
-			CohensD:       mean(valuesA) - mean(valuesB),
-			CILower:       math.Min(min(valuesA), min(valuesB)),
-			CIUpper:       math.Max(max(valuesA), max(valuesB)),
-			IsSignificant: false,
-			ObservedPower: 0,
-		})
-	}
-	return stats
-}
-
-func collectMetricValues(grades []models.Grade, extractor func(models.Grade) float64) []float64 {
-	values := make([]float64, 0, len(grades))
-	for _, grade := range grades {
-		values = append(values, extractor(grade))
-	}
-	return values
-}
-
-func mean(values []float64) float64 {
-	total := 0.0
-	for _, value := range values {
-		total += value
-	}
-	return total / float64(len(values))
-}
-
-func median(values []float64) float64 {
-	sorted := append([]float64(nil), values...)
-	sort.Float64s(sorted)
-	middle := len(sorted) / 2
-	if len(sorted)%2 == 0 {
-		return (sorted[middle-1] + sorted[middle]) / 2
-	}
-	return sorted[middle]
-}
-
-func stddev(values []float64) float64 {
-	if len(values) < 2 {
-		return 0
-	}
-	avg := mean(values)
-	total := 0.0
-	for _, value := range values {
-		diff := value - avg
-		total += diff * diff
-	}
-	return math.Sqrt(total / float64(len(values)))
-}
-
-func min(values []float64) float64 {
-	current := values[0]
-	for _, value := range values[1:] {
-		if value < current {
-			current = value
-		}
-	}
-	return current
-}
-
-func max(values []float64) float64 {
-	current := values[0]
-	for _, value := range values[1:] {
-		if value > current {
-			current = value
-		}
-	}
-	return current
-}
+// AgentDx pivot retired the legacy `protoGrade` / `fallbackStats` machinery
+// that fed the old ComputeStats / pairwise variant statistics view. The
+// per-run Diagnostic Profile (Story #19-#23) replaces it. Stats helpers
+// (mean/median/stddev) and the model.ExperimentStat type were dropped
+// together; if AgentDx ever needs aggregate stats again, they belong in
+// engine/pkg/diagnostic where they can compose with the fingerprint vector.

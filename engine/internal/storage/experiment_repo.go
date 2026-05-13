@@ -98,11 +98,6 @@ func (s *Store) GetExperiment(ctx context.Context, experimentID string) (*models
 		return nil, err
 	}
 	experiment.Variants = variants
-	stats, err := s.ListExperimentStats(ctx, experimentID)
-	if err != nil {
-		return nil, err
-	}
-	experiment.Stats = stats
 	return &experiment, nil
 }
 

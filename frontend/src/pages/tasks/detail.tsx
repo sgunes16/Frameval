@@ -26,8 +26,8 @@ export function TaskDetailPage() {
               <span>Complexity {task.complexity_score}/10</span>
             </div>
           </div>
-          <Link to="/experiments/new">
-            <Button size="sm">Use in experiment</Button>
+          <Link to={`/diagnostic/compare?task=${task.id}`}>
+            <Button size="sm">Run diagnostic on this task</Button>
           </Link>
         </div>
         <p className="mt-4 whitespace-pre-wrap text-sm text-slate-600">{task.description}</p>

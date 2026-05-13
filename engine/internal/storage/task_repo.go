@@ -37,44 +37,139 @@ type taskManifest struct {
 	Workspace       *taskManifestWorkspace `json:"workspace,omitempty" yaml:"workspace,omitempty"`
 	ComplexityScore float64                `json:"complexity_score" yaml:"complexity_score"`
 	CodebaseType    string                 `json:"codebase_type" yaml:"codebase_type"`
-	Prompt          string                 `json:"prompt" yaml:"prompt"`
-	TechnicalDetail string                 `json:"technical_details" yaml:"technical_details"`
-	SetupScript     string                 `json:"setup_script" yaml:"setup_script"`
-	CodebasePath    string                 `json:"codebase_path" yaml:"codebase_path"`
-	TestCases       []models.TestCase      `json:"test_cases" yaml:"test_cases"`
+	// Prompt accepts both the legacy `prompt` key and the AgentDx-era
+	// `task_prompt` key. The new per-directory task.yaml format uses
+	// task_prompt (matches models.Task.TaskPrompt); the legacy monolithic
+	// tasks.yaml used prompt. Either populates the same Go field via
+	// the UnmarshalYAML hook below.
+	Prompt          string            `json:"prompt" yaml:"prompt"`
+	TaskPrompt      string            `json:"task_prompt" yaml:"task_prompt"`
+	TechnicalDetail string            `json:"technical_details" yaml:"technical_details"`
+	SetupScript     string            `json:"setup_script" yaml:"setup_script"`
+	CodebasePath    string            `json:"codebase_path" yaml:"codebase_path"`
+	TestCases       []models.TestCase `json:"test_cases" yaml:"test_cases"`
+}
+
+// promptText returns the agent prompt regardless of which YAML key the
+// task.yaml author used. Per-directory AgentDx tasks use `task_prompt`;
+// the legacy monolithic manifest used `prompt`.
+func (m *taskManifest) promptText() string {
+	if strings.TrimSpace(m.TaskPrompt) != "" {
+		return m.TaskPrompt
+	}
+	return m.Prompt
 }
 
 type taskManifestFile struct {
 	Tasks []taskManifest `json:"tasks" yaml:"tasks"`
 }
 
-// SeedBuiltinTasks reads a tasks.yaml/tasks.yml/tasks.json manifest from tasksRoot
-// (or, as a convenience, tasksRoot itself if it points directly at a file) and
-// upserts every entry into the database. No per-task directories or tests/
-// folders are required any more — each task declares its own verification
-// command (typically a compile/syntax check) under `test_cases`.
+// SeedBuiltinTasks loads task definitions from tasksRoot.
+//
+// Two discovery formats are supported:
+//
+//  1. **Per-directory (AgentDx-era):** `tasksRoot/<id>/task.yaml`. One
+//     task per directory; the surrounding workspace/, tests/, setup.sh,
+//     and eval.sh live as siblings. This is the format documented in
+//     docs/task-authoring.md and used by the 3 stress tasks.
+//
+//  2. **Monolithic (legacy):** `tasksRoot/tasks.yaml` (or .yml/.json) with a
+//     top-level `tasks: [...]` array. Kept for back-compat.
+//
+// Both formats can coexist — per-directory tasks take precedence on ID
+// collision. If neither is found the seeder is a no-op (engine still
+// starts; the UI shows zero tasks).
 func (s *Store) SeedBuiltinTasks(ctx context.Context, tasksRoot string) error {
 	manifestPath := tasksRoot
 	info, err := os.Stat(tasksRoot)
 	if err != nil {
 		return fmt.Errorf("stat tasks root: %w", err)
 	}
+
+	manifests := []taskManifest{}
+	seenIDs := map[string]struct{}{}
+
 	if info.IsDir() {
-		resolved, resolveErr := resolveTasksManifestPath(tasksRoot)
-		if resolveErr != nil {
-			return resolveErr
+		// Format 1: walk subdirectories for per-task task.yaml files.
+		entries, err := os.ReadDir(tasksRoot)
+		if err != nil {
+			return fmt.Errorf("read tasks root: %w", err)
 		}
-		manifestPath = resolved
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			subPath := filepath.Join(tasksRoot, entry.Name(), "task.yaml")
+			raw, err := os.ReadFile(subPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return fmt.Errorf("read task manifest %s: %w", subPath, err)
+			}
+			single, err := parseSingleTaskManifest(subPath, raw)
+			if err != nil {
+				return fmt.Errorf("parse task manifest %s: %w", subPath, err)
+			}
+			if strings.TrimSpace(single.ID) == "" {
+				single.ID = entry.Name()
+			}
+			// Resolve the workspace/setup/eval paths relative to the task dir
+			// so the orchestrator knows where to mount from at run time.
+			taskDir := filepath.Join(tasksRoot, entry.Name())
+			if single.CodebasePath == "" {
+				wsPath := filepath.Join(taskDir, "workspace")
+				if _, err := os.Stat(wsPath); err == nil {
+					single.CodebasePath = wsPath
+				}
+			}
+			manifests = append(manifests, single)
+			seenIDs[single.ID] = struct{}{}
+		}
+
+		// Format 2: legacy monolithic manifest (only if a file is present).
+		if resolved, resolveErr := resolveTasksManifestPath(tasksRoot); resolveErr == nil {
+			manifestPath = resolved
+		} else {
+			// No legacy manifest; if we already found per-dir tasks we're done.
+			if len(manifests) > 0 {
+				return s.upsertManifests(ctx, manifests)
+			}
+			return nil
+		}
 	}
+
 	raw, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return fmt.Errorf("read tasks manifest %s: %w", manifestPath, err)
 	}
-	manifests, err := parseTaskManifests(manifestPath, raw)
+	legacy, err := parseTaskManifests(manifestPath, raw)
 	if err != nil {
 		return fmt.Errorf("parse tasks manifest %s: %w", manifestPath, err)
 	}
+	for _, m := range legacy {
+		if _, dup := seenIDs[m.ID]; dup {
+			continue // per-dir task wins
+		}
+		manifests = append(manifests, m)
+	}
+
+	return s.upsertManifests(ctx, manifests)
+}
+
+// upsertManifests sorts by ID for stable upsert order, writes each task to
+// the database, then prunes any built-in tasks that are no longer present in
+// the manifest. The prune step keeps the DB in sync after tasks are renamed
+// or deleted from disk — without it, removing a task.yaml leaves the row
+// stranded forever. User-created tasks (is_builtin = 0) are never touched.
+func (s *Store) upsertManifests(ctx context.Context, manifests []taskManifest) error {
 	sort.SliceStable(manifests, func(i, j int) bool { return manifests[i].ID < manifests[j].ID })
+	keepIDs := make([]string, 0, len(manifests))
+	for _, manifest := range manifests {
+		if id := strings.TrimSpace(manifest.ID); id != "" {
+			keepIDs = append(keepIDs, id)
+		}
+	}
 	for _, manifest := range manifests {
 		if strings.TrimSpace(manifest.ID) == "" {
 			return fmt.Errorf("task manifest missing id: %+v", manifest)
@@ -116,7 +211,7 @@ func (s *Store) SeedBuiltinTasks(ctx context.Context, tasksRoot string) error {
 			Metadata:        manifest.Metadata,
 			ComplexityScore: manifest.ComplexityScore,
 			CodebaseType:    manifest.CodebaseType,
-			TaskPrompt:      manifest.Prompt,
+			TaskPrompt:      manifest.promptText(),
 			TechnicalDetail: manifest.TechnicalDetail,
 			SetupScript:     manifest.SetupScript,
 			CodebasePath:    manifest.CodebasePath,
@@ -126,6 +221,29 @@ func (s *Store) SeedBuiltinTasks(ctx context.Context, tasksRoot string) error {
 		if _, upsertErr := s.UpsertTask(ctx, task); upsertErr != nil {
 			return upsertErr
 		}
+	}
+	return s.pruneOrphanBuiltinTasks(ctx, keepIDs)
+}
+
+// pruneOrphanBuiltinTasks deletes any rows marked is_builtin = 1 whose ID is
+// not in keepIDs. Called after the seeder finishes upserting so that
+// tasks removed from disk also vanish from /api/tasks on the next boot.
+func (s *Store) pruneOrphanBuiltinTasks(ctx context.Context, keepIDs []string) error {
+	if len(keepIDs) == 0 {
+		// Refuse to wipe the entire built-in table when the manifest is empty
+		// (e.g. misconfigured FRAMEVAL_TASKS_ROOT). Better to leave stale rows
+		// than to delete everything by accident.
+		return nil
+	}
+	placeholders := strings.Repeat("?,", len(keepIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf("DELETE FROM tasks WHERE is_builtin = 1 AND id NOT IN (%s)", placeholders)
+	args := make([]any, len(keepIDs))
+	for i, id := range keepIDs {
+		args[i] = id
+	}
+	if _, err := s.DB.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("prune orphan built-in tasks: %w", err)
 	}
 	return nil
 }
@@ -138,6 +256,24 @@ func resolveTasksManifestPath(tasksRoot string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("tasks manifest not found under %s; expected tasks.yaml, tasks.yml, or tasks.json", tasksRoot)
+}
+
+// parseSingleTaskManifest parses a per-directory task.yaml (or .json) that
+// contains exactly one task — no `tasks:` wrapper. Used by the per-directory
+// discovery branch in SeedBuiltinTasks.
+func parseSingleTaskManifest(manifestPath string, raw []byte) (taskManifest, error) {
+	var manifest taskManifest
+	switch strings.ToLower(filepath.Ext(manifestPath)) {
+	case ".yaml", ".yml":
+		if err := yaml.Unmarshal(raw, &manifest); err != nil {
+			return manifest, err
+		}
+	default:
+		if err := json.Unmarshal(raw, &manifest); err != nil {
+			return manifest, err
+		}
+	}
+	return manifest, nil
 }
 
 func parseTaskManifests(manifestPath string, raw []byte) ([]taskManifest, error) {

@@ -26,7 +26,6 @@ type Experiment struct {
 	StartedAt           string             `json:"started_at,omitempty"`
 	CompletedAt         string             `json:"completed_at,omitempty"`
 	Variants            []Variant          `json:"variants,omitempty"`
-	Stats               []ExperimentStat   `json:"stats,omitempty"`
 }
 
 type Variant struct {
