@@ -1,41 +1,35 @@
+// Package executor wraps the public pkg/executor types with internal helpers.
+//
+// Public consumers should import engine/pkg/executor directly. This file
+// exposes type aliases so existing internal code keeps compiling during the
+// pkg refactor; the aliases resolve to the same underlying types as pkg/executor.
 package executor
 
 import (
-	"context"
-
-	"github.com/mustafaselman/frameval/engine/internal/models"
+	pkgexec "github.com/mustafaselman/frameval/engine/pkg/executor"
 )
 
-type ExecutionMode string
+// Re-exported public types (identical to pkg/executor; aliases preserve
+// existing call sites without churn).
+type (
+	AgentExecutor = pkgexec.AgentExecutor
+	ExecutionMode = pkgexec.ExecutionMode
+	RunConfig     = pkgexec.RunConfig
+	RunResult     = pkgexec.RunResult
+	ParsedTurn    = pkgexec.ParsedTurn
+)
 
+// Re-exported execution-mode constants.
 const (
-	ExecutionModeCLI ExecutionMode = "cli"
-	ExecutionModeAPI ExecutionMode = "api"
+	ExecutionModeCLI = pkgexec.ExecutionModeCLI
+	ExecutionModeAPI = pkgexec.ExecutionModeAPI
 )
 
-type RunConfig struct {
-	WorkspacePath string
-	Prompt        string
-	Model         string
-	Environment   map[string]string
-	OnOutput      func(line string)
-}
-
-type RunResult struct {
-	RawOutput      string
-	ParsedTurns    []models.ParsedTurn
-	StreamedOutput bool
-}
-
+// defaultCLILanguageInstruction is an internal helper used by built-in CLI
+// executors to nudge agents toward English output for reproducible grading.
 const defaultCLILanguageInstruction = "Frameval evaluation instruction: respond in English unless the task explicitly asks for another language."
 
+// promptWithDefaultCLILanguage prepends the language nudge to a raw prompt.
 func promptWithDefaultCLILanguage(prompt string) string {
 	return defaultCLILanguageInstruction + "\n\n" + prompt
-}
-
-type AgentExecutor interface {
-	Name() string
-	SupportedModes() []ExecutionMode
-	Execute(ctx context.Context, cfg RunConfig) (*RunResult, error)
-	ParseTranscript(raw []byte) (*models.Transcript, error)
 }
