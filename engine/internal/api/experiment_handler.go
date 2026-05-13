@@ -87,15 +87,6 @@ func (s *Service) CancelExperiment(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, map[string]bool{"cancelled": true})
 }
 
-func (s *Service) GetExperimentStats(w http.ResponseWriter, r *http.Request) {
-	stats, err := s.store.ListExperimentStats(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	JSON(w, http.StatusOK, stats)
-}
-
 func (s *Service) ExportExperiment(w http.ResponseWriter, r *http.Request) {
 	experimentID := chi.URLParam(r, "id")
 	format := chi.URLParam(r, "format")

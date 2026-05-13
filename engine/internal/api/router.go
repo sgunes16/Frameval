@@ -36,7 +36,6 @@ func NewRouter(service *Service) http.Handler {
 			r.Post("/{id}/estimate", service.EstimateExperiment)
 			r.Post("/{id}/start", service.StartExperiment)
 			r.Post("/{id}/cancel", service.CancelExperiment)
-			r.Get("/{id}/stats", service.GetExperimentStats)
 			r.Get("/{id}/export/{format}", service.ExportExperiment)
 			r.Get("/{id}/runs", service.ListExperimentRuns)
 			r.Route("/{id}/variants", func(r chi.Router) {

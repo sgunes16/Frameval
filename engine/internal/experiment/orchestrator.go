@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -266,7 +265,6 @@ func (o *Orchestrator) refreshExperimentState(ctx context.Context, experimentID 
 	}
 	completed := 0
 	active := 0
-	variantGrades := map[string][]models.Grade{}
 	for _, run := range runs {
 		if run.Status == "completed" || run.Status == "failed" {
 			completed++
@@ -274,21 +272,18 @@ func (o *Orchestrator) refreshExperimentState(ctx context.Context, experimentID 
 		if run.Status == "running" || run.Status == "grading" || run.Status == "queued" {
 			active++
 		}
-		if run.Grade != nil {
-			variantGrades[run.VariantID] = append(variantGrades[run.VariantID], *run.Grade)
-		}
 	}
 	o.broadcast("run.progress", map[string]any{"experiment_id": experimentID, "completed": completed, "total": len(runs), "active": active})
 	if completed != len(runs) || len(runs) == 0 {
 		return nil
 	}
-	stats, err := o.grader.ComputeStats(ctx, experimentID, variantGrades)
-	if err == nil {
-		sort.Slice(stats, func(i, j int) bool { return stats[i].MetricName < stats[j].MetricName })
-		_ = o.store.ReplaceExperimentStats(ctx, experimentID, stats)
-	}
+	// AgentDx pivot retired pairwise variant statistics in favor of the
+	// per-run diagnostic profile shown on /diagnostic/compare. The legacy
+	// grader.ComputeStats / stats_repo plumbing was removed in the cleanup
+	// PR; experiments still transition to "completed" here so the UI
+	// reflects state, but no aggregated stats are persisted.
 	_ = o.store.UpdateExperimentStatus(ctx, experimentID, "completed")
-	o.broadcast("experiment.complete", map[string]any{"experiment_id": experimentID, "stats_summary": stats})
+	o.broadcast("experiment.complete", map[string]any{"experiment_id": experimentID})
 	return nil
 }
 

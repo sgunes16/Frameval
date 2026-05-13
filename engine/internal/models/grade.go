@@ -47,24 +47,3 @@ type InstructionResult struct {
 	Status      string `json:"status"`
 	Reasoning   string `json:"reasoning"`
 }
-
-type ExperimentStat struct {
-	ID            string  `json:"id"`
-	ExperimentID  string  `json:"experiment_id"`
-	VariantAID    string  `json:"variant_a_id"`
-	VariantBID    string  `json:"variant_b_id"`
-	MetricName    string  `json:"metric_name"`
-	MeanA         float64 `json:"mean_a"`
-	MeanB         float64 `json:"mean_b"`
-	MedianA       float64 `json:"median_a"`
-	MedianB       float64 `json:"median_b"`
-	StdA          float64 `json:"std_a"`
-	StdB          float64 `json:"std_b"`
-	MannWhitneyU  float64 `json:"mann_whitney_u"`
-	PValue        float64 `json:"p_value"`
-	CohensD       float64 `json:"cohens_d"`
-	CILower       float64 `json:"ci_lower"`
-	CIUpper       float64 `json:"ci_upper"`
-	IsSignificant bool    `json:"is_significant"`
-	ObservedPower float64 `json:"observed_power"`
-}

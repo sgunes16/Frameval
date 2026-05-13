@@ -59,8 +59,8 @@ export function ExperimentsPage() {
               placeholder="Search by name, model, agent..."
               className="w-64"
             />
-            <Link to="/experiments/new">
-              <Button size="sm">New experiment</Button>
+            <Link to="/diagnostic/compare">
+              <Button size="sm">New diagnostic run</Button>
             </Link>
           </div>
         </div>
@@ -69,10 +69,10 @@ export function ExperimentsPage() {
       {filtered.length === 0 ? (
         <EmptyState
           title="No experiments match"
-          description="Adjust your filters or create a new experiment."
+          description="Adjust your filters or start a new diagnostic run."
           action={
-            <Link to="/experiments/new">
-              <Button size="sm">Create experiment</Button>
+            <Link to="/diagnostic/compare">
+              <Button size="sm">Start diagnostic run</Button>
             </Link>
           }
         />
@@ -113,18 +113,11 @@ export function ExperimentsPage() {
                   <td className="px-4 py-3 text-slate-600">{formatCurrency(experiment.estimated_cost_usd)}</td>
                   <td className="px-4 py-3 text-slate-500">{formatTimeAgo(experiment.created_at)}</td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <Link to={`/experiments/${experiment.id}/monitor`}>
-                        <Button variant="ghost" size="sm">
-                          Monitor
-                        </Button>
-                      </Link>
-                      <Link to={`/experiments/${experiment.id}/results`}>
-                        <Button variant="outline" size="sm">
-                          Results
-                        </Button>
-                      </Link>
-                    </div>
+                    <Link to={`/experiments/${experiment.id}/monitor`}>
+                      <Button variant="outline" size="sm">
+                        Open
+                      </Button>
+                    </Link>
                   </td>
                 </tr>
               ))}
