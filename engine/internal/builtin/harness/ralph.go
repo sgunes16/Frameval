@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,9 +19,12 @@ import (
 // defaultRalphMaxIterations is the cap when Budget.MaxIterations is unset (<= 0).
 const defaultRalphMaxIterations = 8
 
-// noProgressStreakHalt is the number of consecutive iterations with no workspace
-// change after which Ralph declares the loop stuck and halts. Lower than total
-// iterations so we stop early when the agent is not learning.
+// noProgressStreakHalt is the number of consecutive iterations whose workspace
+// fingerprint matches the previous iteration's, after which Ralph declares the
+// loop stuck and halts. The first iteration always runs to establish a
+// baseline fingerprint; counting begins from iteration 1. With the value at 2,
+// a fully idle agent halts after 3 invocations (iter 0 baseline, iter 1 first
+// match, iter 2 second match → halt).
 const noProgressStreakHalt = 2
 
 // Ralph wraps a single-invocation bare-style call in a while-loop. State
@@ -195,6 +197,3 @@ func fingerprintDir(root string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// Statically assert the harness package can find the os import (avoids
-// "imported and not used" lint if a future edit drops a path manipulation).
-var _ = os.PathSeparator

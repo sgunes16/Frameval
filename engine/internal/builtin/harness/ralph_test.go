@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -82,7 +83,7 @@ func TestRalphReachesMaxIterationsWhenProgressing(t *testing.T) {
 		t.Errorf("expected 3 calls, got %d", rec.calls)
 	}
 	for i := 0; i < 3; i++ {
-		marker := "--- Iteration: " + itoa(i) + " ---"
+		marker := "--- Iteration: " + strconv.Itoa(i) + " ---"
 		if !strings.Contains(result.RawOutput, marker) {
 			t.Errorf("merged transcript missing %q", marker)
 		}
@@ -181,21 +182,4 @@ func TestRegistryListsRalph(t *testing.T) {
 	if _, err := r.Get("ralph"); err != nil {
 		t.Errorf("expected ralph in default registry: %v", err)
 	}
-}
-
-// itoa avoids a strconv import in tests for the loop counter formatting.
-func itoa(n int) string {
-	switch n {
-	case 0:
-		return "0"
-	case 1:
-		return "1"
-	case 2:
-		return "2"
-	}
-	// fall-through for larger N; tests only need 0-2 currently
-	if n < 0 {
-		return "-"
-	}
-	return ""
 }
