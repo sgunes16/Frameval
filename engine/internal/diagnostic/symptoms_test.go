@@ -140,6 +140,53 @@ func TestSymptomsUnexpectedFilesModified(t *testing.T) {
 	}
 }
 
+func TestTruncateUTF8DoesNotSplitMultiByteRune(t *testing.T) {
+	// Each "é" is 2 bytes in UTF-8. A 251-byte cap would land mid-rune
+	// without the boundary walk. truncateUTF8 must back up to an even
+	// boundary so the result contains no broken bytes.
+	src := strings.Repeat("é", 300) // 600 bytes total
+	out := truncateUTF8(src, 251)
+	if len(out)%2 != 0 {
+		t.Errorf("truncated length %d is odd; landed mid-rune", len(out))
+	}
+	// Result must be valid UTF-8 (no replacement chars when decoded)
+	for _, r := range out {
+		if r == 0xFFFD {
+			t.Errorf("found replacement rune; truncation broke a multi-byte rune")
+		}
+	}
+}
+
+func TestInferToolNameFallbackAtIndexZero(t *testing.T) {
+	e := NewSymptomExtractor()
+	// A tool-role error turn at index 0 has no preceding tool: <name> turn,
+	// so inferToolName must fall back to "unknown" — never panic.
+	turns := []executor.ParsedTurn{
+		{Role: "tool", Content: "error: something blew up"},
+	}
+	s := e.Extract(turns, RunOutcome{}, task.Task{})
+	if len(s.ToolFailures) != 1 {
+		t.Fatalf("expected 1 tool failure, got %d", len(s.ToolFailures))
+	}
+	if s.ToolFailures[0].ToolName != "unknown" {
+		t.Errorf("expected fallback name 'unknown', got %q", s.ToolFailures[0].ToolName)
+	}
+}
+
+func TestSymptomsDoneClaimFromToolRoleIgnored(t *testing.T) {
+	// Tool-role output mentioning "task complete" must NOT flip
+	// DeclaredCompletion — only assistant claims count.
+	e := NewSymptomExtractor()
+	turns := []executor.ParsedTurn{
+		{Role: "tool", Content: "task complete (subprocess exit 0)"},
+		{Role: "assistant", Content: "let me verify"},
+	}
+	s := e.Extract(turns, RunOutcome{}, task.Task{})
+	if s.DeclaredCompletion {
+		t.Error("tool-role 'task complete' should not flip DeclaredCompletion")
+	}
+}
+
 func TestSymptomsPacketSizeUnder4KB(t *testing.T) {
 	e := NewSymptomExtractor()
 	// Pathologically long inputs (simulates verbose Aider run)

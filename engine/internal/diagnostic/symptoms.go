@@ -68,8 +68,11 @@ func (e *SymptomExtractor) Extract(turns []executor.ParsedTurn, outcome RunOutco
 	s.ToolFailures = collectToolFailures(turns)
 	s.LastErrorMessage = lastErrorMessage(turns)
 	s.LastAssistantClaim = truncateUTF8(lastAssistantContent(turns), lastClaimMaxLen)
-	s.DeclaredCompletion = anyMatches(turns, doneClaimRE)
-	s.AcknowledgedFailure = anyMatches(turns, failureClaimRE)
+	// Completion / failure claims are signal about agent statements, so
+	// only count assistant-role turns. A tool result echoing "task complete"
+	// should not flip DeclaredCompletion.
+	s.DeclaredCompletion = anyAssistantMatches(turns, doneClaimRE)
+	s.AcknowledgedFailure = anyAssistantMatches(turns, failureClaimRE)
 	s.TimeToFirstError = timeToFirstError(turns)
 	s.UnexpectedFilesModified = computeUnexpected(outcome.FilesTouched, outcome.ExpectedFilesModified)
 
@@ -135,8 +138,11 @@ func lastAssistantContent(turns []executor.ParsedTurn) string {
 	return ""
 }
 
-func anyMatches(turns []executor.ParsedTurn, re *regexp.Regexp) bool {
+func anyAssistantMatches(turns []executor.ParsedTurn, re *regexp.Regexp) bool {
 	for _, t := range turns {
+		if !strings.EqualFold(t.Role, roleAssistant) {
+			continue
+		}
 		if re.MatchString(t.Content) {
 			return true
 		}
