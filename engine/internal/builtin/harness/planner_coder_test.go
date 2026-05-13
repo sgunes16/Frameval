@@ -139,6 +139,46 @@ func TestPlannerCoderContextCancellationAbortsBeforeCoder(t *testing.T) {
 	}
 }
 
+// Parallel to the Canceled test: DeadlineExceeded also aborts before coder.
+func TestPlannerCoderDeadlineExceededAbortsBeforeCoder(t *testing.T) {
+	h := NewPlannerCoder()
+	ws := pkgharness.Workspace{Path: t.TempDir()}
+	tk := task.Task{TaskPrompt: "x"}
+	exec := &twoStageExecutor{plannerErr: context.DeadlineExceeded}
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+
+	_, err := h.Invoke(context.Background(), run, exec)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected context.DeadlineExceeded, got %v", err)
+	}
+	if len(exec.calls) != 1 {
+		t.Errorf("expected only planner call on deadline; got %d", len(exec.calls))
+	}
+}
+
+// When BOTH planner and coder fail, both errors must be unwrappable so
+// downstream errors.Is checks can detect either sentinel.
+func TestPlannerCoderBothErrorsAreWrapped(t *testing.T) {
+	h := NewPlannerCoder()
+	ws := pkgharness.Workspace{Path: t.TempDir()}
+	tk := task.Task{TaskPrompt: "x"}
+	plannerSentinel := errors.New("planner blew up")
+	coderSentinel := errors.New("coder blew up")
+	exec := &twoStageExecutor{plannerErr: plannerSentinel, coderErr: coderSentinel}
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+
+	_, err := h.Invoke(context.Background(), run, exec)
+	if err == nil {
+		t.Fatal("expected error from both stages")
+	}
+	if !errors.Is(err, plannerSentinel) {
+		t.Errorf("planner sentinel not unwrappable: %v", err)
+	}
+	if !errors.Is(err, coderSentinel) {
+		t.Errorf("coder sentinel not unwrappable: %v", err)
+	}
+}
+
 func TestExtractPlanFromResultPrefersAssistantTurn(t *testing.T) {
 	r := &executor.RunResult{
 		RawOutput: "fallback",

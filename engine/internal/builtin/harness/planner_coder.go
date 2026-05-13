@@ -79,7 +79,9 @@ func (h *PlannerCoder) Invoke(ctx context.Context, run harness.HarnessRun, exec 
 	combined := mergeRoleTranscripts(plannerResult, coderResult)
 	switch {
 	case plannerErr != nil && coderErr != nil:
-		return combined, fmt.Errorf("planner_coder: planner: %w; coder: %v", plannerErr, coderErr)
+		// Go 1.20+ fmt.Errorf supports multiple %w verbs; both errors are
+		// unwrappable via errors.Is/errors.As.
+		return combined, fmt.Errorf("planner_coder: planner: %w; coder: %w", plannerErr, coderErr)
 	case plannerErr != nil:
 		return combined, fmt.Errorf("planner_coder: planner: %w", plannerErr)
 	case coderErr != nil:
