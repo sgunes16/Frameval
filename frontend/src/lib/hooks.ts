@@ -5,8 +5,6 @@ import type {
   AgentInfo,
   APIKey,
   ArtifactVersion,
-  Baseline,
-  CatalogResponse,
   DockerStatus,
   Experiment,
   ExperimentStat,
@@ -68,14 +66,6 @@ export function useTask(id?: string) {
   return useQuery({ queryKey: ['task', id], enabled: Boolean(id), queryFn: () => api.get<Task>(`/tasks/${id}`) });
 }
 
-export function useBaselines() {
-  return useQuery({ queryKey: ['baselines'], queryFn: () => api.get<Baseline[]>('/baselines') });
-}
-
-export function useBaseline(id?: string) {
-  return useQuery({ queryKey: ['baseline', id], enabled: Boolean(id), queryFn: () => api.get<Baseline>(`/baselines/${id}`) });
-}
-
 export function useVariants(experimentId?: string) {
   return useQuery({ queryKey: ['variants', experimentId], enabled: Boolean(experimentId), queryFn: () => api.get<Variant[]>(`/experiments/${experimentId}/variants`) });
 }
@@ -94,10 +84,6 @@ export function useAgents() {
 
 export function useAPIKeys() {
   return useQuery({ queryKey: ['api-keys'], queryFn: () => api.get<APIKey[]>('/config/api-keys') });
-}
-
-export function useCatalogExtensions() {
-  return useQuery({ queryKey: ['catalog-extensions'], queryFn: () => api.get<CatalogResponse>('/config/catalog/extensions') });
 }
 
 export function useDockerStatus() {
@@ -132,15 +118,6 @@ export function useCreateArtifact() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ variantId, payload }: { variantId: string; payload: unknown }) => api.post<ArtifactVersion>(`/variants/${variantId}/artifacts`, payload),
-    onSuccess: (_data, variables) => client.invalidateQueries({ queryKey: ['artifacts', variables.variantId] }),
-  });
-}
-
-export function useImportCatalogExtensions() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({ variantId, extensionIds }: { variantId: string; extensionIds: string[] }) =>
-      api.post<ArtifactVersion[]>(`/variants/${variantId}/catalog-extensions`, { extension_ids: extensionIds }),
     onSuccess: (_data, variables) => client.invalidateQueries({ queryKey: ['artifacts', variables.variantId] }),
   });
 }

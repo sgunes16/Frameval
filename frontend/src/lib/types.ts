@@ -105,18 +105,6 @@ export type Task = {
   test_cases?: Array<{ id?: string; name: string; test_command: string; expected_result?: string; visibility?: string; timeout_seconds?: number; setup_script?: string; ordering: number }>;
 };
 
-export type Baseline = {
-  id: string;
-  name: string;
-  description?: string;
-  source: string;
-  task_id: string;
-  model: string;
-  agent_cli: string;
-  total_runs: number;
-  evaluated_at: string;
-};
-
 export type ModelConfig = {
   id: string;
   provider: string;
@@ -147,27 +135,6 @@ export type ExperimentStat = {
   mean_b: number;
   p_value: number;
   is_significant: boolean;
-};
-
-export type CatalogExtension = {
-  id: string;
-  name: string;
-  description: string;
-  author?: string;
-  version?: string;
-  download_url: string;
-  repository?: string;
-  homepage?: string;
-  documentation?: string;
-  license?: string;
-  tags?: string[];
-  verified?: boolean;
-};
-
-export type CatalogResponse = {
-  schema_version: string;
-  updated_at: string;
-  extensions: CatalogExtension[];
 };
 
 export type DockerStatus = {

@@ -95,30 +95,3 @@ type ArtifactDiff struct {
 	To   ArtifactVersion `json:"to"`
 	Diff string          `json:"diff"`
 }
-
-type CatalogExtension struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Description   string   `json:"description"`
-	Author        string   `json:"author"`
-	Version       string   `json:"version"`
-	DownloadURL   string   `json:"download_url"`
-	Repository    string   `json:"repository,omitempty"`
-	Homepage      string   `json:"homepage,omitempty"`
-	Documentation string   `json:"documentation,omitempty"`
-	License       string   `json:"license,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
-	Verified      bool     `json:"verified"`
-	CreatedAt     string   `json:"created_at,omitempty"`
-	UpdatedAt     string   `json:"updated_at,omitempty"`
-}
-
-type CatalogListResponse struct {
-	SchemaVersion string             `json:"schema_version"`
-	UpdatedAt     string             `json:"updated_at"`
-	Extensions    []CatalogExtension `json:"extensions"`
-}
-
-type CatalogExtensionImportRequest struct {
-	ExtensionIDs []string `json:"extension_ids"`
-}

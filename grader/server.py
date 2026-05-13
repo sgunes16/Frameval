@@ -9,7 +9,6 @@ from grader.composite import compute_composite
 from grader.config import get_settings
 from grader.llm_judge import grade as judge_grade
 from grader.process_grader import grade as process_grade
-from grader.spec_adherence import grade as adherence_grade
 from grader.stats import compute_stats
 from grader.proto import grader_pb2, grader_pb2_grpc
 
@@ -32,12 +31,12 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
         code = grade_code(task, output_files)
         process = process_grade(request.transcript_json)
         judge = judge_grade(code, process) if settings.enable_llm_judge else disabled_judge_result()
-        adherence = adherence_grade(request.transcript_json, request.task.prompt) if settings.enable_spec_adherence else disabled_adherence_result()
+        adherence = disabled_adherence_result()
         composite = compute_composite(
             code,
             process,
             judge if settings.enable_llm_judge else None,
-            adherence if settings.enable_spec_adherence else None,
+            None,
         )
         return grader_pb2.GradeRunResponse(
             code=grader_pb2.CodeGradeResult(
