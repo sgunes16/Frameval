@@ -70,6 +70,18 @@ export function FailureBreakdown({ series }: Props) {
     data.some((row) => (row[code] as number) > 0),
   );
 
+  // If every selected run still has a null/absent failure_label (the
+  // classifier hasn't run yet), codesShown is empty and BarChart would
+  // render axes with no bars — show the empty state instead so it's
+  // explicit what's missing.
+  if (codesShown.length === 0) {
+    return (
+      <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-sm text-slate-500">
+        No failure classifications available yet. The classifier may not have run on these runs.
+      </div>
+    );
+  }
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer>

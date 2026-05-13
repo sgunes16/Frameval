@@ -100,7 +100,7 @@ export function DiagnosticComparePage() {
             <Card>
               <CardHeader
                 title="Behavioral fingerprint"
-                description="9 normalized dimensions overlaid across the selected runs."
+                description="9 of the 10 fingerprint dimensions overlaid; recovery latency is unbounded (turn count) so it appears in the recovery timeline below instead of on this normalized radar."
               />
               <BehavioralRadar series={series} />
             </Card>
