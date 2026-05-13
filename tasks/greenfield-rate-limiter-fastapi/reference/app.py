@@ -3,7 +3,8 @@
 In-process token-bucket-ish rate limiter. Each X-Forwarded-For value gets
 its own sliding window of timestamps; a request is allowed iff the
 window contains < 10 entries within the last 60 seconds. Uses
-`time.monotonic()` for window comparisons (freezegun patches it).
+`time.time()` for window comparisons — freezegun patches it by default,
+so the reset test advances the clock deterministically without sleeps.
 
 Constraints respected:
   - fastapi + starlette only
