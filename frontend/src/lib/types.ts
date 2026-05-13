@@ -1,3 +1,91 @@
+// AgentDx diagnostic profile types — mirror engine/pkg/diagnostic.
+// Field names in snake_case to match the gRPC + JSON wire format.
+
+export type Fingerprint = {
+  planning_depth: number;
+  tool_call_diversity: number;
+  self_validation_rate: number;
+  backtrack_rate: number;
+  file_focus: number;
+  recovery_latency: number;
+  premature_completion: number;
+  turn_efficiency: number;
+  context_reference_rate: number;
+  idle_thinking_ratio: number;
+};
+
+export type ToolFailure = {
+  turn_index: number;
+  tool_name: string;
+  message: string;
+};
+
+export type Symptoms = {
+  tests_passed: number;
+  tests_failed: number;
+  tests_total: number;
+  compile_failed: boolean;
+  lint_errors?: string[];
+  tool_failures?: ToolFailure[];
+  last_error_message?: string;
+  files_touched?: string[];
+  files_created?: string[];
+  files_deleted?: string[];
+  last_assistant_claim?: string;
+  declared_completion: boolean;
+  acknowledged_failure: boolean;
+  time_to_first_error: number;
+  timeout_hit: boolean;
+  wall_clock_seconds: number;
+  unexpected_files_modified?: string[];
+};
+
+export type ErrorEvent = {
+  turn_index: number;
+  type: 'tool_failure' | 'test_failure' | 'stderr' | 'compile_error';
+  tool_name?: string;
+  message: string;
+};
+
+export type RecoveryProfile = {
+  error_events?: ErrorEvent[];
+  error_acknowledgment_rate: number;
+  correction_latency_mean: number;
+  correction_success_rate: number;
+  silent_skip_count: number;
+};
+
+export type FailureCode =
+  | 'NONE' | 'HAL_API' | 'HAL_FILE' | 'DEP_MISS'
+  | 'STOP_EARLY' | 'STOP_GIVEUP' | 'LOOP_INF' | 'WRONG_ABS'
+  | 'MISREAD' | 'ENV_ERR' | 'SCOPE_DRIFT' | 'TIMEOUT' | 'SILENT_SKIP';
+
+export type EvidenceSpan = {
+  code: FailureCode;
+  quote: string;
+  turn_index: number;
+};
+
+export type FailureClassification = {
+  primary: FailureCode;
+  secondary?: FailureCode[];
+  evidence?: EvidenceSpan[];
+  confidence: number;
+  rationale?: string;
+};
+
+export type Diagnostic = {
+  id: string;
+  run_id: string;
+  fingerprint: Fingerprint;
+  symptoms: Symptoms;
+  recovery: RecoveryProfile;
+  failure_label?: FailureClassification | null;
+  classifier_model?: string;
+  classifier_latency_ms?: number;
+  created_at?: string;
+};
+
 export type Variant = {
   id: string;
   experiment_id: string;

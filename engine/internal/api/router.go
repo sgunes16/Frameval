@@ -54,6 +54,7 @@ func NewRouter(service *Service) http.Handler {
 		r.Get("/runs/{id}", service.GetRun)
 		r.Get("/runs/{id}/transcript", service.GetTranscript)
 		r.Get("/runs/{id}/grade", service.GetRunGrade)
+		r.Get("/runs/{id}/diagnostic", service.GetRunDiagnostic)
 		r.Post("/runs/{id}/retry", service.RetryRun)
 		r.Post("/runs/{id}/regrade", service.RegradeRun)
 		r.Get("/tasks", service.ListTasks)
