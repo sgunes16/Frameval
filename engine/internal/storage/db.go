@@ -43,12 +43,27 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) runMigrations(ctx context.Context) error {
+	if _, err := s.DB.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			filename   TEXT PRIMARY KEY,
+			applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+		)
+	`); err != nil {
+		return fmt.Errorf("create schema_migrations table: %w", err)
+	}
+
 	entries, err := migrationFiles.ReadDir("migrations")
 	if err != nil {
 		return fmt.Errorf("read migrations: %w", err)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+
 	for _, entry := range entries {
+		var existing string
+		row := s.DB.QueryRowContext(ctx, `SELECT filename FROM schema_migrations WHERE filename = ?`, entry.Name())
+		if scanErr := row.Scan(&existing); scanErr == nil {
+			continue // already applied
+		}
 		contents, readErr := migrationFiles.ReadFile(filepath.Join("migrations", entry.Name()))
 		if readErr != nil {
 			return fmt.Errorf("read migration %s: %w", entry.Name(), readErr)
@@ -61,6 +76,9 @@ func (s *Store) runMigrations(ctx context.Context) error {
 			if _, execErr := s.DB.ExecContext(ctx, statement); execErr != nil && !isIgnorableMigrationError(execErr) {
 				return fmt.Errorf("apply migration %s: %w", entry.Name(), execErr)
 			}
+		}
+		if _, err := s.DB.ExecContext(ctx, `INSERT INTO schema_migrations(filename) VALUES (?)`, entry.Name()); err != nil {
+			return fmt.Errorf("record migration %s: %w", entry.Name(), err)
 		}
 	}
 	return nil
@@ -86,7 +104,17 @@ func unmarshalJSON[T any](raw string, fallback T) T {
 }
 
 func splitSQLStatements(contents string) []string {
-	parts := strings.Split(contents, ";")
+	// Strip line comments first so semicolons inside comments don't confuse the splitter.
+	var stripped strings.Builder
+	for _, line := range strings.Split(contents, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		stripped.WriteString(line)
+		stripped.WriteString("\n")
+	}
+	parts := strings.Split(stripped.String(), ";")
 	statements := make([]string, 0, len(parts))
 	for _, part := range parts {
 		statement := strings.TrimSpace(part)

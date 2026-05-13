@@ -10,11 +10,11 @@
 -- pkg/task contract and allows future external task sources (e.g., user-imported
 -- brownfield tasks) to populate them without another migration.
 
+-- template_kind was already added by migration 003; not re-added here.
 ALTER TABLE tasks ADD COLUMN external_source TEXT;
 ALTER TABLE tasks ADD COLUMN external_id TEXT;
 ALTER TABLE tasks ADD COLUMN external_url TEXT;
 ALTER TABLE tasks ADD COLUMN metadata_json TEXT;
-ALTER TABLE tasks ADD COLUMN template_kind TEXT;
 
 ALTER TABLE test_cases ADD COLUMN visibility TEXT;
 ALTER TABLE test_cases ADD COLUMN timeout_seconds INTEGER;

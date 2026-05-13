@@ -3,7 +3,6 @@ package models
 type Grade struct {
 	ID                        string              `json:"id"`
 	RunID                     string              `json:"run_id,omitempty"`
-	BaselineID                string              `json:"baseline_id,omitempty"`
 	TestPassRate              float64             `json:"test_pass_rate"`
 	TestPassCount             int                 `json:"test_pass_count"`
 	TestFailCount             int                 `json:"test_fail_count"`
