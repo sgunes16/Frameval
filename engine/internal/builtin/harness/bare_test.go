@@ -52,7 +52,10 @@ func TestBareSetupDoesNotMutateWorkspace(t *testing.T) {
 		t.Errorf("Task not carried: got %q", run.Task.ID)
 	}
 	if run.Workspace.Path != "/tmp/ws" {
-		t.Errorf("Workspace not carried: %+v", run.Workspace)
+		t.Errorf("Workspace.Path not carried: %+v", run.Workspace)
+	}
+	if run.Workspace.TestsDir != "/tmp/tests" {
+		t.Errorf("Workspace.TestsDir not carried: %+v", run.Workspace)
 	}
 }
 

@@ -16,11 +16,20 @@ type Registry struct {
 //
 // Each AgentDx release ships at minimum the bare harness; additional built-ins
 // (claudemd, speckit, ralph, planner_coder) land in their respective stories
-// and self-register here.
+// and self-register here. Built-in registration failures are programmer errors
+// (a name collision between built-ins indicates the constructor itself is
+// broken) and panic immediately so the engine refuses to start in an
+// inconsistent state.
 func NewRegistry() *Registry {
 	r := &Registry{adapters: map[string]pkgharness.Harness{}}
-	r.Register(NewBare())
+	mustRegister(r, NewBare())
 	return r
+}
+
+func mustRegister(r *Registry, h pkgharness.Harness) {
+	if err := r.Register(h); err != nil {
+		panic(fmt.Sprintf("harness: failed to register built-in %q: %v", h.Name(), err))
+	}
 }
 
 // Register adds an adapter. Returns an error if the name collides with an
