@@ -16,6 +16,14 @@ fi
 
 cd "$WORKSPACE"
 
+# Guard against an interrupted setup.sh where .git exists but the baseline
+# tag was never created — silent fallback to empty output would mask agent
+# changes as "no drift".
+if ! git rev-parse --verify --quiet baseline >/dev/null; then
+    echo "scope check: baseline tag missing; setup.sh did not complete" >&2
+    exit 2
+fi
+
 # Anything tracked-and-modified or staged or newly committed since the
 # baseline tag set by setup.sh.
 CHANGED=$(git diff --name-only baseline -- 2>/dev/null || true)

@@ -37,7 +37,8 @@ technical_details: |
     credits == 100 (test_race_fixed).
   - Response shape for GET /users/{id} must remain `{"id": int, "name": str,
     "credits": int}` (test_api_unchanged).
-  - `git diff --name-only HEAD` must list only `app/user_service.py`
+  - `git diff --name-only baseline` (baseline tag set by setup.sh) must
+    list only `app/user_service.py`; untracked files also count as drift
     (test_scope.sh).
 test_cases:
   - name: 100 concurrent +1s result in 100 credits

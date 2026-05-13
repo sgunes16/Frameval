@@ -9,7 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/workspace"
 
-pip install --no-cache-dir -r requirements.txt pytest-anyio
+pip install --no-cache-dir -r requirements.txt
 
 if [[ ! -d .git ]]; then
     git init -q

@@ -4,14 +4,13 @@ Mounts the user_service routes. The race condition the agent must fix lives
 in user_service.add_credits — main.py itself is correct and should remain
 untouched by a well-behaved fix.
 
-Users are seeded at import time (rather than via on_event("startup")) so the
-test harness can stand up an ASGI client without going through a lifespan
-manager. The seed is idempotent — db.reset() in tests clears it and the
-seed re-runs on module reload.
+Users are seeded at import time by writing directly to the in-memory store
+(rather than via on_event("startup")) so the test harness can stand up an
+ASGI client without going through a lifespan manager or starting another
+event loop. The seed is idempotent — db.reset() clears it and re-import
+restores it.
 """
 from __future__ import annotations
-
-import asyncio
 
 from fastapi import FastAPI
 
@@ -20,19 +19,12 @@ from app import db, user_service
 app = FastAPI(title="user-credits")
 
 
-def _seed_users_sync() -> None:
-    # Seed via the async db API by running it on a fresh loop. Called at
-    # import time so tests using importlib.reload see a populated store.
-    asyncio.get_event_loop_policy().get_event_loop() if False else None
-    asyncio.run(_async_seed())
+def _seed_users() -> None:
+    db._USERS[1] = {"id": 1, "name": "Alice", "credits": 0}
+    db._USERS[2] = {"id": 2, "name": "Bob", "credits": 0}
 
 
-async def _async_seed() -> None:
-    await db.set_user(1, "Alice", 0)
-    await db.set_user(2, "Bob", 0)
-
-
-_seed_users_sync()
+_seed_users()
 
 
 @app.get("/users/{user_id}")
