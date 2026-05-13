@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	builtinharness "github.com/mustafaselman/frameval/engine/internal/builtin/harness"
+	"github.com/mustafaselman/frameval/engine/internal/diagnostic"
 	"github.com/mustafaselman/frameval/engine/internal/executor"
 	"github.com/mustafaselman/frameval/engine/internal/models"
 	"github.com/mustafaselman/frameval/engine/internal/sandbox"
@@ -279,6 +280,11 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", err.Error())
 		return err
 	}
+	// Compute the AgentDx Diagnostic Profile — deterministic Fingerprint +
+	// Symptoms + Recovery, plus optional LLM failure classification. Errors
+	// in any stage degrade gracefully rather than fail the run: a missing
+	// diagnostic row is better than throwing away a successful grading pass.
+	o.persistDiagnostic(ctx, *experiment, *run, *task, transcript, grade, passed, failed)
 	status := "completed"
 	errorMessage := ""
 	if execErr != nil {
@@ -290,6 +296,71 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	}
 	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": status, "variant_id": run.VariantID})
 	return nil
+}
+
+// persistDiagnostic runs the three deterministic extractors (Fingerprint,
+// Symptoms, Recovery) and the optional LLM failure classifier, then writes
+// a Diagnostic row. Best-effort — any stage that errors is logged and the
+// run still completes; the goal is for the Compare view to have data.
+func (o *Orchestrator) persistDiagnostic(
+	ctx context.Context,
+	experiment models.Experiment,
+	run models.Run,
+	taskRec models.Task,
+	transcript models.Transcript,
+	grade models.Grade,
+	testsPassed, testsFailed int,
+) {
+	fp := diagnostic.NewFingerprintExtractor().Extract(transcript.ParsedTurns, diagnostic.TaskContext{
+		TaskPrompt:       taskRec.TaskPrompt,
+		InstructionFiles: []string{"CLAUDE.md"},
+	})
+	recovery := diagnostic.NewRecoveryAnalyzer().Analyze(transcript.ParsedTurns)
+	outcome := diagnostic.RunOutcome{
+		TestsPassed:   testsPassed,
+		TestsFailed:   testsFailed,
+		TestsTotal:    testsPassed + testsFailed,
+		CompileFailed: !grade.TypeCheckPass && grade.LintScore == 0,
+		FilesTouched:  filenamesOfOutputs(transcript.OutputFiles),
+	}
+	symptoms := diagnostic.NewSymptomExtractor().Extract(transcript.ParsedTurns, outcome, taskRec)
+
+	rec := storage.DiagnosticRecord{
+		RunID:       run.ID,
+		Fingerprint: fp,
+		Symptoms:    symptoms,
+		Recovery:    recovery,
+	}
+
+	// LLM classifier is opt-in via FRAMEVAL_ENABLE_LLM_JUDGE=true (set in .env).
+	// Until then we persist deterministic stages only and leave failure_label NULL.
+	if os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE") == "true" {
+		tail := transcript.RawOutput
+		if len(tail) > 4000 {
+			tail = tail[len(tail)-4000:]
+		}
+		clsResult := o.grader.ClassifyFailure(ctx, run.ID, symptoms, taskRec.Description, tail, "claude-haiku-4-5")
+		if clsResult.Classification.Confidence > 0 {
+			label := clsResult.Classification
+			rec.FailureLabel = &label
+			rec.ClassifierModel = clsResult.ClassifierModel
+			rec.ClassifierLatencyMs = clsResult.LatencyMs
+		}
+	}
+
+	if err := o.store.SaveDiagnostic(ctx, rec); err != nil {
+		o.broadcastRunLog(experiment, run, "diagnostic", "save failed: "+err.Error())
+		return
+	}
+	o.broadcast("diagnostic.ready", map[string]any{"run_id": run.ID, "experiment_id": experiment.ID})
+}
+
+func filenamesOfOutputs(files []models.OutputFile) []string {
+	out := make([]string, 0, len(files))
+	for _, f := range files {
+		out = append(out, f.Path)
+	}
+	return out
 }
 
 func (o *Orchestrator) refreshExperimentState(ctx context.Context, experimentID string) error {
