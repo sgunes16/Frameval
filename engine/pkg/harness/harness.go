@@ -28,7 +28,7 @@ type Workspace struct {
 //
 // Different harnesses use different fields:
 //   - Ralph uses MaxIterations + StopOnSuccess (test-pass check between iterations)
-//   - SpecKit uses MaxWallSeconds across the 5-stage pipeline
+//   - SpecKit uses MaxWallSeconds across the 4-stage pipeline
 //   - PlannerCoder uses MaxWallSeconds for both planner + coder calls combined
 type Budget struct {
 	MaxIterations  int

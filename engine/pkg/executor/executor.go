@@ -17,12 +17,19 @@ const (
 // Harnesses build RunConfigs and pass them to AgentExecutor.Execute. The same
 // RunConfig may be invoked multiple times by a harness (Ralph loop, multi-agent
 // roles, etc.) within a single AgentDx run.
+//
+// Stage / Role are optional metadata harnesses use to differentiate sub-calls
+// within a single run (e.g., spec-kit's 4 stages, planner+coder's 2 roles).
+// Executors that don't care can ignore them; downstream AgentDx readers can
+// surface the distinction in the Compare view.
 type RunConfig struct {
 	WorkspacePath string
 	Prompt        string
 	Model         string
 	Environment   map[string]string
 	OnOutput      func(line string)
+	Stage         string
+	Role          string
 }
 
 // RunResult is what an executor returns after one invocation.
@@ -39,10 +46,14 @@ type RunResult struct {
 //
 // Defined here (in the public package) because third-party harnesses, executors,
 // and diagnostic-pipeline consumers all need to read transcripts.
+//
+// Stage is set by harnesses that perform multi-stage invocations (e.g., speckit)
+// so downstream consumers can group turns by stage.
 type ParsedTurn struct {
 	Role      string `json:"role"`
 	Content   string `json:"content"`
 	Timestamp string `json:"timestamp"`
+	Stage     string `json:"stage,omitempty"`
 }
 
 // AgentExecutor abstracts a single agent CLI or API backend.

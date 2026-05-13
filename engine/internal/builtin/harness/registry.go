@@ -24,6 +24,7 @@ func NewRegistry() *Registry {
 	r := &Registry{adapters: map[string]pkgharness.Harness{}}
 	mustRegister(r, NewBare())
 	mustRegister(r, NewClaudeMd())
+	mustRegister(r, NewSpecKit())
 	return r
 }
 
