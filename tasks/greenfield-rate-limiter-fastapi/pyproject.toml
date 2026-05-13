@@ -1,0 +1,4 @@
+# Pytest config for the rate-limiter task. Quiet output + sane test discovery.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
