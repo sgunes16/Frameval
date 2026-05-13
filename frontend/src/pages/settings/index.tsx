@@ -17,9 +17,11 @@ export function SettingsPage() {
           description="Frameval reads configuration from environment variables. Restart the engine to apply changes."
         />
         <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-          <span><code className="rounded bg-white px-2 py-1">ANTHROPIC_API_KEY</code> — Claude / Cursor</span>
-          <span><code className="rounded bg-white px-2 py-1">OPENAI_API_KEY</code> — GPT family</span>
-          <span><code className="rounded bg-white px-2 py-1">GOOGLE_API_KEY</code> — Gemini</span>
+          <span><code className="rounded bg-white px-2 py-1">ANTHROPIC_API_KEY</code> — failure classifier (Haiku)</span>
+          <span><code className="rounded bg-white px-2 py-1">OPENAI_API_KEY</code> — passed through Aider; Ollama ignores</span>
+          <span><code className="rounded bg-white px-2 py-1">CURSOR_API_KEY</code> — Cursor agent mode</span>
+          <span><code className="rounded bg-white px-2 py-1">OLLAMA_BASE_URL</code> — local LLM endpoint (Aider)</span>
+          <span><code className="rounded bg-white px-2 py-1">AIDER_MODEL</code> — local agent model id</span>
           <span><code className="rounded bg-white px-2 py-1">FRAMEVAL_ENABLE_LLM_JUDGE</code> — enable LLM grading</span>
         </div>
       </Card>
