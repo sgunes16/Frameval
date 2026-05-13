@@ -1,0 +1,33 @@
+# Example 01 — `bare` vs `ralph` on greenfield-cli-wordfreq.
+#
+# The schema below is the proposed harness-aware experiment shape (the
+# orchestrator route consuming it is the follow-up to Story #23). For now
+# this file documents the intent; once the route lands you can POST it
+# to /api/experiments verbatim.
+
+task: ../../tasks/greenfield-cli-wordfreq
+
+executor: aider
+executor_config:
+  # Override AIDER_MODEL here if Qwen2.5-Coder-7B isn't pulled on your
+  # Ollama. The default in the engine matches what setup.sh installs.
+  model: openai/qwen2.5-coder:7b
+  openai_api_base: http://host.docker.internal:11434/v1
+
+harnesses:
+  - name: bare
+  - name: ralph
+    budget:
+      max_iterations: 8
+      max_wall_seconds: 600
+      stop_on_success: true   # halt when eval.sh exits 0
+
+# Minimum 5 per CLAUDE.md; lower replica counts are technically supported
+# by the schema (migration 002 relaxed the constraint to >= 1) but the
+# project-level convention is 5 for statistical credibility. Bump higher
+# if you're producing thesis-grade numbers.
+replicas: 5
+
+# Optional: cap how many sandboxes run in parallel. Defaults to the
+# engine-level FRAMEVAL_MAX_CONCURRENT env var (1 on 16 GB Macs).
+max_concurrent: 1

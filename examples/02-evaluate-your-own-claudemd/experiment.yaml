@@ -1,0 +1,28 @@
+# Example 02 — your CLAUDE.md vs bare on brownfield-fix-async-race.
+#
+# The task harness_context/claudemd.md normally would be loaded by the
+# claudemd harness, but here we point the harness at your CLAUDE.md via
+# the harness override below. This lets you A/B test your real-world
+# CLAUDE.md against the bare baseline without copying files into the task.
+
+task: ../../tasks/brownfield-fix-async-race
+
+executor: aider
+executor_config:
+  model: openai/qwen2.5-coder:7b
+  openai_api_base: http://host.docker.internal:11434/v1
+
+harnesses:
+  - name: bare
+  - name: claudemd
+    config:
+      # Override the task's default harness_context/claudemd.md with the
+      # operator-supplied file. When the harness orchestration follow-up
+      # lands, this is the field the runtime will read.
+      claudemd_path: ./my-claudemd/CLAUDE.md
+
+# 5 replicas per the project's "minimum 5 for credibility" convention
+# (the schema allows lower; bump higher if you're producing thesis-grade
+# numbers).
+replicas: 5
+max_concurrent: 1
