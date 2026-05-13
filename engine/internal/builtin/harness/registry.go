@@ -23,6 +23,7 @@ type Registry struct {
 func NewRegistry() *Registry {
 	r := &Registry{adapters: map[string]pkgharness.Harness{}}
 	mustRegister(r, NewBare())
+	mustRegister(r, NewClaudeMd())
 	return r
 }
 
