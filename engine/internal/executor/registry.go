@@ -13,8 +13,6 @@ type Registry struct {
 func NewRegistry(manager *sandbox.Manager) *Registry {
 	return &Registry{executors: map[string]AgentExecutor{
 		"cursor": NewCursorExecutor(manager),
-		"gemini": NewGeminiExecutor(manager),
-		"api":    &APIModeExecutor{},
 	}}
 }
 

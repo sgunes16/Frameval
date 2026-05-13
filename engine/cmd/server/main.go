@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/mustafaselman/frameval/engine/internal/api"
-	"github.com/mustafaselman/frameval/engine/internal/benchmark"
 	"github.com/mustafaselman/frameval/engine/internal/executor"
 	"github.com/mustafaselman/frameval/engine/internal/experiment"
 	"github.com/mustafaselman/frameval/engine/internal/sandbox"
@@ -27,8 +26,6 @@ func main() {
 	port := getenv("FRAMEVAL_PORT", "8080")
 	sandboxImage := getenv("FRAMEVAL_SANDBOX_IMAGE", "frameval-sandbox:local")
 	tasksRoot := getenv("FRAMEVAL_TASKS_ROOT", "../tasks")
-	terminalBenchRoot := os.Getenv("FRAMEVAL_TERMINAL_BENCH_ROOT")
-	sweBenchPath := os.Getenv("FRAMEVAL_SWE_BENCH_PATH")
 	maxConcurrent := getenvInt("FRAMEVAL_MAX_CONCURRENT", 1)
 
 	store, err := storage.Open(ctx, dbPath)
@@ -38,22 +35,6 @@ func main() {
 	defer store.Close()
 	if err := store.SeedBuiltinTasks(ctx, tasksRoot); err != nil {
 		log.Printf("seed tasks: %v", err)
-	}
-	if terminalBenchRoot != "" {
-		count, err := benchmark.ImportTerminalBenchTasks(ctx, store, terminalBenchRoot)
-		if err != nil {
-			log.Printf("import terminal-bench tasks: %v", err)
-		} else {
-			log.Printf("imported %d terminal-bench tasks", count)
-		}
-	}
-	if sweBenchPath != "" {
-		count, err := benchmark.ImportSWEBenchTasks(ctx, store, sweBenchPath)
-		if err != nil {
-			log.Printf("import swe-bench tasks: %v", err)
-		} else {
-			log.Printf("imported %d swe-bench tasks", count)
-		}
 	}
 	if err := store.SeedModelConfigs(ctx); err != nil {
 		log.Printf("seed model configs: %v", err)

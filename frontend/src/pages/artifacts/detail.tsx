@@ -3,8 +3,6 @@ import { useParams } from 'react-router-dom';
 import { ArtifactDiff } from '../../components/artifacts/artifact-diff';
 import { ArtifactEditor } from '../../components/artifacts/artifact-editor';
 import { ArtifactUpload } from '../../components/artifacts/artifact-upload';
-import { DimensionTags } from '../../components/artifacts/dimension-tags';
-import { VersionTimeline } from '../../components/artifacts/version-timeline';
 import { Card, CardHeader } from '../../components/ui/card';
 import { useArtifacts, useCreateArtifact } from '../../lib/hooks';
 
@@ -28,7 +26,6 @@ export function ArtifactDetailPage() {
         <ArtifactEditor value={content} onChange={setContent} />
         {latest && (
           <div className="mt-4 space-y-3">
-            <DimensionTags dimensions={latest.dimensions} />
             <ArtifactDiff diff={diff} />
           </div>
         )}
@@ -36,10 +33,6 @@ export function ArtifactDetailPage() {
       <Card>
         <CardHeader title="New version" description="Upload a follow-up revision or different artifact." />
         <ArtifactUpload onCreate={(payload) => id && createArtifact.mutate({ variantId: id, payload })} />
-        <div className="mt-6">
-          <CardHeader title="Version timeline" />
-          <VersionTimeline versions={versions} />
-        </div>
       </Card>
     </div>
   );
