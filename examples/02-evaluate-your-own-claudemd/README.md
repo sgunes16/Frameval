@@ -44,16 +44,16 @@ designed to surface exactly this kind of asymmetry.
 
 ## How to run it
 
-Same shape as Example 01:
+Same shape as Example 01: create the experiments through the UI for now
+(the YAML schema in this directory is the orchestrator-follow-up target,
+not a runnable command today), then assemble the run IDs into the
+Diagnostic Compare URL:
 
 ```bash
 docker compose up -d
-curl -X POST http://localhost:8080/api/experiments \
-  -H 'Content-Type: application/json' \
-  -d @experiment.yaml
-# wait for runs to complete; ~10–15 min on 16 GB Mac
+open http://localhost:5173/experiments
+# create one bare experiment + one claudemd experiment (point claudemd at
+# my-claudemd/CLAUDE.md), wait for runs to complete (~10–15 min on
+# 16 GB Mac for 5 replicas × 2 harnesses), then:
 open "http://localhost:5173/diagnostic/compare?runs=<id1>,<id2>,<id3>,<id4>,<id5>,<id6>"
 ```
-
-End-to-end orchestrator wiring for harness-aware experiments is the active
-follow-up; until then this README documents the intent.

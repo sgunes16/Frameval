@@ -21,22 +21,27 @@ After the runs complete, the Diagnostic Compare view should show:
 
 ## How to run it
 
-End-to-end orchestration is the active follow-up (Story #23's "out of scope"
-note). Until that lands, kick off the comparison via the REST API:
+End-to-end orchestration of a harness-aware experiment from one YAML file
+is the active follow-up (Story #23's "out of scope" note). Until that lands,
+use the existing `/api/experiments` UI to create two experiments — one per
+harness — and reference the same task / replica count, then assemble the
+run IDs into the Diagnostic Compare URL:
 
 ```bash
 # Bring up the stack (sandbox image must be pre-built)
 docker compose up -d
 
-# Create an experiment with both harnesses (placeholder — final shape TBD
-# when the harness-aware experiment endpoint lands)
-curl -X POST http://localhost:8080/api/experiments \
-  -H 'Content-Type: application/json' \
-  -d @experiment.yaml
+# Create the experiments through the UI for now
+open http://localhost:5173/experiments
 
-# Once runs complete, open the compare view
-open "http://localhost:5173/diagnostic/compare?runs=<bare-run-id>,<ralph-run-id>"
+# Once both sets of runs complete, open the compare view with the
+# completed run IDs
+open "http://localhost:5173/diagnostic/compare?runs=<bare-run-id-1>,<bare-run-id-2>,<bare-run-id-3>,<ralph-run-id-1>,<ralph-run-id-2>,<ralph-run-id-3>"
 ```
+
+The `experiment.yaml` in this directory documents the harness-aware schema
+the orchestrator follow-up will consume directly. Until then it's a planning
+document, not a runnable command.
 
 ## Configuration
 

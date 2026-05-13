@@ -22,7 +22,11 @@ harnesses:
       max_wall_seconds: 600
       stop_on_success: true   # halt when eval.sh exits 0
 
-replicas: 3
+# Minimum 5 per CLAUDE.md; lower replica counts are technically supported
+# by the schema (migration 002 relaxed the constraint to >= 1) but the
+# project-level convention is 5 for statistical credibility. Bump higher
+# if you're producing thesis-grade numbers.
+replicas: 5
 
 # Optional: cap how many sandboxes run in parallel. Defaults to the
 # engine-level FRAMEVAL_MAX_CONCURRENT env var (1 on 16 GB Macs).

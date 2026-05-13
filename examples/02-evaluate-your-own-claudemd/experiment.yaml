@@ -21,5 +21,8 @@ harnesses:
       # lands, this is the field the runtime will read.
       claudemd_path: ./my-claudemd/CLAUDE.md
 
-replicas: 3
+# 5 replicas per the project's "minimum 5 for credibility" convention
+# (the schema allows lower; bump higher if you're producing thesis-grade
+# numbers).
+replicas: 5
 max_concurrent: 1
