@@ -2,7 +2,6 @@ package executor
 
 import (
 	"context"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -56,7 +55,7 @@ func (e *AiderExecutor) SupportedModes() []ExecutionMode {
 // receives a transcript (it will be classified as ENV_ERR).
 func (e *AiderExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	prompt := promptWithDefaultCLILanguage(cfg.Prompt)
-	command := os.Getenv("FRAMEVAL_AIDER_COMMAND")
+	command := envOrOSGetenv(cfg.Environment, "FRAMEVAL_AIDER_COMMAND")
 	if command == "" {
 		if _, err := exec.LookPath("aider"); err != nil {
 			raw := "aider binary not found on PATH; execution skipped\nPrompt:\n" + prompt
@@ -68,9 +67,9 @@ func (e *AiderExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult,
 	// Defaults first, caller's cfg.Environment overrides last (caller wins).
 	env := mergeEnv(map[string]string{
 		"FRAMEVAL_PROMPT": prompt,
-		"AIDER_MODEL":     fallbackAiderModel(cfg.Model),
-		"OPENAI_API_BASE": fallbackOllamaBase(),
-		"OPENAI_API_KEY":  fallbackOllamaKey(),
+		"AIDER_MODEL":     fallbackAiderModel(cfg.Model, cfg.Environment),
+		"OPENAI_API_BASE": fallbackOllamaBase(cfg.Environment),
+		"OPENAI_API_KEY":  fallbackOllamaKey(cfg.Environment),
 	}, cfg.Environment)
 	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, env, command, cfg.OnOutput)
 	turns, _ := e.ParseTranscript([]byte(output))
@@ -114,27 +113,27 @@ func detectAiderRole(line string) string {
 	return "assistant"
 }
 
-func fallbackAiderModel(model string) string {
+func fallbackAiderModel(model string, env map[string]string) string {
 	if strings.TrimSpace(model) != "" {
 		return model
 	}
-	if env := os.Getenv("AIDER_MODEL"); env != "" {
-		return env
+	if value := envOrOSGetenv(env, "AIDER_MODEL"); value != "" {
+		return value
 	}
 	return "openai/qwen2.5-coder:7b"
 }
 
-func fallbackOllamaBase() string {
-	if env := os.Getenv("OLLAMA_BASE_URL"); env != "" {
-		return env
+func fallbackOllamaBase(env map[string]string) string {
+	if value := envOrOSGetenv(env, "OLLAMA_BASE_URL"); value != "" {
+		return value
 	}
 	return "http://host.docker.internal:11434/v1"
 }
 
-func fallbackOllamaKey() string {
+func fallbackOllamaKey(env map[string]string) string {
 	// Ollama ignores the key but Aider's OpenAI client requires one to be set.
-	if env := os.Getenv("OPENAI_API_KEY"); env != "" {
-		return env
+	if value := envOrOSGetenv(env, "OPENAI_API_KEY"); value != "" {
+		return value
 	}
 	return "ollama"
 }

@@ -77,37 +77,47 @@ func TestDetectAiderRole(t *testing.T) {
 
 func TestFallbackAiderModelPrecedence(t *testing.T) {
 	t.Setenv("AIDER_MODEL", "")
-	if got := fallbackAiderModel(""); got != "openai/qwen2.5-coder:7b" {
+	if got := fallbackAiderModel("", nil); got != "openai/qwen2.5-coder:7b" {
 		t.Errorf("default model: got %q", got)
 	}
-	if got := fallbackAiderModel("openai/explicit-model"); got != "openai/explicit-model" {
+	if got := fallbackAiderModel("openai/explicit-model", nil); got != "openai/explicit-model" {
 		t.Errorf("explicit cfg.Model not used: got %q", got)
 	}
 	t.Setenv("AIDER_MODEL", "openai/env-model")
-	if got := fallbackAiderModel(""); got != "openai/env-model" {
-		t.Errorf("env override not used: got %q", got)
+	if got := fallbackAiderModel("", nil); got != "openai/env-model" {
+		t.Errorf("OS env override not used: got %q", got)
 	}
 	// cfg.Model still wins over env.
-	if got := fallbackAiderModel("openai/explicit-model"); got != "openai/explicit-model" {
+	if got := fallbackAiderModel("openai/explicit-model", nil); got != "openai/explicit-model" {
 		t.Errorf("cfg.Model should win over env: got %q", got)
+	}
+	// cfg.Environment beats OS env.
+	if got := fallbackAiderModel("", map[string]string{"AIDER_MODEL": "openai/cfg-env-model"}); got != "openai/cfg-env-model" {
+		t.Errorf("cfg.Environment should win over OS env: got %q", got)
 	}
 }
 
 func TestFallbackOllamaBase(t *testing.T) {
 	t.Setenv("OLLAMA_BASE_URL", "")
-	if got := fallbackOllamaBase(); got != "http://host.docker.internal:11434/v1" {
+	if got := fallbackOllamaBase(nil); got != "http://host.docker.internal:11434/v1" {
 		t.Errorf("default base: got %q", got)
 	}
 	t.Setenv("OLLAMA_BASE_URL", "http://customhost:9999/v1")
-	if got := fallbackOllamaBase(); got != "http://customhost:9999/v1" {
-		t.Errorf("env override: got %q", got)
+	if got := fallbackOllamaBase(nil); got != "http://customhost:9999/v1" {
+		t.Errorf("OS env override: got %q", got)
+	}
+	if got := fallbackOllamaBase(map[string]string{"OLLAMA_BASE_URL": "http://cfg-env/v1"}); got != "http://cfg-env/v1" {
+		t.Errorf("cfg.Environment should win over OS env: got %q", got)
 	}
 }
 
 func TestFallbackOllamaKeyDefault(t *testing.T) {
 	_ = os.Unsetenv("OPENAI_API_KEY")
-	if got := fallbackOllamaKey(); got != "ollama" {
+	if got := fallbackOllamaKey(nil); got != "ollama" {
 		t.Errorf("default key: got %q", got)
+	}
+	if got := fallbackOllamaKey(map[string]string{"OPENAI_API_KEY": "cfg-env-key"}); got != "cfg-env-key" {
+		t.Errorf("cfg.Environment should win: got %q", got)
 	}
 }
 
