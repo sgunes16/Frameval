@@ -135,18 +135,28 @@ class FailureClassifier:
             return unclassified(str(exc))
 
 
+_UNCLASSIFIED_PREFIX = "classifier_unavailable: "
+_RATIONALE_CAP = 400
+
+
 def unclassified(reason: str = "classifier call failed") -> FailureClassification:
     """Sentinel returned on hard LLM failures.
 
     primary=NONE, confidence=0, rationale carries the failure reason.
     The orchestrator can detect this case via `confidence == 0`.
+
+    Reserves space for the fixed prefix so the rationale never overflows
+    Pydantic's 400-char cap regardless of the supplied reason length.
     """
+    reason_budget = _RATIONALE_CAP - len(_UNCLASSIFIED_PREFIX)
+    truncated_reason = reason[:reason_budget]
+    rationale = f"{_UNCLASSIFIED_PREFIX}{truncated_reason}"
     return FailureClassification(
         primary=FailureCode.NONE,
         secondary=[],
         evidence=[],
         confidence=0.0,
-        rationale=f"classifier_unavailable: {reason}"[:400],
+        rationale=rationale,
     )
 
 
@@ -154,10 +164,20 @@ def unclassified(reason: str = "classifier call failed") -> FailureClassificatio
 _default: FailureClassifier | None = None
 
 
-def set_default_classifier(classifier: FailureClassifier) -> None:
-    """Override the module-level default — primarily for tests."""
+def set_default_classifier(classifier: FailureClassifier | None) -> None:
+    """Override the module-level default — primarily for tests.
+
+    Passing None resets state to the lazy-construct path so the next
+    classify() call rebuilds a fresh default. Tests should call this with
+    None in teardown to prevent cross-test bleed.
+    """
     global _default
     _default = classifier
+
+
+def reset_default_classifier() -> None:
+    """Convenience alias for set_default_classifier(None)."""
+    set_default_classifier(None)
 
 
 def classify(

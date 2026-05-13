@@ -111,3 +111,13 @@ def test_module_level_classify_uses_default():
     got = classify(symptoms={"x": 1}, task_description="t", transcript_tail="")
     assert got.primary == FailureCode.HAL_API
     assert fake.last_call is not None
+
+
+def test_unclassified_long_reason_respects_400_cap():
+    # A pathologically long reason must still produce a valid
+    # FailureClassification (rationale ≤ 400).
+    long_reason = "x" * 1000
+    sentinel = unclassified(long_reason)
+    assert len(sentinel.rationale) <= 400
+    assert sentinel.rationale.startswith("classifier_unavailable: ")
+    assert sentinel.primary == FailureCode.NONE
