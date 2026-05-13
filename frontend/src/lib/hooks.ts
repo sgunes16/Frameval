@@ -5,6 +5,7 @@ import type {
   AgentInfo,
   APIKey,
   ArtifactVersion,
+  Diagnostic,
   DockerStatus,
   Experiment,
   ExperimentStat,
@@ -51,6 +52,23 @@ export function useTranscripts(runIds: string[]) {
       );
       return results.filter((t): t is Transcript => t !== null);
     },
+  });
+}
+
+export function useDiagnostic(runId?: string) {
+  return useQuery({
+    queryKey: ['diagnostic', runId],
+    enabled: Boolean(runId),
+    queryFn: () => api.get<Diagnostic>(`/runs/${runId}/diagnostic`),
+  });
+}
+
+export function useCompareDiagnostics(runIds: string[]) {
+  return useQuery({
+    queryKey: ['diagnostics', ...runIds],
+    enabled: runIds.length > 0,
+    queryFn: () =>
+      Promise.all(runIds.map((id) => api.get<Diagnostic>(`/runs/${id}/diagnostic`))),
   });
 }
 
