@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import grader_pb2 as grader__pb2
+from grader.proto import grader_pb2 as grader__pb2
 
 GRPC_GENERATED_VERSION = '1.80.0'
 GRPC_VERSION = grpc.__version__
@@ -49,6 +49,11 @@ class GraderServiceStub(object):
                 request_serializer=grader__pb2.ClassifyDimensionsRequest.SerializeToString,
                 response_deserializer=grader__pb2.ClassifyDimensionsResponse.FromString,
                 _registered_method=True)
+        self.ClassifyFailure = channel.unary_unary(
+                '/frameval.grader.GraderService/ClassifyFailure',
+                request_serializer=grader__pb2.ClassifyFailureRequest.SerializeToString,
+                response_deserializer=grader__pb2.ClassifyFailureResponse.FromString,
+                _registered_method=True)
         self.HealthCheck = channel.unary_unary(
                 '/frameval.grader.GraderService/HealthCheck',
                 request_serializer=grader__pb2.Empty.SerializeToString,
@@ -77,6 +82,12 @@ class GraderServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ClassifyFailure(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def HealthCheck(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -100,6 +111,11 @@ def add_GraderServiceServicer_to_server(servicer, server):
                     servicer.ClassifyDimensions,
                     request_deserializer=grader__pb2.ClassifyDimensionsRequest.FromString,
                     response_serializer=grader__pb2.ClassifyDimensionsResponse.SerializeToString,
+            ),
+            'ClassifyFailure': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClassifyFailure,
+                    request_deserializer=grader__pb2.ClassifyFailureRequest.FromString,
+                    response_serializer=grader__pb2.ClassifyFailureResponse.SerializeToString,
             ),
             'HealthCheck': grpc.unary_unary_rpc_method_handler(
                     servicer.HealthCheck,
@@ -188,6 +204,33 @@ class GraderService(object):
             '/frameval.grader.GraderService/ClassifyDimensions',
             grader__pb2.ClassifyDimensionsRequest.SerializeToString,
             grader__pb2.ClassifyDimensionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClassifyFailure(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/frameval.grader.GraderService/ClassifyFailure',
+            grader__pb2.ClassifyFailureRequest.SerializeToString,
+            grader__pb2.ClassifyFailureResponse.FromString,
             options,
             channel_credentials,
             insecure,

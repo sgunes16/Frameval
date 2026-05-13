@@ -8,6 +8,7 @@ service GraderService {
   rpc GradeRun(GradeRunRequest) returns (GradeRunResponse);
   rpc ComputeStats(ComputeStatsRequest) returns (ComputeStatsResponse);
   rpc ClassifyDimensions(ClassifyDimensionsRequest) returns (ClassifyDimensionsResponse);
+  rpc ClassifyFailure(ClassifyFailureRequest) returns (ClassifyFailureResponse);
   rpc HealthCheck(Empty) returns (HealthResponse);
 }
 
@@ -179,4 +180,43 @@ message ClassifyDimensionsResponse {
   string priority_signaling = 8;
   string tool_guidance = 9;
   string error_handling = 10;
+}
+
+// AgentDx failure classifier RPC. Story #22 owns the Python implementation;
+// this proto carries the call from the Go orchestrator across the boundary.
+//
+// symptoms_json is the already-compact Symptoms packet serialized by the
+// engine-side symptom extractor (Story #20). transcript_tail is the last
+// N turns of the run formatted as `[<idx>][<role>] <content>` per line.
+message ClassifyFailureRequest {
+  string run_id = 1;
+  bytes symptoms_json = 2;
+  string task_description = 3;
+  string transcript_tail = 4;
+  // Optional override for the classifier model id. Empty string uses the
+  // server-side default (Claude Haiku 4.5 per spec §4.7.4).
+  string classifier_model = 5;
+}
+
+message ClassifyFailureResponse {
+  FailureClassificationProto classification = 1;
+  // Total time spent inside the classifier (LLM call + retries). Useful
+  // for surfacing per-run cost-vs-latency in the Diagnostic Compare view.
+  int32 latency_ms = 2;
+}
+
+message FailureClassificationProto {
+  // FailureCode enum values are passed as strings to keep the proto stable
+  // when the Python taxonomy grows without requiring a proto regen.
+  string primary = 1;
+  repeated string secondary = 2;
+  repeated EvidenceSpanProto evidence = 3;
+  double confidence = 4;
+  string rationale = 5;
+}
+
+message EvidenceSpanProto {
+  string code = 1;
+  string quote = 2;
+  int32 turn_index = 3;
 }

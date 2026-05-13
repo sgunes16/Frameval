@@ -4,9 +4,14 @@ from concurrent import futures
 
 import grpc
 
+import json
+import time
+
 from grader.code_grader import grade as grade_code
 from grader.composite import compute_composite
 from grader.config import get_settings
+from grader.failure_classifier import classify as classify_failure
+from grader.failure_classifier.grader import FailureClassifier
 from grader.llm_judge import grade as judge_grade
 from grader.process_grader import grade as process_grade
 from grader.stats import compute_stats
@@ -73,6 +78,61 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
             payload.append({"variant_id": variant.variant_id, "grades": grades})
         stats = compute_stats(request.experiment_id, payload)
         return grader_pb2.ComputeStatsResponse(stats=[grader_pb2.PairwiseStat(**stat) for stat in stats])
+
+    def ClassifyFailure(
+        self,
+        request: grader_pb2.ClassifyFailureRequest,
+        context: grpc.ServicerContext,
+    ) -> grader_pb2.ClassifyFailureResponse:
+        """Run the LLM failure classifier on the supplied run data.
+
+        Never raises — on any classifier-side exception, the underlying
+        FailureClassifier returns the unclassified() sentinel. We translate
+        that into a ClassifyFailureResponse with primary="NONE" and
+        confidence=0 so the Go orchestrator can persist a row and move on.
+        """
+        started = time.perf_counter()
+        try:
+            symptoms = json.loads(request.symptoms_json or b"{}")
+        except json.JSONDecodeError:
+            symptoms = {}
+        # When the caller supplies a non-empty classifier_model override,
+        # run a one-shot FailureClassifier with that model. Empty falls
+        # through to the module-level default (Haiku 4.5 per spec §4.7.4).
+        # This is the override hook calibration ablation runs use (Story #25).
+        override_model = (request.classifier_model or "").strip()
+        if override_model:
+            verdict = FailureClassifier(model=override_model).classify(
+                symptoms=symptoms,
+                task_description=request.task_description,
+                transcript_tail=request.transcript_tail,
+            )
+        else:
+            verdict = classify_failure(
+                symptoms=symptoms,
+                task_description=request.task_description,
+                transcript_tail=request.transcript_tail,
+            )
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        evidence_pbs = [
+            grader_pb2.EvidenceSpanProto(
+                code=e.code.value,
+                quote=e.quote,
+                turn_index=e.turn_index,
+            )
+            for e in verdict.evidence
+        ]
+        classification = grader_pb2.FailureClassificationProto(
+            primary=verdict.primary.value,
+            secondary=[c.value for c in verdict.secondary],
+            evidence=evidence_pbs,
+            confidence=verdict.confidence,
+            rationale=verdict.rationale,
+        )
+        return grader_pb2.ClassifyFailureResponse(
+            classification=classification,
+            latency_ms=latency_ms,
+        )
 
     def ClassifyDimensions(self, request: grader_pb2.ClassifyDimensionsRequest, context: grpc.ServicerContext) -> grader_pb2.ClassifyDimensionsResponse:
         return grader_pb2.ClassifyDimensionsResponse(

@@ -1653,6 +1653,282 @@ func (x *ClassifyDimensionsResponse) GetErrorHandling() string {
 	return ""
 }
 
+// AgentDx failure classifier RPC. Story #22 owns the Python implementation;
+// this proto carries the call from the Go orchestrator across the boundary.
+//
+// symptoms_json is the already-compact Symptoms packet serialized by the
+// engine-side symptom extractor (Story #20). transcript_tail is the last
+// N turns of the run formatted as `[<idx>][<role>] <content>` per line.
+type ClassifyFailureRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	RunId           string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	SymptomsJson    []byte                 `protobuf:"bytes,2,opt,name=symptoms_json,json=symptomsJson,proto3" json:"symptoms_json,omitempty"`
+	TaskDescription string                 `protobuf:"bytes,3,opt,name=task_description,json=taskDescription,proto3" json:"task_description,omitempty"`
+	TranscriptTail  string                 `protobuf:"bytes,4,opt,name=transcript_tail,json=transcriptTail,proto3" json:"transcript_tail,omitempty"`
+	// Optional override for the classifier model id. Empty string uses the
+	// server-side default (Claude Haiku 4.5 per spec §4.7.4).
+	ClassifierModel string `protobuf:"bytes,5,opt,name=classifier_model,json=classifierModel,proto3" json:"classifier_model,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ClassifyFailureRequest) Reset() {
+	*x = ClassifyFailureRequest{}
+	mi := &file_grader_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClassifyFailureRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClassifyFailureRequest) ProtoMessage() {}
+
+func (x *ClassifyFailureRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grader_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClassifyFailureRequest.ProtoReflect.Descriptor instead.
+func (*ClassifyFailureRequest) Descriptor() ([]byte, []int) {
+	return file_grader_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ClassifyFailureRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ClassifyFailureRequest) GetSymptomsJson() []byte {
+	if x != nil {
+		return x.SymptomsJson
+	}
+	return nil
+}
+
+func (x *ClassifyFailureRequest) GetTaskDescription() string {
+	if x != nil {
+		return x.TaskDescription
+	}
+	return ""
+}
+
+func (x *ClassifyFailureRequest) GetTranscriptTail() string {
+	if x != nil {
+		return x.TranscriptTail
+	}
+	return ""
+}
+
+func (x *ClassifyFailureRequest) GetClassifierModel() string {
+	if x != nil {
+		return x.ClassifierModel
+	}
+	return ""
+}
+
+type ClassifyFailureResponse struct {
+	state          protoimpl.MessageState      `protogen:"open.v1"`
+	Classification *FailureClassificationProto `protobuf:"bytes,1,opt,name=classification,proto3" json:"classification,omitempty"`
+	// Total time spent inside the classifier (LLM call + retries). Useful
+	// for surfacing per-run cost-vs-latency in the Diagnostic Compare view.
+	LatencyMs     int32 `protobuf:"varint,2,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClassifyFailureResponse) Reset() {
+	*x = ClassifyFailureResponse{}
+	mi := &file_grader_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClassifyFailureResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClassifyFailureResponse) ProtoMessage() {}
+
+func (x *ClassifyFailureResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_grader_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClassifyFailureResponse.ProtoReflect.Descriptor instead.
+func (*ClassifyFailureResponse) Descriptor() ([]byte, []int) {
+	return file_grader_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ClassifyFailureResponse) GetClassification() *FailureClassificationProto {
+	if x != nil {
+		return x.Classification
+	}
+	return nil
+}
+
+func (x *ClassifyFailureResponse) GetLatencyMs() int32 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+type FailureClassificationProto struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// FailureCode enum values are passed as strings to keep the proto stable
+	// when the Python taxonomy grows without requiring a proto regen.
+	Primary       string               `protobuf:"bytes,1,opt,name=primary,proto3" json:"primary,omitempty"`
+	Secondary     []string             `protobuf:"bytes,2,rep,name=secondary,proto3" json:"secondary,omitempty"`
+	Evidence      []*EvidenceSpanProto `protobuf:"bytes,3,rep,name=evidence,proto3" json:"evidence,omitempty"`
+	Confidence    float64              `protobuf:"fixed64,4,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	Rationale     string               `protobuf:"bytes,5,opt,name=rationale,proto3" json:"rationale,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FailureClassificationProto) Reset() {
+	*x = FailureClassificationProto{}
+	mi := &file_grader_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FailureClassificationProto) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FailureClassificationProto) ProtoMessage() {}
+
+func (x *FailureClassificationProto) ProtoReflect() protoreflect.Message {
+	mi := &file_grader_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FailureClassificationProto.ProtoReflect.Descriptor instead.
+func (*FailureClassificationProto) Descriptor() ([]byte, []int) {
+	return file_grader_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *FailureClassificationProto) GetPrimary() string {
+	if x != nil {
+		return x.Primary
+	}
+	return ""
+}
+
+func (x *FailureClassificationProto) GetSecondary() []string {
+	if x != nil {
+		return x.Secondary
+	}
+	return nil
+}
+
+func (x *FailureClassificationProto) GetEvidence() []*EvidenceSpanProto {
+	if x != nil {
+		return x.Evidence
+	}
+	return nil
+}
+
+func (x *FailureClassificationProto) GetConfidence() float64 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+func (x *FailureClassificationProto) GetRationale() string {
+	if x != nil {
+		return x.Rationale
+	}
+	return ""
+}
+
+type EvidenceSpanProto struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	Quote         string                 `protobuf:"bytes,2,opt,name=quote,proto3" json:"quote,omitempty"`
+	TurnIndex     int32                  `protobuf:"varint,3,opt,name=turn_index,json=turnIndex,proto3" json:"turn_index,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EvidenceSpanProto) Reset() {
+	*x = EvidenceSpanProto{}
+	mi := &file_grader_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EvidenceSpanProto) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EvidenceSpanProto) ProtoMessage() {}
+
+func (x *EvidenceSpanProto) ProtoReflect() protoreflect.Message {
+	mi := &file_grader_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EvidenceSpanProto.ProtoReflect.Descriptor instead.
+func (*EvidenceSpanProto) Descriptor() ([]byte, []int) {
+	return file_grader_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *EvidenceSpanProto) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *EvidenceSpanProto) GetQuote() string {
+	if x != nil {
+		return x.Quote
+	}
+	return ""
+}
+
+func (x *EvidenceSpanProto) GetTurnIndex() int32 {
+	if x != nil {
+		return x.TurnIndex
+	}
+	return 0
+}
+
 var File_grader_proto protoreflect.FileDescriptor
 
 const file_grader_proto_rawDesc = "" +
@@ -1797,11 +2073,35 @@ const file_grader_proto_rawDesc = "" +
 	"\x12priority_signaling\x18\b \x01(\tR\x11prioritySignaling\x12#\n" +
 	"\rtool_guidance\x18\t \x01(\tR\ftoolGuidance\x12%\n" +
 	"\x0eerror_handling\x18\n" +
-	" \x01(\tR\rerrorHandling2\xf4\x02\n" +
+	" \x01(\tR\rerrorHandling\"\xd3\x01\n" +
+	"\x16ClassifyFailureRequest\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12#\n" +
+	"\rsymptoms_json\x18\x02 \x01(\fR\fsymptomsJson\x12)\n" +
+	"\x10task_description\x18\x03 \x01(\tR\x0ftaskDescription\x12'\n" +
+	"\x0ftranscript_tail\x18\x04 \x01(\tR\x0etranscriptTail\x12)\n" +
+	"\x10classifier_model\x18\x05 \x01(\tR\x0fclassifierModel\"\x8d\x01\n" +
+	"\x17ClassifyFailureResponse\x12S\n" +
+	"\x0eclassification\x18\x01 \x01(\v2+.frameval.grader.FailureClassificationProtoR\x0eclassification\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\x02 \x01(\x05R\tlatencyMs\"\xd2\x01\n" +
+	"\x1aFailureClassificationProto\x12\x18\n" +
+	"\aprimary\x18\x01 \x01(\tR\aprimary\x12\x1c\n" +
+	"\tsecondary\x18\x02 \x03(\tR\tsecondary\x12>\n" +
+	"\bevidence\x18\x03 \x03(\v2\".frameval.grader.EvidenceSpanProtoR\bevidence\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x04 \x01(\x01R\n" +
+	"confidence\x12\x1c\n" +
+	"\trationale\x18\x05 \x01(\tR\trationale\"\\\n" +
+	"\x11EvidenceSpanProto\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\x12\x14\n" +
+	"\x05quote\x18\x02 \x01(\tR\x05quote\x12\x1d\n" +
+	"\n" +
+	"turn_index\x18\x03 \x01(\x05R\tturnIndex2\xda\x03\n" +
 	"\rGraderService\x12O\n" +
 	"\bGradeRun\x12 .frameval.grader.GradeRunRequest\x1a!.frameval.grader.GradeRunResponse\x12[\n" +
 	"\fComputeStats\x12$.frameval.grader.ComputeStatsRequest\x1a%.frameval.grader.ComputeStatsResponse\x12m\n" +
-	"\x12ClassifyDimensions\x12*.frameval.grader.ClassifyDimensionsRequest\x1a+.frameval.grader.ClassifyDimensionsResponse\x12F\n" +
+	"\x12ClassifyDimensions\x12*.frameval.grader.ClassifyDimensionsRequest\x1a+.frameval.grader.ClassifyDimensionsResponse\x12d\n" +
+	"\x0fClassifyFailure\x12'.frameval.grader.ClassifyFailureRequest\x1a(.frameval.grader.ClassifyFailureResponse\x12F\n" +
 	"\vHealthCheck\x12\x16.frameval.grader.Empty\x1a\x1f.frameval.grader.HealthResponseB9Z7github.com/mustafaselman/frameval/engine/proto;graderpbb\x06proto3"
 
 var (
@@ -1816,7 +2116,7 @@ func file_grader_proto_rawDescGZIP() []byte {
 	return file_grader_proto_rawDescData
 }
 
-var file_grader_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_grader_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_grader_proto_goTypes = []any{
 	(*Empty)(nil),                      // 0: frameval.grader.Empty
 	(*HealthResponse)(nil),             // 1: frameval.grader.HealthResponse
@@ -1840,6 +2140,10 @@ var file_grader_proto_goTypes = []any{
 	(*PairwiseStat)(nil),               // 19: frameval.grader.PairwiseStat
 	(*ClassifyDimensionsRequest)(nil),  // 20: frameval.grader.ClassifyDimensionsRequest
 	(*ClassifyDimensionsResponse)(nil), // 21: frameval.grader.ClassifyDimensionsResponse
+	(*ClassifyFailureRequest)(nil),     // 22: frameval.grader.ClassifyFailureRequest
+	(*ClassifyFailureResponse)(nil),    // 23: frameval.grader.ClassifyFailureResponse
+	(*FailureClassificationProto)(nil), // 24: frameval.grader.FailureClassificationProto
+	(*EvidenceSpanProto)(nil),          // 25: frameval.grader.EvidenceSpanProto
 }
 var file_grader_proto_depIdxs = []int32{
 	3,  // 0: frameval.grader.GradeRunRequest.output_files:type_name -> frameval.grader.OutputFile
@@ -1857,19 +2161,23 @@ var file_grader_proto_depIdxs = []int32{
 	17, // 12: frameval.grader.ComputeStatsRequest.variant_grades:type_name -> frameval.grader.VariantGrades
 	9,  // 13: frameval.grader.VariantGrades.grades:type_name -> frameval.grader.GradeRunResponse
 	19, // 14: frameval.grader.ComputeStatsResponse.stats:type_name -> frameval.grader.PairwiseStat
-	2,  // 15: frameval.grader.GraderService.GradeRun:input_type -> frameval.grader.GradeRunRequest
-	16, // 16: frameval.grader.GraderService.ComputeStats:input_type -> frameval.grader.ComputeStatsRequest
-	20, // 17: frameval.grader.GraderService.ClassifyDimensions:input_type -> frameval.grader.ClassifyDimensionsRequest
-	0,  // 18: frameval.grader.GraderService.HealthCheck:input_type -> frameval.grader.Empty
-	9,  // 19: frameval.grader.GraderService.GradeRun:output_type -> frameval.grader.GradeRunResponse
-	18, // 20: frameval.grader.GraderService.ComputeStats:output_type -> frameval.grader.ComputeStatsResponse
-	21, // 21: frameval.grader.GraderService.ClassifyDimensions:output_type -> frameval.grader.ClassifyDimensionsResponse
-	1,  // 22: frameval.grader.GraderService.HealthCheck:output_type -> frameval.grader.HealthResponse
-	19, // [19:23] is the sub-list for method output_type
-	15, // [15:19] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	24, // 15: frameval.grader.ClassifyFailureResponse.classification:type_name -> frameval.grader.FailureClassificationProto
+	25, // 16: frameval.grader.FailureClassificationProto.evidence:type_name -> frameval.grader.EvidenceSpanProto
+	2,  // 17: frameval.grader.GraderService.GradeRun:input_type -> frameval.grader.GradeRunRequest
+	16, // 18: frameval.grader.GraderService.ComputeStats:input_type -> frameval.grader.ComputeStatsRequest
+	20, // 19: frameval.grader.GraderService.ClassifyDimensions:input_type -> frameval.grader.ClassifyDimensionsRequest
+	22, // 20: frameval.grader.GraderService.ClassifyFailure:input_type -> frameval.grader.ClassifyFailureRequest
+	0,  // 21: frameval.grader.GraderService.HealthCheck:input_type -> frameval.grader.Empty
+	9,  // 22: frameval.grader.GraderService.GradeRun:output_type -> frameval.grader.GradeRunResponse
+	18, // 23: frameval.grader.GraderService.ComputeStats:output_type -> frameval.grader.ComputeStatsResponse
+	21, // 24: frameval.grader.GraderService.ClassifyDimensions:output_type -> frameval.grader.ClassifyDimensionsResponse
+	23, // 25: frameval.grader.GraderService.ClassifyFailure:output_type -> frameval.grader.ClassifyFailureResponse
+	1,  // 26: frameval.grader.GraderService.HealthCheck:output_type -> frameval.grader.HealthResponse
+	22, // [22:27] is the sub-list for method output_type
+	17, // [17:22] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_grader_proto_init() }
@@ -1883,7 +2191,7 @@ func file_grader_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grader_proto_rawDesc), len(file_grader_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
