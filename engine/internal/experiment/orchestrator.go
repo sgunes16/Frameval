@@ -284,7 +284,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	// Symptoms + Recovery, plus optional LLM failure classification. Errors
 	// in any stage degrade gracefully rather than fail the run: a missing
 	// diagnostic row is better than throwing away a successful grading pass.
-	o.persistDiagnostic(ctx, *experiment, *run, *task, transcript, grade, passed, failed)
+	o.persistDiagnostic(ctx, *experiment, *run, *task, *variant, transcript, grade, passed, failed)
 	status := "completed"
 	errorMessage := ""
 	if execErr != nil {
@@ -307,20 +307,28 @@ func (o *Orchestrator) persistDiagnostic(
 	experiment models.Experiment,
 	run models.Run,
 	taskRec models.Task,
+	variant models.Variant,
 	transcript models.Transcript,
 	grade models.Grade,
 	testsPassed, testsFailed int,
 ) {
 	fp := diagnostic.NewFingerprintExtractor().Extract(transcript.ParsedTurns, diagnostic.TaskContext{
 		TaskPrompt:       taskRec.TaskPrompt,
-		InstructionFiles: []string{"CLAUDE.md"},
+		InstructionFiles: instructionFilesForHarness(variant.HarnessID),
 	})
 	recovery := diagnostic.NewRecoveryAnalyzer().Analyze(transcript.ParsedTurns)
+	// Symptoms.CompileFailed needs *positive* evidence of a compile-time
+	// failure, not "no type checker ran". TypeCheckPass is the bool the
+	// grader sets only if a type-check stage actually executed; LintScore=0
+	// is "no lint configured" not "lint failed". The cheapest reliable
+	// proxy is "all tests failed and at least one test ran" — that
+	// matches every greenfield syntax-error scenario.
+	compileFailed := testsFailed > 0 && testsPassed == 0
 	outcome := diagnostic.RunOutcome{
 		TestsPassed:   testsPassed,
 		TestsFailed:   testsFailed,
 		TestsTotal:    testsPassed + testsFailed,
-		CompileFailed: !grade.TypeCheckPass && grade.LintScore == 0,
+		CompileFailed: compileFailed,
 		FilesTouched:  filenamesOfOutputs(transcript.OutputFiles),
 	}
 	symptoms := diagnostic.NewSymptomExtractor().Extract(transcript.ParsedTurns, outcome, taskRec)
@@ -361,6 +369,28 @@ func filenamesOfOutputs(files []models.OutputFile) []string {
 		out = append(out, f.Path)
 	}
 	return out
+}
+
+// instructionFilesForHarness maps a harness ID to the canonical filename
+// its Setup step lays down in the workspace. Used by the fingerprint's
+// ContextReferenceRate dimension — without this mapping, every non-claudemd
+// run scores near zero on that dimension because the extractor only knew
+// to look for CLAUDE.md.
+func instructionFilesForHarness(harnessID string) []string {
+	switch harnessID {
+	case "claudemd":
+		return []string{"CLAUDE.md"}
+	case "speckit":
+		return []string{"AGENTS.md", "constitution.md", "spec.md"}
+	case "planner_coder":
+		return []string{"PLAN.md"}
+	case "ralph", "bare":
+		fallthrough
+	default:
+		// No instruction file injected; the dimension scores ~zero for these,
+		// which is the correct behavior (no context to reference).
+		return nil
+	}
 }
 
 func (o *Orchestrator) refreshExperimentState(ctx context.Context, experimentID string) error {

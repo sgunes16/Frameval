@@ -39,15 +39,25 @@ export function DiagnosticLaunchPage() {
     if (!taskID && tasks.length > 0 && !initialTask) setTaskID(tasks[0].id);
   }, [tasks, taskID, initialTask]);
 
-  // Pick a sensible default model for the chosen executor so the dropdown
-  // doesn't sit on (say) a Cursor model while the user has aider selected.
-  // Aider talks to local Ollama by default; Cursor talks to its own cloud.
-  const preferredProvider = executorID === 'cursor' ? 'cursor' : 'ollama';
+  // Filter the model dropdown to the providers each executor can actually
+  // route to. Cursor only talks to its own cloud; Aider supports Ollama
+  // locally AND OpenAI/Anthropic/Google when API keys are configured.
+  // Unknown executors get the full list as a safety fallback.
+  const allowedProviders = useMemo<string[]>(() => {
+    switch (executorID) {
+      case 'cursor':
+        return ['cursor'];
+      case 'aider':
+        return ['ollama', 'openai', 'anthropic', 'google'];
+      default:
+        return [];
+    }
+  }, [executorID]);
   const filteredModels = useMemo(() => {
-    if (models.length === 0) return models;
-    const preferred = models.filter((m) => m.provider === preferredProvider);
+    if (models.length === 0 || allowedProviders.length === 0) return models;
+    const preferred = models.filter((m) => allowedProviders.includes(m.provider));
     return preferred.length > 0 ? preferred : models;
-  }, [models, preferredProvider]);
+  }, [models, allowedProviders]);
   useEffect(() => {
     if (filteredModels.length === 0) return;
     const stillValid = filteredModels.some((m) => m.model_id === modelID);
