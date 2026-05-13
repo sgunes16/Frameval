@@ -158,6 +158,44 @@ func TestSpecKitInvokeStopsOnStageError(t *testing.T) {
 	}
 }
 
+func TestSpecKitInvokeRespectsContextCancellation(t *testing.T) {
+	h := NewSpecKit()
+	// recordingExecutor cancels the parent ctx mid-flight via a closure
+	calls := 0
+	ctx, cancel := context.WithCancel(context.Background())
+	fake := &cancellingExecutor{cancel: cancel, callsBeforeCancel: 2, calls: &calls}
+	tk := task.Task{TaskPrompt: "x"}
+	ws := pkgharness.Workspace{Path: t.TempDir()}
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+
+	_, err := h.Invoke(ctx, run, fake)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	// fake.Execute increments calls for each invocation. After cancellation
+	// triggered on the 2nd call, no further stage Execute should happen.
+	if calls > 2 {
+		t.Errorf("expected at most 2 stage invocations before honoring cancellation, got %d", calls)
+	}
+}
+
+type cancellingExecutor struct {
+	cancel            context.CancelFunc
+	callsBeforeCancel int
+	calls             *int
+}
+
+func (c *cancellingExecutor) Name() string                                          { return "cancelling" }
+func (c *cancellingExecutor) SupportedModes() []executor.ExecutionMode              { return []executor.ExecutionMode{executor.ExecutionModeCLI} }
+func (c *cancellingExecutor) ParseTranscript(raw []byte) ([]executor.ParsedTurn, error) { return nil, nil }
+func (c *cancellingExecutor) Execute(_ context.Context, cfg executor.RunConfig) (*executor.RunResult, error) {
+	*c.calls++
+	if *c.calls >= c.callsBeforeCancel {
+		c.cancel()
+	}
+	return &executor.RunResult{RawOutput: "ok", ParsedTurns: []executor.ParsedTurn{{Role: "assistant", Content: cfg.Stage}}}, nil
+}
+
 func TestSpecKitTeardownRemovesOwnedDir(t *testing.T) {
 	h := NewSpecKit()
 	ws := pkgharness.Workspace{Path: t.TempDir()}

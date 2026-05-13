@@ -108,11 +108,14 @@ func stagePrompt(stage string, t task.Task) string {
 func (h *SpecKit) Invoke(ctx context.Context, run harness.HarnessRun, exec executor.AgentExecutor) (*executor.RunResult, error) {
 	var stageResults []*executor.RunResult
 	var stageErr error
+stages:
 	for _, stage := range speckitStages {
+		// `break stages` (labeled) exits the for loop; a plain `break` inside
+		// the select would only break the select.
 		select {
 		case <-ctx.Done():
 			stageErr = ctx.Err()
-			break
+			break stages
 		default:
 		}
 		result, err := exec.Execute(ctx, executor.RunConfig{
@@ -126,7 +129,7 @@ func (h *SpecKit) Invoke(ctx context.Context, run harness.HarnessRun, exec execu
 		stageResults = append(stageResults, result)
 		if err != nil {
 			stageErr = fmt.Errorf("speckit: stage %s: %w", stage, err)
-			break
+			break stages
 		}
 	}
 	return mergeStageTranscripts(speckitStages, stageResults), stageErr
