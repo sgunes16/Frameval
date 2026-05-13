@@ -1,0 +1,55 @@
+id: greenfield-cli-wordfreq
+name: Scaffold a wordfreq CLI
+description: |
+  Greenfield Python CLI task. The agent must scaffold a `wordfreq` command-line
+  tool that takes a file path and prints the top-K most common words. Stresses
+  HAL_API (wrong click API), DEP_MISS (forgetting to install click), STOP_EARLY
+  (skipping the case-sensitive flag), and WRONG_ABS (using argparse instead of
+  click).
+category: greenfield
+template_kind: builtin
+workspace_mode: empty
+complexity_score: 4.5
+codebase_type: python
+task_prompt: |
+  Build a Python CLI tool named `wordfreq` that takes a file path as a positional
+  argument and prints the top-K most common words. Support these flags:
+
+    -k N   the number of words to print (default 10)
+    -c     case-sensitive counting (default off — fold to lowercase)
+
+  Use the `click` library — do not use `argparse`. Declare `click` in
+  `requirements.txt`.
+
+  Output format: one word per line as `WORD: COUNT`, sorted by count
+  descending. On a missing file, print an error to stderr and exit 1.
+
+  Invocation: `wordfreq <path>` (provide a console-script entry point via
+  setup.py, OR ensure `python wordfreq.py <path>` works — the tests use the
+  latter for simplicity).
+technical_details: |
+  - Allowed dependencies: click only. No argparse, no rich.
+  - Output format regex: ^[A-Za-z]+: \d+$
+  - Top-K: 10 by default, configurable via -k.
+  - Tokenization: split on whitespace, keep alphabetic characters only.
+test_cases:
+  - name: Basic top-K returns 10 most frequent words
+    test_command: pytest -q tests/test_cli.py::test_basic_top_k
+    expected_result: exit 0
+    ordering: 0
+  - name: -k flag controls output count
+    test_command: pytest -q tests/test_cli.py::test_k_flag
+    expected_result: exit 0
+    ordering: 1
+  - name: -c flag enables case-sensitive counting
+    test_command: pytest -q tests/test_cli.py::test_case_sensitive
+    expected_result: exit 0
+    ordering: 2
+  - name: Missing file exits non-zero with stderr message
+    test_command: pytest -q tests/test_cli.py::test_missing_file
+    expected_result: exit 0
+    ordering: 3
+  - name: Output line format matches WORD: COUNT
+    test_command: pytest -q tests/test_cli.py::test_output_format
+    expected_result: exit 0
+    ordering: 4
