@@ -9,14 +9,23 @@ import (
 	"github.com/mustafaselman/frameval/engine/internal/models"
 )
 
+const defaultHarnessID = "bare"
+
+func fallbackHarnessID(value string) string {
+	if value == "" {
+		return defaultHarnessID
+	}
+	return value
+}
+
 func (s *Store) CreateVariant(ctx context.Context, variant models.Variant) (*models.Variant, error) {
 	if variant.ID == "" {
 		variant.ID = uuid.NewString()
 	}
 	_, err := s.DB.ExecContext(ctx, `
-		INSERT INTO variants (id, experiment_id, name, description, is_control, ordering)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, variant.ID, variant.ExperimentID, variant.Name, variant.Description, boolToInt(variant.IsControl), variant.Ordering)
+		INSERT INTO variants (id, experiment_id, name, description, is_control, ordering, harness_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, variant.ID, variant.ExperimentID, variant.Name, variant.Description, boolToInt(variant.IsControl), variant.Ordering, fallbackHarnessID(variant.HarnessID))
 	if err != nil {
 		return nil, fmt.Errorf("create variant: %w", err)
 	}
@@ -24,7 +33,7 @@ func (s *Store) CreateVariant(ctx context.Context, variant models.Variant) (*mod
 }
 
 func (s *Store) ListVariantsByExperiment(ctx context.Context, experimentID string) ([]models.Variant, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id, experiment_id, name, description, is_control, ordering FROM variants WHERE experiment_id = ? ORDER BY ordering ASC`, experimentID)
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, experiment_id, name, description, is_control, ordering, harness_id FROM variants WHERE experiment_id = ? ORDER BY ordering ASC`, experimentID)
 	if err != nil {
 		return nil, fmt.Errorf("list variants: %w", err)
 	}
@@ -51,7 +60,7 @@ func (s *Store) ListVariantsByExperiment(ctx context.Context, experimentID strin
 }
 
 func (s *Store) GetVariant(ctx context.Context, variantID string) (*models.Variant, error) {
-	row := s.DB.QueryRowContext(ctx, `SELECT id, experiment_id, name, description, is_control, ordering FROM variants WHERE id = ?`, variantID)
+	row := s.DB.QueryRowContext(ctx, `SELECT id, experiment_id, name, description, is_control, ordering, harness_id FROM variants WHERE id = ?`, variantID)
 	variant, err := scanVariant(row)
 	if err != nil {
 		return nil, err
@@ -65,7 +74,7 @@ func (s *Store) GetVariant(ctx context.Context, variantID string) (*models.Varia
 }
 
 func (s *Store) UpdateVariant(ctx context.Context, variantID string, variant models.Variant) (*models.Variant, error) {
-	_, err := s.DB.ExecContext(ctx, `UPDATE variants SET name = ?, description = ?, is_control = ?, ordering = ? WHERE id = ?`, variant.Name, variant.Description, boolToInt(variant.IsControl), variant.Ordering, variantID)
+	_, err := s.DB.ExecContext(ctx, `UPDATE variants SET name = ?, description = ?, is_control = ?, ordering = ?, harness_id = ? WHERE id = ?`, variant.Name, variant.Description, boolToInt(variant.IsControl), variant.Ordering, fallbackHarnessID(variant.HarnessID), variantID)
 	if err != nil {
 		return nil, fmt.Errorf("update variant: %w", err)
 	}
@@ -83,11 +92,13 @@ func (s *Store) DeleteVariant(ctx context.Context, variantID string) error {
 func scanVariant(scanner interface{ Scan(dest ...any) error }) (models.Variant, error) {
 	var variant models.Variant
 	var description sql.NullString
+	var harnessID sql.NullString
 	var isControl int
-	if err := scanner.Scan(&variant.ID, &variant.ExperimentID, &variant.Name, &description, &isControl, &variant.Ordering); err != nil {
+	if err := scanner.Scan(&variant.ID, &variant.ExperimentID, &variant.Name, &description, &isControl, &variant.Ordering, &harnessID); err != nil {
 		return variant, fmt.Errorf("scan variant: %w", err)
 	}
 	variant.Description = description.String
 	variant.IsControl = isControl == 1
+	variant.HarnessID = fallbackHarnessID(harnessID.String)
 	return variant, nil
 }

@@ -45,9 +45,9 @@ func (s *Store) CreateExperiment(ctx context.Context, req models.ExperimentReque
 	for idx, variantReq := range req.Variants {
 		variantID := uuid.NewString()
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO variants (id, experiment_id, name, description, is_control, ordering)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, variantID, experimentID, variantReq.Name, variantReq.Description, boolToInt(variantReq.IsControl), maxInt(variantReq.Ordering, idx))
+			INSERT INTO variants (id, experiment_id, name, description, is_control, ordering, harness_id)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, variantID, experimentID, variantReq.Name, variantReq.Description, boolToInt(variantReq.IsControl), maxInt(variantReq.Ordering, idx), fallbackHarnessID(variantReq.HarnessID))
 		if err != nil {
 			return nil, fmt.Errorf("insert variant: %w", err)
 		}

@@ -43,12 +43,12 @@ func (h *PlannerCoder) Setup(_ context.Context, ws harness.Workspace, t task.Tas
 }
 
 func (h *PlannerCoder) Invoke(ctx context.Context, run harness.HarnessRun, exec executor.AgentExecutor) (*executor.RunResult, error) {
-	plannerResult, plannerErr := exec.Execute(ctx, executor.RunConfig{
+	plannerResult, plannerErr := exec.Execute(ctx, harness.MergeConfig(run.BaseRunConfig, executor.RunConfig{
 		Prompt:        plannerPrompt(run.Task),
 		WorkspacePath: run.Workspace.Path,
 		Role:          rolePlanner,
 		Stage:         rolePlanner,
-	})
+	}))
 	if plannerResult == nil {
 		plannerResult = &executor.RunResult{}
 	}
@@ -66,12 +66,12 @@ func (h *PlannerCoder) Invoke(ctx context.Context, run harness.HarnessRun, exec 
 		return mergeRoleTranscripts(plannerResult, &executor.RunResult{}), plannerErr
 	}
 
-	coderResult, coderErr := exec.Execute(ctx, executor.RunConfig{
+	coderResult, coderErr := exec.Execute(ctx, harness.MergeConfig(run.BaseRunConfig, executor.RunConfig{
 		Prompt:        coderPrompt(run.Task, plan),
 		WorkspacePath: run.Workspace.Path,
 		Role:          roleCoder,
 		Stage:         roleCoder,
-	})
+	}))
 	if coderResult == nil {
 		coderResult = &executor.RunResult{}
 	}

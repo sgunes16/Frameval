@@ -22,6 +22,24 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    to: '/diagnostic/launch',
+    label: 'Run diagnostic',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l3 9-3 9 16-9z" />
+      </svg>
+    ),
+  },
+  {
+    to: '/diagnostic/compare',
+    label: 'Compare runs',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h7m-7 6h7m-7 6h7M14 6h7m-7 6h7m-7 6h7" />
+      </svg>
+    ),
+  },
+  {
     to: '/experiments',
     label: 'Experiments',
     icon: (

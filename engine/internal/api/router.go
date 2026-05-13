@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	builtinharness "github.com/mustafaselman/frameval/engine/internal/builtin/harness"
+	"github.com/mustafaselman/frameval/engine/internal/executor"
 	"github.com/mustafaselman/frameval/engine/internal/experiment"
 	"github.com/mustafaselman/frameval/engine/internal/storage"
 )
@@ -11,11 +13,13 @@ import (
 type Service struct {
 	store        *storage.Store
 	orchestrator *experiment.Orchestrator
+	harnesses    *builtinharness.Registry
+	executors    *executor.Registry
 	hub          *Hub
 }
 
-func NewService(store *storage.Store, orchestrator *experiment.Orchestrator, hub *Hub) *Service {
-	return &Service{store: store, orchestrator: orchestrator, hub: hub}
+func NewService(store *storage.Store, orchestrator *experiment.Orchestrator, harnesses *builtinharness.Registry, executors *executor.Registry, hub *Hub) *Service {
+	return &Service{store: store, orchestrator: orchestrator, harnesses: harnesses, executors: executors, hub: hub}
 }
 
 func NewRouter(service *Service) http.Handler {
@@ -61,6 +65,9 @@ func NewRouter(service *Service) http.Handler {
 		r.Get("/tasks/{id}", service.GetTask)
 		r.Get("/config/models", service.ListModels)
 		r.Get("/config/agents", service.ListAgents)
+		r.Get("/config/harnesses", service.ListHarnesses)
+		r.Get("/config/executors", service.ListExecutors)
+		r.Post("/diagnostic/launch", service.LaunchDiagnostic)
 		r.Get("/config/api-keys", service.ListAPIKeys)
 		r.Post("/config/api-keys", service.UpsertAPIKey)
 		r.Delete("/config/api-keys/{provider}", service.DeleteAPIKey)

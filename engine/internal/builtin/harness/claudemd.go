@@ -89,10 +89,10 @@ func (h *ClaudeMd) Setup(_ context.Context, ws harness.Workspace, t task.Task, b
 }
 
 func (h *ClaudeMd) Invoke(ctx context.Context, run harness.HarnessRun, exec executor.AgentExecutor) (*executor.RunResult, error) {
-	return exec.Execute(ctx, executor.RunConfig{
+	return exec.Execute(ctx, harness.MergeConfig(run.BaseRunConfig, executor.RunConfig{
 		Prompt:        run.Task.TaskPrompt,
 		WorkspacePath: run.Workspace.Path,
-	})
+	}))
 }
 
 // Teardown removes the laid-down CLAUDE.md if and only if Setup created it.

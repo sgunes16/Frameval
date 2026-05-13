@@ -207,6 +207,31 @@ export type AgentInfo = {
   available: boolean;
 };
 
+export type HarnessInfo = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export type ExecutorInfo = {
+  id: string;
+  modes: string[];
+};
+
+export type LaunchDiagnosticRequest = {
+  task_id: string;
+  executor_id: string;
+  harness_ids: string[];
+  model?: string;
+  runs_per_variant?: number;
+  timeout_seconds?: number;
+  name?: string;
+};
+
+export type LaunchDiagnosticResponse = {
+  experiment_id: string;
+};
+
 export type APIKey = {
   id: string;
   provider: string;

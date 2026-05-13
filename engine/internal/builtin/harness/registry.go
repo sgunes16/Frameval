@@ -63,3 +63,13 @@ func (r *Registry) List() []string {
 	}
 	return names
 }
+
+// Entries returns all registered harness adapters. Used by the API layer to
+// emit name + description without leaking the registry internals.
+func (r *Registry) Entries() []pkgharness.Harness {
+	out := make([]pkgharness.Harness, 0, len(r.adapters))
+	for _, h := range r.adapters {
+		out = append(out, h)
+	}
+	return out
+}

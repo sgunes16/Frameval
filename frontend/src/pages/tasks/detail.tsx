@@ -26,7 +26,7 @@ export function TaskDetailPage() {
               <span>Complexity {task.complexity_score}/10</span>
             </div>
           </div>
-          <Link to={`/diagnostic/compare?task=${task.id}`}>
+          <Link to={`/diagnostic/launch?task=${task.id}`}>
             <Button size="sm">Run diagnostic on this task</Button>
           </Link>
         </div>
