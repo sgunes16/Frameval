@@ -8,7 +8,6 @@ import type {
   Diagnostic,
   DockerStatus,
   Experiment,
-  ExperimentStat,
   Grade,
   ModelConfig,
   QueueStatus,
@@ -28,10 +27,6 @@ export function useExperiment(id?: string) {
 
 export function useRuns(experimentId?: string) {
   return useQuery({ queryKey: ['runs', experimentId], enabled: Boolean(experimentId), queryFn: () => api.get<Run[]>(`/experiments/${experimentId}/runs`) });
-}
-
-export function useExperimentStats(experimentId?: string) {
-  return useQuery({ queryKey: ['experiment-stats', experimentId], enabled: Boolean(experimentId), queryFn: () => api.get<ExperimentStat[]>(`/experiments/${experimentId}/stats`) });
 }
 
 export function useRun(runId?: string) {

@@ -130,7 +130,6 @@ export type Experiment = {
   estimated_cost_usd?: number;
   created_at: string;
   variants?: Variant[];
-  stats?: ExperimentStat[];
 };
 
 export type Run = {
@@ -212,17 +211,6 @@ export type APIKey = {
   id: string;
   provider: string;
   redacted_key: string;
-};
-
-export type ExperimentStat = {
-  id?: string;
-  metric_name: string;
-  variant_a_id: string;
-  variant_b_id: string;
-  mean_a: number;
-  mean_b: number;
-  p_value: number;
-  is_significant: boolean;
 };
 
 export type DockerStatus = {
