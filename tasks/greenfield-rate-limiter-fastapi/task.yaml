@@ -1,0 +1,58 @@
+id: greenfield-rate-limiter-fastapi
+name: Build a per-IP rate-limited FastAPI endpoint
+description: |
+  Greenfield FastAPI task. The agent must build a single endpoint with
+  per-IP rate limiting (10 req/min). Stresses HAL_API (wrong rate-limit
+  library), MISREAD (global vs per-IP), STOP_EARLY (skipping the
+  window-reset logic).
+category: greenfield
+template_kind: builtin
+workspace_mode: empty
+complexity_score: 5.5
+codebase_type: python
+task_prompt: |
+  Build a FastAPI service in `app.py` (so `from app import app` works) with
+  one endpoint:
+
+      GET /api/data
+
+  Behavior:
+    - Returns JSON {"data": "ok"} on success.
+    - Rate-limit to 10 requests per minute per client IP address.
+    - When exceeded: return HTTP 429 with body {"error": "rate limit exceeded"}.
+    - The window MUST reset after 60 seconds (request 11 should succeed
+      once the bucket refills).
+    - Different client IPs have independent budgets.
+
+  Identify the client IP from the X-Forwarded-For header (test environment
+  uses TestClient; X-Forwarded-For will be supplied).
+
+  Constraints:
+    - Allowed dependencies: fastapi, starlette.
+    - No external state stores (no Redis, no database) — keep it in-process.
+    - Do not start a uvicorn server in module scope; tests instantiate
+      a TestClient against `app`.
+technical_details: |
+  - Tests instantiate `app` from `app.py` (workspace root) and inject
+    X-Forwarded-For via TestClient headers.
+  - The window reset test mocks time via `freezegun.freeze_time` so it
+    completes deterministically and quickly (no real sleeps).
+  - Response shapes are strict: success body keys exactly {"data"};
+    429 body keys exactly {"error"}.
+test_cases:
+  - name: First 10 requests return 200
+    test_command: pytest -q tests/test_rate_limit.py::test_first_10_ok
+    expected_result: exit 0
+    ordering: 0
+  - name: 11th request returns 429 with correct body
+    test_command: pytest -q tests/test_rate_limit.py::test_11th_returns_429
+    expected_result: exit 0
+    ordering: 1
+  - name: Window resets after 60s
+    test_command: pytest -q tests/test_rate_limit.py::test_window_resets
+    expected_result: exit 0
+    ordering: 2
+  - name: Per-IP budgets are independent
+    test_command: pytest -q tests/test_rate_limit.py::test_per_ip_independent
+    expected_result: exit 0
+    ordering: 3
