@@ -9,7 +9,6 @@ class Settings:
     port: int = int(os.getenv("GRADER_PORT", "50051"))
     version: str = "0.1.0"
     enable_llm_judge: bool = os.getenv("FRAMEVAL_ENABLE_LLM_JUDGE", "false").lower() == "true"
-    enable_spec_adherence: bool = os.getenv("FRAMEVAL_ENABLE_SPEC_ADHERENCE", "false").lower() == "true"
 
 
 def get_settings() -> Settings:

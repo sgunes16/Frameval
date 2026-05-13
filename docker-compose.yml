@@ -10,17 +10,14 @@ services:
       FRAMEVAL_SANDBOX_IMAGE: frameval-sandbox:local
       FRAMEVAL_MAX_CONCURRENT: 3
       FRAMEVAL_TASKS_ROOT: /app/tasks
-      FRAMEVAL_TERMINAL_BENCH_ROOT: /app/benchmarks/terminal-bench/original-tasks
-      FRAMEVAL_SWE_BENCH_PATH: /app/benchmarks/SWE-bench_Lite.jsonl
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      AIDER_MODEL: ${AIDER_MODEL:-openai/qwen2.5-coder:7b}
     volumes:
       - frameval_data:/data
       - ./tasks:/app/tasks:ro
-      - ./baselines:/app/baselines:ro
-      - ./benchmarks:/app/benchmarks:ro
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8080:8080"
@@ -36,7 +33,7 @@ services:
       GRADER_PORT: 50051
       FRAMEVAL_DB_PATH: /data/frameval.db
       FRAMEVAL_ENABLE_LLM_JUDGE: ${FRAMEVAL_ENABLE_LLM_JUDGE:-false}
-      FRAMEVAL_ENABLE_SPEC_ADHERENCE: ${FRAMEVAL_ENABLE_SPEC_ADHERENCE:-false}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - frameval_data:/data
     ports:

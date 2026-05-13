@@ -33,7 +33,7 @@ func (e *CursorExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult
 		}
 		command = `agent -p --force --output-format stream-json --stream-partial-output --model "$FRAMEVAL_MODEL_ID" "$FRAMEVAL_PROMPT"`
 	}
-	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, mergeEnv(cfg.Environment, map[string]string{"FRAMEVAL_PROMPT": prompt, "FRAMEVAL_MODEL_ID": fallbackModel(cfg.Model)}), command, cfg.OnOutput)
+	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, mergeEnv(map[string]string{"FRAMEVAL_PROMPT": prompt, "FRAMEVAL_MODEL_ID": fallbackModel(cfg.Model)}, cfg.Environment), command, cfg.OnOutput)
 	turns, _ := e.ParseTranscript([]byte(output))
 	return &RunResult{RawOutput: output, ParsedTurns: turns, StreamedOutput: cfg.OnOutput != nil}, err
 }

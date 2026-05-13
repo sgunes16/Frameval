@@ -111,6 +111,32 @@ func TestFallbackOllamaKeyDefault(t *testing.T) {
 	}
 }
 
+func TestMergeEnvCallerWins(t *testing.T) {
+	defaults := map[string]string{
+		"AIDER_MODEL":     "openai/qwen2.5-coder:7b",
+		"OPENAI_API_BASE": "http://host.docker.internal:11434/v1",
+		"FRAMEVAL_PROMPT": "default-prompt",
+	}
+	callerOverrides := map[string]string{
+		"AIDER_MODEL": "openai/different-model",
+		"NEW_VAR":     "added",
+	}
+	merged := mergeEnv(defaults, callerOverrides)
+
+	if merged["AIDER_MODEL"] != "openai/different-model" {
+		t.Errorf("caller override should win: got %q", merged["AIDER_MODEL"])
+	}
+	if merged["OPENAI_API_BASE"] != "http://host.docker.internal:11434/v1" {
+		t.Errorf("default should remain when not overridden: got %q", merged["OPENAI_API_BASE"])
+	}
+	if merged["FRAMEVAL_PROMPT"] != "default-prompt" {
+		t.Errorf("default should remain: got %q", merged["FRAMEVAL_PROMPT"])
+	}
+	if merged["NEW_VAR"] != "added" {
+		t.Errorf("caller-only key should be present: got %q", merged["NEW_VAR"])
+	}
+}
+
 func TestAiderRegistered(t *testing.T) {
 	r := &Registry{executors: map[string]AgentExecutor{
 		"aider": &AiderExecutor{},

@@ -2,8 +2,6 @@ package executor
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -67,12 +65,13 @@ func (e *AiderExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult,
 		}
 		command = `aider --model "$AIDER_MODEL" --openai-api-base "$OPENAI_API_BASE" --openai-api-key "$OPENAI_API_KEY" --no-stream --yes-always --no-pretty --message "$FRAMEVAL_PROMPT"`
 	}
-	env := mergeEnv(cfg.Environment, map[string]string{
-		"FRAMEVAL_PROMPT":  prompt,
-		"AIDER_MODEL":      fallbackAiderModel(cfg.Model),
-		"OPENAI_API_BASE":  fallbackOllamaBase(),
-		"OPENAI_API_KEY":   fallbackOllamaKey(),
-	})
+	// Defaults first, caller's cfg.Environment overrides last (caller wins).
+	env := mergeEnv(map[string]string{
+		"FRAMEVAL_PROMPT": prompt,
+		"AIDER_MODEL":     fallbackAiderModel(cfg.Model),
+		"OPENAI_API_BASE": fallbackOllamaBase(),
+		"OPENAI_API_KEY":  fallbackOllamaKey(),
+	}, cfg.Environment)
 	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, env, command, cfg.OnOutput)
 	turns, _ := e.ParseTranscript([]byte(output))
 	return &RunResult{RawOutput: output, ParsedTurns: turns, StreamedOutput: cfg.OnOutput != nil}, err
@@ -140,13 +139,3 @@ func fallbackOllamaKey() string {
 	return "ollama"
 }
 
-// describeAiderConfig is a debug helper, not part of the public interface;
-// surfaces effective config in logs. Marshalling here is purely structural.
-func describeAiderConfig(model string) string {
-	payload := map[string]string{
-		"model":     fallbackAiderModel(model),
-		"base_url":  fallbackOllamaBase(),
-	}
-	b, _ := json.Marshal(payload)
-	return fmt.Sprintf("aider config: %s", string(b))
-}

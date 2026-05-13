@@ -674,7 +674,7 @@ func runGitCommand(ctx context.Context, workspace string, env map[string]string,
 
 func buildSandboxEnv(env map[string]string) []string {
 	sandboxEnv := make([]string, 0, len(env)+8)
-	for _, key := range []string{"CURSOR_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "FRAMEVAL_CURSOR_COMMAND", "FRAMEVAL_GEMINI_COMMAND"} {
+	for _, key := range []string{"CURSOR_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "FRAMEVAL_CURSOR_COMMAND", "FRAMEVAL_AIDER_COMMAND", "OLLAMA_BASE_URL", "AIDER_MODEL"} {
 		if value := os.Getenv(key); value != "" {
 			sandboxEnv = append(sandboxEnv, key+"="+value)
 		}
