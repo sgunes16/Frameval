@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { CancelButton } from '../../components/run-monitor/cancel-button';
 import { AgentEventViewer, LogViewer, type AgentLogEvent } from '../../components/run-monitor/log-viewer';
-import { PatchViewer } from '../../components/run-monitor/patch-viewer';
 import { RunProgressBar } from '../../components/run-monitor/progress-bar';
 import { RunGrid } from '../../components/run-monitor/run-grid';
 import { Badge } from '../../components/ui/badge';
@@ -252,10 +251,6 @@ export function ExperimentMonitorPage() {
       <Card>
         <CardHeader title="Agent timeline" description={selectedRunLabel} />
         <AgentEventViewer events={rawLogEvents} runs={filteredRuns} />
-      </Card>
-      <Card>
-        <CardHeader title="Patch" description={selectedRunLabel} />
-        <PatchViewer transcript={selectedTranscript} runLabel={selectedRunLabel} />
       </Card>
       <Card>
         <CardHeader title="Raw stream" description={selectedRunLabel} />

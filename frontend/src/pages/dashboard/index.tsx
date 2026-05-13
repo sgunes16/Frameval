@@ -3,13 +3,12 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardHeader } from '../../components/ui/card';
 import { EmptyState } from '../../components/ui/empty-state';
-import { useBaselines, useExperiments, useTasks } from '../../lib/hooks';
+import { useExperiments, useTasks } from '../../lib/hooks';
 import { statusTone, statusLabel, formatTimeAgo } from '../../lib/utils';
 
 export function DashboardPage() {
   const { data: experiments = [] } = useExperiments();
   const { data: tasks = [] } = useTasks();
-  const { data: baselines = [] } = useBaselines();
 
   const running = experiments.filter((experiment) => experiment.status === 'running').length;
   const completed = experiments.filter((experiment) => experiment.status === 'completed').length;
@@ -25,17 +24,16 @@ export function DashboardPage() {
           <div className="mt-1 text-xl font-semibold">Benchmark agent context, deterministically.</div>
           <div className="mt-1 text-sm text-slate-300">Spin up sandboxed runs and compare variants with reproducible metrics.</div>
         </div>
-        <Link to="/experiments/new">
+        <Link to="/experiments">
           <Button variant="secondary" size="lg" className="bg-white text-slate-900 hover:bg-slate-100">
-            New experiment
+            View experiments
           </Button>
         </Link>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Experiments" value={experiments.length} hint={`${running} running · ${completed} completed`} />
         <StatCard label="Task library" value={tasks.length} hint="Greenfield, brownfield, bugfix" />
-        <StatCard label="Baselines" value={baselines.length} hint="Coming soon" muted />
         <StatCard label="Sandbox runs" value={experiments.reduce((acc, exp) => acc + exp.runs_per_variant * (exp.variants?.length ?? 0), 0)} hint="Total configured" />
       </div>
 
@@ -56,8 +54,8 @@ export function DashboardPage() {
             title="No experiments yet"
             description="Create an experiment to benchmark how context artifacts affect agent behavior."
             action={
-              <Link to="/experiments/new">
-                <Button size="sm">Create your first experiment</Button>
+              <Link to="/experiments">
+                <Button size="sm">View experiments</Button>
               </Link>
             }
           />
@@ -87,7 +85,7 @@ export function DashboardPage() {
                     <td className="px-4 py-2 text-slate-600">{experiment.variants?.length ?? 0}</td>
                     <td className="px-4 py-2 text-slate-500">{formatTimeAgo(experiment.created_at)}</td>
                     <td className="px-4 py-2 text-right">
-                      <Link to={`/experiments/${experiment.id}/${experiment.status === 'running' ? 'monitor' : 'results'}`}>
+                      <Link to={`/experiments/${experiment.id}/monitor`}>
                         <Button variant="ghost" size="sm">
                           Open
                         </Button>
@@ -105,9 +103,9 @@ export function DashboardPage() {
         <Card>
           <CardHeader title="Quick start" description="Guided paths for common workflows." />
           <div className="space-y-2">
-            <QuickLink to="/experiments/new" title="Run an A/B on AGENTS.md" description="Compare a control against a custom context file." />
+            <QuickLink to="/experiments" title="See active experiments" description="Monitor in-flight runs and review past comparisons." />
             <QuickLink to="/tasks" title="Browse task library" description="Ready-to-run prompts, tests, and workspace modes." />
-            <QuickLink to="/settings" title="Configure models & agents" description="Set API keys and pick Cursor or Gemini CLI." />
+            <QuickLink to="/settings" title="Configure models & agents" description="Set API keys and pick your executor." />
           </div>
         </Card>
         <Card>

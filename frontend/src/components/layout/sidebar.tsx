@@ -52,17 +52,6 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    to: '/baselines',
-    label: 'Baselines',
-    hint: 'Soon',
-    disabled: true,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 19V5m0 14h16m-8-4V9m4 6V11M8 15v-2" />
-      </svg>
-    ),
-  },
-  {
     to: '/settings',
     label: 'Settings',
     icon: (
