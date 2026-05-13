@@ -36,11 +36,33 @@ export function DiagnosticLaunchPage() {
     if (!executorID && executors.length > 0) setExecutorID(executors[0].id);
   }, [executors, executorID]);
   useEffect(() => {
-    if (!modelID && models.length > 0) setModelID(models[0].model_id);
-  }, [models, modelID]);
-  useEffect(() => {
     if (!taskID && tasks.length > 0 && !initialTask) setTaskID(tasks[0].id);
   }, [tasks, taskID, initialTask]);
+
+  // Filter the model dropdown to the providers each executor can actually
+  // route to. Cursor only talks to its own cloud; Aider supports Ollama
+  // locally AND OpenAI/Anthropic/Google when API keys are configured.
+  // Unknown executors get the full list as a safety fallback.
+  const allowedProviders = useMemo<string[]>(() => {
+    switch (executorID) {
+      case 'cursor':
+        return ['cursor'];
+      case 'aider':
+        return ['ollama', 'openai', 'anthropic', 'google'];
+      default:
+        return [];
+    }
+  }, [executorID]);
+  const filteredModels = useMemo(() => {
+    if (models.length === 0 || allowedProviders.length === 0) return models;
+    const preferred = models.filter((m) => allowedProviders.includes(m.provider));
+    return preferred.length > 0 ? preferred : models;
+  }, [models, allowedProviders]);
+  useEffect(() => {
+    if (filteredModels.length === 0) return;
+    const stillValid = filteredModels.some((m) => m.model_id === modelID);
+    if (!stillValid) setModelID(filteredModels[0].model_id);
+  }, [filteredModels, modelID]);
 
   const toggleHarness = (id: string) => {
     setSelectedHarnesses((prev) =>
@@ -185,12 +207,16 @@ export function DiagnosticLaunchPage() {
               onChange={(event) => setModelID(event.target.value)}
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm"
             >
-              {models.map((m) => (
+              {filteredModels.map((m) => (
                 <option key={m.id} value={m.model_id}>
-                  {m.display_name} ({m.provider})
+                  {m.display_name}
                 </option>
               ))}
             </select>
+            <div className="mt-1 text-[11px] text-slate-500">
+              Showing models compatible with {executorID || 'the selected executor'}. Aider runs
+              local Ollama models; Cursor uses its own cloud.
+            </div>
           </div>
         </div>
       </Card>

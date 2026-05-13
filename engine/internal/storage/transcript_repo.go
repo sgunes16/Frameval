@@ -38,10 +38,11 @@ func (s *Store) GetTranscriptByRun(ctx context.Context, runID string) (*models.T
 		FROM transcripts WHERE run_id = ?
 	`, runID)
 	var transcript models.Transcript
-	var parsedTurns, files sql.NullString
-	if err := row.Scan(&transcript.ID, &transcript.RunID, &transcript.RawOutput, &parsedTurns, &transcript.FilesystemDiff, &transcript.Patch, &transcript.TotalTurns, &transcript.TotalTokens, &transcript.CostUSD, &files); err != nil {
+	var parsedTurns, files, patch sql.NullString
+	if err := row.Scan(&transcript.ID, &transcript.RunID, &transcript.RawOutput, &parsedTurns, &transcript.FilesystemDiff, &patch, &transcript.TotalTurns, &transcript.TotalTokens, &transcript.CostUSD, &files); err != nil {
 		return nil, fmt.Errorf("get transcript: %w", err)
 	}
+	transcript.Patch = patch.String
 	transcript.ParsedTurns = unmarshalJSON(parsedTurns.String, []models.ParsedTurn{})
 	transcript.OutputFiles = unmarshalJSON(files.String, []models.OutputFile{})
 	return &transcript, nil
