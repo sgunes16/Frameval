@@ -34,17 +34,21 @@ will cite.
 3. **Run the classifier over the same runs.** Each run already has a
    `diagnostic.failure_label` row populated by the gRPC ClassifyFailure
    call after the orchestrator integration lands. Until that integration
-   ships, run the classifier offline:
+   ships, export the classifier predictions to a JSON file (one record
+   per run with `{"run_id": "...", "classification": {...}}`) and feed
+   it to the scorer:
 
    ```bash
    cd grader
    PYTHONPATH=.. uv run python -m grader.failure_classifier.tools.score_validation \
        --labels ../docs/calibration/labels-template.csv \
-       --runs <path-or-DSN-to-runs-table> \
+       --predictions <path-to-predictions.json> \
        --out ../docs/calibration/2026-06-validation.md
    ```
 
-   The `score_validation` script is shipped in this same directory tree.
+   The `score_validation` script (shipped in
+   `grader/failure_classifier/tools/`) accepts `--predictions` as a JSON
+   file matching the gRPC `ClassifyFailureResponse` shape.
 
 4. **Per-category accuracy.** The script outputs:
    - Confusion matrix (predicted vs gold)

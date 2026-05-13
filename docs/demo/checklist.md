@@ -21,6 +21,11 @@ day-of; don't skip ahead until each box is green.
 
 - [ ] Close every other Docker container and Aider session; the demo
       Mac should have ~10 GB free RAM headroom for Ollama.
+- [ ] **Verify the Cursor backup path is ready** before you discover it
+      isn't mid-demo. Export the key and sanity-check:
+      `export CURSOR_API_KEY=<your-key> && env | grep CURSOR_API_KEY`
+      Without this, the recovery move described in the bottom section
+      will fail.
 - [ ] Restart the stack from a clean DB:
       `rm frameval.db && docker compose up`
 - [ ] In a separate terminal, tail engine logs so you can see runs as
