@@ -14,8 +14,19 @@ import (
 
 func (s *Store) SeedModelConfigs(ctx context.Context) error {
 	defaults := []models.ModelConfig{
+		// Local — Ollama via Aider's OpenAI-compatible adapter. Model IDs
+		// MUST be `openai/<ollama-tag>` (Aider routes that prefix to
+		// OLLAMA_BASE_URL transparently). These are the typical "already
+		// pulled" set on a fresh macOS install; for tags not in this list
+		// pull them with `ollama pull <tag>` and add a row via the API.
+		{Provider: "ollama", ModelID: "openai/llama3.1:8b", DisplayName: "Llama 3.1 8B (Ollama)", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 8192, SupportsStructuredOutput: false, SupportsSeed: false},
+		{Provider: "ollama", ModelID: "openai/llama3.2:3b", DisplayName: "Llama 3.2 3B (Ollama)", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 131072, SupportsStructuredOutput: false, SupportsSeed: false},
+		{Provider: "ollama", ModelID: "openai/llama3.2:1b", DisplayName: "Llama 3.2 1B (Ollama)", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 131072, SupportsStructuredOutput: false, SupportsSeed: false},
+		{Provider: "ollama", ModelID: "openai/phi3:mini", DisplayName: "Phi-3 Mini (Ollama)", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 4096, SupportsStructuredOutput: false, SupportsSeed: false},
+		// Cursor — premium runs on Cursor's cloud agent.
 		{Provider: "cursor", ModelID: "auto", DisplayName: "Cursor Auto", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 0, SupportsStructuredOutput: false, SupportsSeed: false},
 		{Provider: "cursor", ModelID: "premium", DisplayName: "Cursor Premium", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 0, SupportsStructuredOutput: false, SupportsSeed: false},
+		// Cloud — OpenAI / Anthropic / Google. Pricing is approximate.
 		{Provider: "openai", ModelID: "gpt-5.4", DisplayName: "GPT-5.4", InputPricePer1K: 0.01, OutputPricePer1K: 0.03, MaxContextTokens: 256000, SupportsStructuredOutput: true, SupportsSeed: true},
 		{Provider: "anthropic", ModelID: "claude-opus-4.7", DisplayName: "Claude Opus 4.7", InputPricePer1K: 0.015, OutputPricePer1K: 0.075, MaxContextTokens: 200000, SupportsStructuredOutput: false, SupportsSeed: false},
 		{Provider: "anthropic", ModelID: "claude-sonnet-4.6", DisplayName: "Claude Sonnet 4.6", InputPricePer1K: 0.003, OutputPricePer1K: 0.015, MaxContextTokens: 200000, SupportsStructuredOutput: false, SupportsSeed: false},
