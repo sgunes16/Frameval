@@ -11,6 +11,7 @@ from grader.code_grader import grade as grade_code
 from grader.composite import compute_composite
 from grader.config import get_settings
 from grader.failure_classifier import classify as classify_failure
+from grader.failure_classifier.grader import FailureClassifier
 from grader.llm_judge import grade as judge_grade
 from grader.process_grader import grade as process_grade
 from grader.stats import compute_stats
@@ -95,11 +96,23 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
             symptoms = json.loads(request.symptoms_json or b"{}")
         except json.JSONDecodeError:
             symptoms = {}
-        verdict = classify_failure(
-            symptoms=symptoms,
-            task_description=request.task_description,
-            transcript_tail=request.transcript_tail,
-        )
+        # When the caller supplies a non-empty classifier_model override,
+        # run a one-shot FailureClassifier with that model. Empty falls
+        # through to the module-level default (Haiku 4.5 per spec §4.7.4).
+        # This is the override hook calibration ablation runs use (Story #25).
+        override_model = (request.classifier_model or "").strip()
+        if override_model:
+            verdict = FailureClassifier(model=override_model).classify(
+                symptoms=symptoms,
+                task_description=request.task_description,
+                transcript_tail=request.transcript_tail,
+            )
+        else:
+            verdict = classify_failure(
+                symptoms=symptoms,
+                task_description=request.task_description,
+                transcript_tail=request.transcript_tail,
+            )
         latency_ms = int((time.perf_counter() - started) * 1000)
         evidence_pbs = [
             grader_pb2.EvidenceSpanProto(
