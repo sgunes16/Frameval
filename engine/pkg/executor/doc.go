@@ -1,9 +1,8 @@
 // Package executor defines the public AgentExecutor interface used by AgentDx
 // harnesses to invoke agent CLIs or LLM APIs.
 //
-// AgentDx ships two executors out of the box (under engine/internal/builtin/executor):
-//   - "aider" — talks to a local Ollama server via Aider's OpenAI-compatible mode
-//   - "cursor" — uses Cursor's CLI agent/auto mode against the Cursor cloud backend
+// AgentDx ships an "aider" and "cursor" executor (the latter is in MVP; aider
+// lands in Story #9). Both live under engine/internal/builtin/executor.
 //
 // Third parties implement this interface to plug in their own agent backend
 // (e.g., Claude Code, Codex, OpenHands) without forking the framework.

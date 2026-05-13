@@ -10,5 +10,6 @@
 //	├── setup.sh            # installs deps in sandbox before agent invocation
 //	└── eval.sh             # runs tests after agent invocation; exit code is the verdict
 //
-// See docs/task-authoring.md for recipes and anti-patterns.
+// Test-writing recipes and anti-patterns will be documented in
+// docs/task-authoring.md (added in Story #26).
 package task

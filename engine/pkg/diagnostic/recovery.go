@@ -10,10 +10,20 @@ type RecoveryProfile struct {
 	SilentSkipCount         int          `json:"silent_skip_count"`
 }
 
+// ErrorKind is the typed enum for ErrorEvent.Type values.
+type ErrorKind string
+
+const (
+	ErrorKindToolFailure  ErrorKind = "tool_failure"
+	ErrorKindTestFailure  ErrorKind = "test_failure"
+	ErrorKindStderr       ErrorKind = "stderr"
+	ErrorKindCompileError ErrorKind = "compile_error"
+)
+
 // ErrorEvent is a single error observed during the run.
 type ErrorEvent struct {
-	TurnIndex int    `json:"turn_index"`
-	Type      string `json:"type"` // "tool_failure" | "test_failure" | "stderr" | "compile_error"
-	ToolName  string `json:"tool_name,omitempty"`
-	Message   string `json:"message"`
+	TurnIndex int       `json:"turn_index"`
+	Type      ErrorKind `json:"type"`
+	ToolName  string    `json:"tool_name,omitempty"`
+	Message   string    `json:"message"`
 }
