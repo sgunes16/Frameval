@@ -111,6 +111,10 @@ func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.orchestrator.StartExperiment(r.Context(), experiment.ID); err != nil {
+		// The experiment + variants + (possibly) some run rows already
+		// exist. Mark it failed so the ghost row doesn't sit at status="" or
+		// "draft" forever — the user can find it in /experiments and delete it.
+		_ = s.store.UpdateExperimentStatus(r.Context(), experiment.ID, "failed")
 		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}

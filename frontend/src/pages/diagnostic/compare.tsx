@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BehavioralRadar } from '../../components/diagnostic/behavioral-radar';
 import { FailureBreakdown } from '../../components/diagnostic/failure-breakdown';
@@ -29,13 +29,29 @@ export function DiagnosticComparePage() {
   const [draftInput, setDraftInput] = useState(initialRunIds.join('\n'));
 
   // When the URL carries ?experiment=<id>, auto-populate the run list from
-  // that experiment's runs. Polls on the runs query so completed runs trickle
-  // into the picker as the queue drains.
+  // that experiment's runs — ONCE. Subsequent poll ticks add newly-completed
+  // runs to the list but never clobber edits the user has typed into the
+  // textarea. Tracking via a ref so re-renders don't re-fire the effect.
   const { data: experimentRuns = [] } = useRuns(experimentID || undefined);
+  const seenRunIds = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!experimentID || experimentRuns.length === 0) return;
-    const ids = experimentRuns.map((r) => r.id).join('\n');
-    setDraftInput(ids);
+    const fresh: string[] = [];
+    for (const r of experimentRuns) {
+      if (!seenRunIds.current.has(r.id)) {
+        seenRunIds.current.add(r.id);
+        fresh.push(r.id);
+      }
+    }
+    if (fresh.length === 0) return;
+    setDraftInput((prev) => {
+      const lines = prev.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      const merged = [...lines];
+      for (const id of fresh) {
+        if (!lines.includes(id)) merged.push(id);
+      }
+      return merged.join('\n');
+    });
   }, [experimentID, experimentRuns]);
 
   const runIds = useMemo(

@@ -37,10 +37,10 @@ func (h *Bare) Setup(_ context.Context, ws harness.Workspace, t task.Task, b har
 }
 
 func (h *Bare) Invoke(ctx context.Context, run harness.HarnessRun, exec executor.AgentExecutor) (*executor.RunResult, error) {
-	return exec.Execute(ctx, executor.RunConfig{
+	return exec.Execute(ctx, harness.MergeConfig(run.BaseRunConfig, executor.RunConfig{
 		Prompt:        run.Task.TaskPrompt,
 		WorkspacePath: run.Workspace.Path,
-	})
+	}))
 }
 
 func (h *Bare) Teardown(_ context.Context, _ harness.HarnessRun) error { return nil }
