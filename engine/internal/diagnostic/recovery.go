@@ -79,6 +79,15 @@ func (a *RecoveryAnalyzer) Analyze(turns []executor.ParsedTurn) diagnostic.Recov
 		ErrorAcknowledgmentRate: safeDivide(acknowledged, len(events)),
 		SilentSkipCount:         silentSkips,
 	}
+	// CorrectionLatencyMean and CorrectionSuccessRate are only meaningful
+	// when correctionAttempts > 0. Consumers can disambiguate "no
+	// corrections attempted" from "all corrections were instantaneous and
+	// successful" by checking the relationship between len(ErrorEvents),
+	// SilentSkipCount, and these fields:
+	//
+	//   if len(ErrorEvents) - SilentSkipCount == 0 {
+	//       // no corrections attempted; latency/success are meaningless
+	//   }
 	if correctionAttempts > 0 {
 		profile.CorrectionLatencyMean = float64(correctionDeltas) / float64(correctionAttempts)
 		profile.CorrectionSuccessRate = float64(correctionSuccesses) / float64(correctionAttempts)
@@ -131,22 +140,32 @@ func classifyError(t executor.ParsedTurn) (diagnostic.ErrorKind, bool) {
 	return "", false
 }
 
-// errorAcknowledgedInNextTurn is true if the assistant's immediately
-// following turn references the error explicitly or implicitly (mentions
-// "error", "failed", "fix", "let me", etc.).
+// errorAcknowledgedInNextTurn is true if the FIRST assistant-role turn after
+// the error references it (explicit "error"/"failed" mention, or a corrective
+// idiom like "let me", "fix", "investigate"). Walks past intervening tool /
+// system turns up to `correctionWindow` so tool-heavy transcripts (where a
+// tool result interposes between the error and the agent's reply) are not
+// undercounted as silent skips.
 func errorAcknowledgedInNextTurn(turns []executor.ParsedTurn, errorIndex int) bool {
-	if errorIndex+1 >= len(turns) {
-		return false
+	limit := errorIndex + 1 + correctionWindow
+	if limit > len(turns) {
+		limit = len(turns)
 	}
-	next := turns[errorIndex+1]
-	if !strings.EqualFold(next.Role, roleAssistant) {
-		return false
-	}
-	lc := strings.ToLower(next.Content)
-	for _, keyword := range []string{"error", "failed", "let me", "i'll", "fix", "investigate", "looks like"} {
-		if strings.Contains(lc, keyword) {
-			return true
+	for j := errorIndex + 1; j < limit; j++ {
+		next := turns[j]
+		if !strings.EqualFold(next.Role, roleAssistant) {
+			continue
 		}
+		lc := strings.ToLower(next.Content)
+		for _, keyword := range []string{"error", "failed", "let me", "i'll", "fix", "investigate", "looks like"} {
+			if strings.Contains(lc, keyword) {
+				return true
+			}
+		}
+		// First assistant turn after the error is the one that "owns" the
+		// acknowledgment opportunity. If it doesn't mention the error, we
+		// don't keep scanning — later turns may be unrelated.
+		return false
 	}
 	return false
 }

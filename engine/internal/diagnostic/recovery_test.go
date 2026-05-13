@@ -115,6 +115,23 @@ func TestRecoverySilentSkip(t *testing.T) {
 	}
 }
 
+func TestRecoveryAckSkipsToolResultBetweenErrorAndAssistantReply(t *testing.T) {
+	// A tool result frequently interposes between the error and the
+	// assistant's reply. Acknowledgment scan must walk past it (bounded by
+	// correctionWindow) so tool-heavy transcripts aren't unfairly counted
+	// as silent skips.
+	a := NewRecoveryAnalyzer()
+	turns := []executor.ParsedTurn{
+		{Role: "tool", Content: "error: missing dep"},
+		{Role: "tool", Content: "additional context (still tool-role)"},
+		{Role: "assistant", Content: "Let me fix that"},
+	}
+	r := a.Analyze(turns)
+	if r.ErrorAcknowledgmentRate != 1.0 {
+		t.Errorf("acknowledgment with interposed tool turn = %v, want 1.0", r.ErrorAcknowledgmentRate)
+	}
+}
+
 func TestRecoveryEventAtLastTurnIsSilentSkip(t *testing.T) {
 	// Spec says: an error at the very last turn has no follow-up window, so
 	// it can't be acknowledged or corrected. Counts as silent skip.
