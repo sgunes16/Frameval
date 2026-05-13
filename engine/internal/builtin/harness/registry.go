@@ -25,6 +25,7 @@ func NewRegistry() *Registry {
 	mustRegister(r, NewBare())
 	mustRegister(r, NewClaudeMd())
 	mustRegister(r, NewSpecKit())
+	mustRegister(r, NewRalph())
 	return r
 }
 
