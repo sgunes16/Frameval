@@ -2,12 +2,14 @@ package experiment
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/mustafaselman/frameval/engine/internal/models"
+	"github.com/mustafaselman/frameval/engine/pkg/diagnostic"
 	graderpb "github.com/mustafaselman/frameval/engine/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -19,6 +21,100 @@ type GraderClient struct {
 
 func NewGraderClient(addr string) *GraderClient {
 	return &GraderClient{addr: addr}
+}
+
+// classifyFailureTimeout caps how long we wait for the LLM classifier to
+// return before logging a warning and persisting the run without a failure
+// label. The classifier is expected to return in ~3-5s on Haiku; the cap
+// is generous to absorb Anthropic API hiccups without losing diagnostic.
+const classifyFailureTimeout = 30 * time.Second
+
+// ClassifyFailureResult bundles the verdict + transport latency the grader
+// reports back. The orchestrator persists both into the `diagnostic` row.
+type ClassifyFailureResult struct {
+	Classification  diagnostic.FailureClassification
+	ClassifierModel string
+	LatencyMs       int32
+}
+
+// ClassifyFailure calls the Python grader's failure classifier RPC.
+//
+// Never returns an error to callers — on any RPC failure (no grader configured,
+// network error, timeout, marshalling issue) it returns the `unclassified`
+// sentinel (primary=NONE, confidence=0) so the orchestrator can still persist
+// a diagnostic row without a failure_label. Callers detect the
+// "classifier-was-unavailable" case by checking
+// `result.Classification.Confidence == 0`.
+func (c *GraderClient) ClassifyFailure(
+	ctx context.Context,
+	runID string,
+	symptoms diagnostic.Symptoms,
+	taskDescription string,
+	transcriptTail string,
+	classifierModel string,
+) ClassifyFailureResult {
+	fallback := ClassifyFailureResult{
+		Classification:  diagnostic.FailureClassification{Primary: diagnostic.FailureNone},
+		ClassifierModel: classifierModel,
+	}
+	if c.addr == "" {
+		return fallback
+	}
+	symptomsJSON, err := json.Marshal(symptoms)
+	if err != nil {
+		return fallback
+	}
+	ctx, cancel := context.WithTimeout(ctx, classifyFailureTimeout)
+	defer cancel()
+	conn, err := grpc.NewClient(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return fallback
+	}
+	defer conn.Close()
+	client := graderpb.NewGraderServiceClient(conn)
+	response, err := client.ClassifyFailure(ctx, &graderpb.ClassifyFailureRequest{
+		RunId:            runID,
+		SymptomsJson:     symptomsJSON,
+		TaskDescription:  taskDescription,
+		TranscriptTail:   transcriptTail,
+		ClassifierModel:  classifierModel,
+	})
+	if err != nil || response == nil || response.Classification == nil {
+		return fallback
+	}
+	return ClassifyFailureResult{
+		Classification:  failureClassificationFromProto(response.Classification),
+		ClassifierModel: classifierModel,
+		LatencyMs:       response.LatencyMs,
+	}
+}
+
+func failureClassificationFromProto(p *graderpb.FailureClassificationProto) diagnostic.FailureClassification {
+	if p == nil {
+		return diagnostic.FailureClassification{Primary: diagnostic.FailureNone}
+	}
+	secondary := make([]diagnostic.FailureCode, 0, len(p.Secondary))
+	for _, s := range p.Secondary {
+		secondary = append(secondary, diagnostic.FailureCode(s))
+	}
+	evidence := make([]diagnostic.EvidenceSpan, 0, len(p.Evidence))
+	for _, e := range p.Evidence {
+		if e == nil {
+			continue
+		}
+		evidence = append(evidence, diagnostic.EvidenceSpan{
+			Code:      diagnostic.FailureCode(e.Code),
+			Quote:     e.Quote,
+			TurnIndex: int(e.TurnIndex),
+		})
+	}
+	return diagnostic.FailureClassification{
+		Primary:    diagnostic.FailureCode(p.Primary),
+		Secondary:  secondary,
+		Evidence:   evidence,
+		Confidence: p.Confidence,
+		Rationale:  p.Rationale,
+	}
 }
 
 func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript) (models.Grade, error) {
