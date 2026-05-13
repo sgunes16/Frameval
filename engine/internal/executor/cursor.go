@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mustafaselman/frameval/engine/internal/models"
 	"github.com/mustafaselman/frameval/engine/internal/sandbox"
 )
 
@@ -29,39 +28,34 @@ func (e *CursorExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult
 	if command == "" {
 		if _, err := exec.LookPath("agent"); err != nil {
 			raw := "cursor agent binary not found; execution skipped\nPrompt:\n" + prompt
-			transcript, _ := e.ParseTranscript([]byte(raw))
-			return &RunResult{RawOutput: raw, ParsedTurns: transcript.ParsedTurns}, nil
+			turns, _ := e.ParseTranscript([]byte(raw))
+			return &RunResult{RawOutput: raw, ParsedTurns: turns}, nil
 		}
 		command = `agent -p --force --output-format stream-json --stream-partial-output --model "$FRAMEVAL_MODEL_ID" "$FRAMEVAL_PROMPT"`
 	}
 	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, mergeEnv(cfg.Environment, map[string]string{"FRAMEVAL_PROMPT": prompt, "FRAMEVAL_MODEL_ID": fallbackModel(cfg.Model)}), command, cfg.OnOutput)
-	transcript, _ := e.ParseTranscript([]byte(output))
-	return &RunResult{RawOutput: output, ParsedTurns: transcript.ParsedTurns, StreamedOutput: cfg.OnOutput != nil}, err
+	turns, _ := e.ParseTranscript([]byte(output))
+	return &RunResult{RawOutput: output, ParsedTurns: turns, StreamedOutput: cfg.OnOutput != nil}, err
 }
 
-func (e *CursorExecutor) ParseTranscript(raw []byte) (*models.Transcript, error) {
-	return parseTranscript(raw), nil
-}
-
-func parseTranscript(raw []byte) *models.Transcript {
+// ParseTranscript splits raw streaming output into structured turns.
+//
+// The orchestrator wraps the returned turns into a models.Transcript with
+// run-level metadata (run ID, fs diff, patch) before persisting.
+func (e *CursorExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
-	turns := make([]models.ParsedTurn, 0, len(lines))
+	turns := make([]ParsedTurn, 0, len(lines))
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		turns = append(turns, models.ParsedTurn{
+		turns = append(turns, ParsedTurn{
 			Role:      "assistant",
 			Content:   line,
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		})
 	}
-	return &models.Transcript{
-		RawOutput:   string(raw),
-		ParsedTurns: turns,
-		TotalTurns:  len(turns),
-		TotalTokens: len(strings.Fields(string(raw))),
-	}
+	return turns, nil
 }
 
 func mergeEnv(base map[string]string, additions map[string]string) map[string]string {

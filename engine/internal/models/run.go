@@ -1,5 +1,12 @@
 package models
 
+import "github.com/mustafaselman/frameval/engine/pkg/executor"
+
+// ParsedTurn is the canonical structured turn type. Defined in pkg/executor
+// (so third-party executors can return it); aliased here for backwards
+// compatibility with internal call sites that import via models.
+type ParsedTurn = executor.ParsedTurn
+
 type Run struct {
 	ID                         string      `json:"id"`
 	ExperimentID               string      `json:"experiment_id"`
@@ -27,12 +34,6 @@ type Transcript struct {
 	TotalTokens    int          `json:"total_tokens"`
 	CostUSD        float64      `json:"cost_usd"`
 	OutputFiles    []OutputFile `json:"output_files,omitempty"`
-}
-
-type ParsedTurn struct {
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Timestamp string `json:"timestamp"`
 }
 
 type OutputFile struct {

@@ -1,0 +1,47 @@
+package task
+
+// Task is the public spec for an evaluation task.
+//
+// A task directory on disk maps to this struct via Loader (TODO: post-MVP).
+// In MVP, tasks are loaded from tasks/<id>/task.yaml plus a sibling tests/
+// directory and setup.sh/eval.sh scripts.
+type Task struct {
+	ID              string         `json:"id" yaml:"id"`
+	Name            string         `json:"name" yaml:"name"`
+	Description     string         `json:"description" yaml:"description"`
+	Category        string         `json:"category" yaml:"category"`
+	TemplateKind    string         `json:"template_kind,omitempty" yaml:"template_kind,omitempty"`
+	WorkspaceMode   string         `json:"workspace_mode,omitempty" yaml:"workspace_mode,omitempty"`
+	WorkspaceGitURL string         `json:"workspace_git_url,omitempty" yaml:"workspace_git_url,omitempty"`
+	WorkspaceGitRef string         `json:"workspace_git_ref,omitempty" yaml:"workspace_git_ref,omitempty"`
+	ExternalSource  string         `json:"external_source,omitempty" yaml:"external_source,omitempty"`
+	ExternalID      string         `json:"external_id,omitempty" yaml:"external_id,omitempty"`
+	ExternalURL     string         `json:"external_url,omitempty" yaml:"external_url,omitempty"`
+	Metadata        map[string]any `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	ComplexityScore float64        `json:"complexity_score" yaml:"complexity_score"`
+	CodebaseType    string         `json:"codebase_type" yaml:"codebase_type"`
+	TaskPrompt      string         `json:"task_prompt" yaml:"task_prompt"`
+	TechnicalDetail string         `json:"technical_details,omitempty" yaml:"technical_details,omitempty"`
+	SetupScript     string         `json:"setup_script,omitempty" yaml:"setup_script,omitempty"`
+	CodebasePath    string         `json:"codebase_path,omitempty" yaml:"codebase_path,omitempty"`
+	TaskRootPath    string         `json:"task_root_path,omitempty" yaml:"task_root_path,omitempty"`
+	IsBuiltin       bool           `json:"is_builtin" yaml:"is_builtin"`
+	CreatedAt       string         `json:"created_at,omitempty" yaml:"created_at,omitempty"`
+	TestCases       []TestCase     `json:"test_cases,omitempty" yaml:"test_cases,omitempty"`
+}
+
+// TestCase is a single deterministic test inside a task's test suite.
+//
+// The Command is executed inside the sandbox by eval.sh after the agent
+// completes; exit code 0 means the test passed.
+type TestCase struct {
+	ID             string `json:"id" yaml:"id,omitempty"`
+	TaskID         string `json:"task_id,omitempty" yaml:"task_id,omitempty"`
+	Name           string `json:"name" yaml:"name"`
+	TestCommand    string `json:"test_command" yaml:"test_command"`
+	ExpectedResult string `json:"expected_result,omitempty" yaml:"expected_result,omitempty"`
+	Visibility     string `json:"visibility,omitempty" yaml:"visibility,omitempty"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
+	SetupScript    string `json:"setup_script,omitempty" yaml:"setup_script,omitempty"`
+	Ordering       int    `json:"ordering" yaml:"ordering"`
+}
