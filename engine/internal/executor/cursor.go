@@ -49,12 +49,12 @@ func (e *CursorExecutor) SupportedModes() []ExecutionMode {
 // still persist a transcript and run AgentDx against it.
 func (e *CursorExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	prompt := promptWithDefaultCLILanguage(cfg.Prompt)
-	if os.Getenv("CURSOR_API_KEY") == "" {
+	if envOrOSGetenv(cfg.Environment, "CURSOR_API_KEY") == "" {
 		raw := ErrCursorNotConfigured.Error() + "\nPrompt:\n" + prompt
 		turns, _ := e.ParseTranscript([]byte(raw))
 		return &RunResult{RawOutput: raw, ParsedTurns: turns}, nil
 	}
-	command := os.Getenv("FRAMEVAL_CURSOR_COMMAND")
+	command := envOrOSGetenv(cfg.Environment, "FRAMEVAL_CURSOR_COMMAND")
 	if command == "" {
 		if _, err := exec.LookPath("agent"); err != nil {
 			raw := "cursor agent binary not found on PATH; execution skipped\nPrompt:\n" + prompt
@@ -131,4 +131,17 @@ func fallbackModel(model string) string {
 		return "auto"
 	}
 	return model
+}
+
+// envOrOSGetenv consults cfg.Environment first, then the OS process env.
+// Returns "" if neither has the key. Used by executor adapters to honor the
+// caller-overrides-defaults precedence contract for credentials and command
+// escape-hatch overrides.
+func envOrOSGetenv(env map[string]string, key string) string {
+	if env != nil {
+		if value, ok := env[key]; ok && value != "" {
+			return value
+		}
+	}
+	return os.Getenv(key)
 }

@@ -24,6 +24,23 @@ func TestCursorExecuteReturnsErrNotConfiguredWhenKeyMissing(t *testing.T) {
 	}
 }
 
+func TestEnvOrOSGetenvPrecedence(t *testing.T) {
+	t.Setenv("MY_KEY", "from-os")
+	if got := envOrOSGetenv(nil, "MY_KEY"); got != "from-os" {
+		t.Errorf("nil cfg → OS env: got %q", got)
+	}
+	if got := envOrOSGetenv(map[string]string{"MY_KEY": "from-cfg"}, "MY_KEY"); got != "from-cfg" {
+		t.Errorf("cfg should win: got %q", got)
+	}
+	if got := envOrOSGetenv(map[string]string{"MY_KEY": ""}, "MY_KEY"); got != "from-os" {
+		t.Errorf("empty cfg value should fall through to OS: got %q", got)
+	}
+	t.Setenv("MY_KEY", "")
+	if got := envOrOSGetenv(nil, "MY_KEY"); got != "" {
+		t.Errorf("empty both → empty: got %q", got)
+	}
+}
+
 func TestCursorParseTranscriptHandlesJSON(t *testing.T) {
 	e := &CursorExecutor{}
 	raw := []byte(strings.Join([]string{
