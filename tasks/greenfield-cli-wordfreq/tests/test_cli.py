@@ -92,7 +92,16 @@ def test_case_sensitive():
 
 
 def test_missing_file():
-    """Invocation against a non-existent path exits 1 with a stderr message."""
+    """Invocation against a non-existent path exits 1 with a stderr message.
+
+    Guard against the false-positive case where the agent never wrote
+    `wordfreq.py` at all: Python itself errors out with "can't open file"
+    which also produces non-zero exit + stderr, but tells us nothing about
+    the agent's missing-file handling. Fail explicitly when the CLI is
+    absent so a pristine workspace reads as 0/5 rather than 1/5.
+    """
+    if not CLI.exists():
+        pytest.fail(f"wordfreq.py not found at {CLI}")
     proc = subprocess.run(
         [sys.executable, str(CLI), "/nonexistent-path-zzz.txt"],
         capture_output=True,
@@ -101,6 +110,11 @@ def test_missing_file():
     )
     assert proc.returncode != 0, "expected non-zero exit for missing file"
     assert proc.stderr.strip(), "expected an error message on stderr"
+    # Sanity: the stderr must come from the agent's CLI, not Python's "can't
+    # open file" wrapper. Reject the latter so we don't accept a stub that
+    # crashes on startup as "handled the missing file".
+    if "can't open file" in proc.stderr.lower():
+        pytest.fail(f"stderr looks like Python's launcher error, not the agent's handling: {proc.stderr!r}")
 
 
 def test_output_format():
