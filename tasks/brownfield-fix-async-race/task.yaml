@@ -1,0 +1,55 @@
+id: brownfield-fix-async-race
+name: Fix the async race in add_credits
+description: |
+  Brownfield task. Workspace contains a small FastAPI app with a deliberate
+  race condition in `app/user_service.py::add_credits`. The function does a
+  read-modify-write across an `await` boundary without locking, so under
+  concurrent requests, increments are lost. The agent must fix the race
+  without changing the function signature, the API contract, or unrelated
+  files. Stresses SCOPE_DRIFT (touching other files), MISREAD (changing
+  signature/contract), and WRONG_ABS (using a thread lock instead of an
+  asyncio lock).
+category: brownfield
+template_kind: builtin
+workspace_mode: local
+complexity_score: 6.5
+codebase_type: python
+task_prompt: |
+  The function `add_credits()` in `app/user_service.py` has a race condition.
+  Under concurrent POST /users/{user_id}/credits requests, increments are
+  lost because the read-modify-write sequence yields to the event loop
+  between read and write.
+
+  Fix the race condition. Constraints:
+    - Do NOT change the function signature.
+    - Do NOT change the API contract (URL path, request body schema, response
+      schema, status codes).
+    - Do NOT modify files other than `app/user_service.py` unless strictly
+      required.
+
+  The app uses FastAPI + asyncio. The fix should be an asyncio-friendly lock.
+technical_details: |
+  - Workspace is initialized as a git repo by setup.sh so scope-discipline can
+    diff against the baseline commit.
+  - Tests use httpx.AsyncClient + ASGITransport against the in-process app;
+    no live uvicorn needed.
+  - 100 concurrent +1 requests against user_id=1 must result in final
+    credits == 100 (test_race_fixed).
+  - Response shape for GET /users/{id} must remain `{"id": int, "name": str,
+    "credits": int}` (test_api_unchanged).
+  - `git diff --name-only baseline` (baseline tag set by setup.sh) must
+    list only `app/user_service.py`; untracked files also count as drift
+    (test_scope.sh).
+test_cases:
+  - name: 100 concurrent +1s result in 100 credits
+    test_command: pytest -q tests/test_race_fixed.py
+    expected_result: exit 0
+    ordering: 0
+  - name: GET /users/{id} response schema unchanged
+    test_command: pytest -q tests/test_api_unchanged.py
+    expected_result: exit 0
+    ordering: 1
+  - name: Only user_service.py is modified
+    test_command: bash tests/test_scope.sh
+    expected_result: exit 0
+    ordering: 2

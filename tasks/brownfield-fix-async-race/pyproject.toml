@@ -1,0 +1,9 @@
+# Pytest configuration for the brownfield-fix-async-race task.
+# Sets asyncio_mode = strict and pins the asyncio fixture loop scope so
+# @pytest.mark.asyncio tests don't trigger deprecation warnings on
+# pytest-asyncio >= 0.21.
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
