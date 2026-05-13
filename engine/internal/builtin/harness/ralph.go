@@ -79,11 +79,11 @@ iterations:
 		default:
 		}
 
-		result, err := exec.Execute(ctx, executor.RunConfig{
+		result, err := exec.Execute(ctx, harness.MergeConfig(run.BaseRunConfig, executor.RunConfig{
 			Prompt:        ralphPrompt(run.Task, i, maxIter),
 			WorkspacePath: run.Workspace.Path,
 			Stage:         fmt.Sprintf("iteration-%d", i),
-		})
+		}))
 		if result == nil {
 			result = &executor.RunResult{}
 		}

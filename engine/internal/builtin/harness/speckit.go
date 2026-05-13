@@ -118,11 +118,11 @@ stages:
 			break stages
 		default:
 		}
-		result, err := exec.Execute(ctx, executor.RunConfig{
+		result, err := exec.Execute(ctx, harness.MergeConfig(run.BaseRunConfig, executor.RunConfig{
 			Prompt:        stagePrompt(stage, run.Task),
 			WorkspacePath: run.Workspace.Path,
 			Stage:         stage,
-		})
+		}))
 		if result == nil {
 			result = &executor.RunResult{}
 		}

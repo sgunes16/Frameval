@@ -11,10 +11,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	builtinharness "github.com/mustafaselman/frameval/engine/internal/builtin/harness"
 	"github.com/mustafaselman/frameval/engine/internal/executor"
 	"github.com/mustafaselman/frameval/engine/internal/models"
 	"github.com/mustafaselman/frameval/engine/internal/sandbox"
 	"github.com/mustafaselman/frameval/engine/internal/storage"
+	pkgexec "github.com/mustafaselman/frameval/engine/pkg/executor"
+	pkgharness "github.com/mustafaselman/frameval/engine/pkg/harness"
 )
 
 type EventBroadcaster interface {
@@ -22,16 +25,17 @@ type EventBroadcaster interface {
 }
 
 type Orchestrator struct {
-	store    *storage.Store
-	queue    *Queue
-	sandbox  *sandbox.Manager
-	registry *executor.Registry
-	grader   *GraderClient
-	hub      EventBroadcaster
+	store       *storage.Store
+	queue       *Queue
+	sandbox     *sandbox.Manager
+	registry    *executor.Registry
+	harnesses   *builtinharness.Registry
+	grader      *GraderClient
+	hub         EventBroadcaster
 }
 
-func NewOrchestrator(store *storage.Store, queue *Queue, manager *sandbox.Manager, registry *executor.Registry, grader *GraderClient, hub EventBroadcaster) *Orchestrator {
-	return &Orchestrator{store: store, queue: queue, sandbox: manager, registry: registry, grader: grader, hub: hub}
+func NewOrchestrator(store *storage.Store, queue *Queue, manager *sandbox.Manager, registry *executor.Registry, harnesses *builtinharness.Registry, grader *GraderClient, hub EventBroadcaster) *Orchestrator {
+	return &Orchestrator{store: store, queue: queue, sandbox: manager, registry: registry, harnesses: harnesses, grader: grader, hub: hub}
 }
 
 func (o *Orchestrator) StartExperiment(ctx context.Context, experimentID string) error {
@@ -160,6 +164,11 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	if err != nil {
 		return err
 	}
+	variant, variantErr := o.store.GetVariant(ctx, run.VariantID)
+	if variantErr != nil {
+		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", variantErr.Error())
+		return variantErr
+	}
 	artifacts, artifactErr := o.store.ListEffectiveArtifactsByVariant(ctx, run.VariantID)
 	if artifactErr != nil {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", artifactErr.Error())
@@ -171,6 +180,15 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", err.Error())
 		return err
 	}
+	harnessID := variant.HarnessID
+	if harnessID == "" {
+		harnessID = "bare"
+	}
+	harnessImpl, harnessErr := o.harnesses.Get(harnessID)
+	if harnessErr != nil {
+		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", harnessErr.Error())
+		return harnessErr
+	}
 	workspace, beforeSnapshot, err := o.sandbox.PrepareWorkspace(ctx, *experiment, *task, artifacts)
 	if err != nil {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", err.Error())
@@ -178,16 +196,32 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	}
 	defer func() { _ = os.RemoveAll(workspace) }()
 	_ = o.store.UpdateRunStatus(ctx, run.ID, "running", "")
-	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "running", "variant_id": run.VariantID})
-	result, execErr := execImpl.Execute(ctx, executor.RunConfig{
+	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "running", "variant_id": run.VariantID, "harness_id": harnessID})
+
+	// Harness lifecycle: Setup lays down harness-specific files (e.g. CLAUDE.md),
+	// Invoke calls the executor — possibly multiple times for ralph/speckit/planner_coder —
+	// and Teardown removes harness-owned files while preserving the agent's edits.
+	harnessWorkspace := pkgharness.Workspace{Path: workspace}
+	hRun, setupErr := harnessImpl.Setup(ctx, harnessWorkspace, *task, pkgharness.Budget{
+		MaxIterations:  3,
+		MaxWallSeconds: experiment.TimeoutSeconds,
+	})
+	if setupErr != nil {
+		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", fmt.Sprintf("harness setup: %v", setupErr))
+		return setupErr
+	}
+	hRun.BaseRunConfig = pkgexec.RunConfig{
 		WorkspacePath: workspace,
-		Prompt:        task.TaskPrompt,
 		Model:         experiment.Model,
 		Environment:   runEnvironment(task.ID),
 		OnOutput: func(line string) {
 			o.broadcastRunLog(*experiment, *run, "executor", line)
 		},
-	})
+	}
+	result, execErr := harnessImpl.Invoke(ctx, hRun, execImpl)
+	if tdErr := harnessImpl.Teardown(ctx, hRun); tdErr != nil {
+		o.broadcastRunLog(*experiment, *run, "executor", "harness teardown warning: "+tdErr.Error())
+	}
 	if result == nil {
 		result = &executor.RunResult{}
 	}

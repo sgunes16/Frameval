@@ -8,7 +8,11 @@ import type {
   Diagnostic,
   DockerStatus,
   Experiment,
+  ExecutorInfo,
   Grade,
+  HarnessInfo,
+  LaunchDiagnosticRequest,
+  LaunchDiagnosticResponse,
   ModelConfig,
   QueueStatus,
   Run,
@@ -93,6 +97,26 @@ export function useModels() {
 
 export function useAgents() {
   return useQuery({ queryKey: ['agents'], queryFn: () => api.get<AgentInfo[]>('/config/agents') });
+}
+
+export function useHarnesses() {
+  return useQuery({ queryKey: ['harnesses'], queryFn: () => api.get<HarnessInfo[]>('/config/harnesses') });
+}
+
+export function useExecutors() {
+  return useQuery({ queryKey: ['executors'], queryFn: () => api.get<ExecutorInfo[]>('/config/executors') });
+}
+
+export function useLaunchDiagnostic() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: LaunchDiagnosticRequest) =>
+      api.post<LaunchDiagnosticResponse>('/diagnostic/launch', payload),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['experiments'] });
+      client.invalidateQueries({ queryKey: ['runs'] });
+    },
+  });
 }
 
 export function useAPIKeys() {

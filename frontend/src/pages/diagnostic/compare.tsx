@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { BehavioralRadar } from '../../components/diagnostic/behavioral-radar';
 import { FailureBreakdown } from '../../components/diagnostic/failure-breakdown';
 import { RecoveryTimeline } from '../../components/diagnostic/recovery-timeline';
 import { CostQualityScatter } from '../../components/diagnostic/cost-quality-scatter';
 import { TranscriptEvidence } from '../../components/diagnostic/transcript-evidence';
+import { Button } from '../../components/ui/button';
 import { Card, CardHeader } from '../../components/ui/card';
 import { EmptyState } from '../../components/ui/empty-state';
-import { useCompareDiagnostics } from '../../lib/hooks';
+import { useCompareDiagnostics, useRuns } from '../../lib/hooks';
 
 /**
  * Diagnostic Compare page — the centerpiece of the AgentDx demo.
@@ -20,11 +21,38 @@ import { useCompareDiagnostics } from '../../lib/hooks';
  */
 export function DiagnosticComparePage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const experimentID = searchParams.get('experiment') ?? '';
   const initialRunIds = useMemo(() => {
     const raw = searchParams.get('runs') ?? '';
     return raw.split(',').map((id) => id.trim()).filter(Boolean);
   }, [searchParams]);
   const [draftInput, setDraftInput] = useState(initialRunIds.join('\n'));
+
+  // When the URL carries ?experiment=<id>, auto-populate the run list from
+  // that experiment's runs — ONCE. Subsequent poll ticks add newly-completed
+  // runs to the list but never clobber edits the user has typed into the
+  // textarea. Tracking via a ref so re-renders don't re-fire the effect.
+  const { data: experimentRuns = [] } = useRuns(experimentID || undefined);
+  const seenRunIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!experimentID || experimentRuns.length === 0) return;
+    const fresh: string[] = [];
+    for (const r of experimentRuns) {
+      if (!seenRunIds.current.has(r.id)) {
+        seenRunIds.current.add(r.id);
+        fresh.push(r.id);
+      }
+    }
+    if (fresh.length === 0) return;
+    setDraftInput((prev) => {
+      const lines = prev.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      const merged = [...lines];
+      for (const id of fresh) {
+        if (!lines.includes(id)) merged.push(id);
+      }
+      return merged.join('\n');
+    });
+  }, [experimentID, experimentRuns]);
 
   const runIds = useMemo(
     () => draftInput.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean),
@@ -44,10 +72,22 @@ export function DiagnosticComparePage() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader
-          title="Diagnostic Compare"
-          description="Side-by-side AgentDx profile across 2–5 runs. Paste run IDs (one per line or comma-separated) to overlay them."
-        />
+        <div className="flex items-start justify-between gap-3">
+          <CardHeader
+            title="Diagnostic Compare"
+            description="Side-by-side AgentDx profile across 2–5 runs. Pass ?experiment=<id> to auto-load every run from an experiment, or paste run IDs manually."
+          />
+          <Link to="/diagnostic/launch">
+            <Button size="sm">New diagnostic run</Button>
+          </Link>
+        </div>
+        {experimentID && (
+          <div className="mb-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Auto-loading runs from experiment{' '}
+            <code className="font-mono">{experimentID.slice(0, 8)}…</code> ({experimentRuns.length}{' '}
+            so far). The list updates as queued runs finish.
+          </div>
+        )}
         <textarea
           value={draftInput}
           onChange={(event) => setDraftInput(event.target.value)}

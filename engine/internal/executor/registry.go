@@ -24,3 +24,13 @@ func (r *Registry) Get(name string) (AgentExecutor, error) {
 	}
 	return executor, nil
 }
+
+// Entries returns all registered executors. Used by the API config endpoint
+// so the frontend can list pickable executors without hard-coding names.
+func (r *Registry) Entries() []AgentExecutor {
+	out := make([]AgentExecutor, 0, len(r.executors))
+	for _, e := range r.executors {
+		out = append(out, e)
+	}
+	return out
+}

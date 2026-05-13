@@ -49,12 +49,49 @@ func (b Budget) WallTimeout() time.Duration {
 // HarnessRun is the per-run handle a Harness creates during Setup and threads
 // through Invoke and Teardown. Implementations may stash internal state in
 // Metadata; external consumers should treat it as opaque.
+//
+// BaseRunConfig carries orchestrator-supplied defaults — model, environment,
+// streaming callback — that the harness should preserve when building its
+// own per-sub-call RunConfigs. Use MergeConfig to overlay harness-specific
+// fields (Prompt, Stage, Role) onto the base.
 type HarnessRun struct {
-	HarnessName string
-	Task        task.Task
-	Workspace   Workspace
-	Budget      Budget
-	Metadata    map[string]any
+	HarnessName   string
+	Task          task.Task
+	Workspace     Workspace
+	Budget        Budget
+	BaseRunConfig executor.RunConfig
+	Metadata      map[string]any
+}
+
+// MergeConfig overlays override onto base, returning a merged RunConfig.
+// Non-zero override fields win; zero override fields keep the base value.
+// Harnesses use this so they don't have to know about orchestrator defaults
+// (Model, Environment, OnOutput) — they just declare what they care about
+// (Prompt, Stage, Role).
+func MergeConfig(base, override executor.RunConfig) executor.RunConfig {
+	merged := base
+	if override.WorkspacePath != "" {
+		merged.WorkspacePath = override.WorkspacePath
+	}
+	if override.Prompt != "" {
+		merged.Prompt = override.Prompt
+	}
+	if override.Model != "" {
+		merged.Model = override.Model
+	}
+	if override.Environment != nil {
+		merged.Environment = override.Environment
+	}
+	if override.OnOutput != nil {
+		merged.OnOutput = override.OnOutput
+	}
+	if override.Stage != "" {
+		merged.Stage = override.Stage
+	}
+	if override.Role != "" {
+		merged.Role = override.Role
+	}
+	return merged
 }
 
 // Harness scaffolds an agent run.

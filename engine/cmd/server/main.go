@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mustafaselman/frameval/engine/internal/api"
+	builtinharness "github.com/mustafaselman/frameval/engine/internal/builtin/harness"
 	"github.com/mustafaselman/frameval/engine/internal/executor"
 	"github.com/mustafaselman/frameval/engine/internal/experiment"
 	"github.com/mustafaselman/frameval/engine/internal/sandbox"
@@ -51,9 +52,10 @@ func main() {
 	queue := experiment.NewQueue(ctx, maxConcurrent)
 	defer queue.Close()
 	registry := executor.NewRegistry(manager)
+	harnessRegistry := builtinharness.NewRegistry()
 	graderClient := experiment.NewGraderClient(graderAddr)
-	orchestrator := experiment.NewOrchestrator(store, queue, manager, registry, graderClient, hub)
-	service := api.NewService(store, orchestrator, hub)
+	orchestrator := experiment.NewOrchestrator(store, queue, manager, registry, harnessRegistry, graderClient, hub)
+	service := api.NewService(store, orchestrator, harnessRegistry, registry, hub)
 	server := &http.Server{Addr: ":" + port, Handler: api.NewRouter(service)}
 
 	go func() {

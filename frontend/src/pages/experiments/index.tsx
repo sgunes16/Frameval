@@ -59,7 +59,7 @@ export function ExperimentsPage() {
               placeholder="Search by name, model, agent..."
               className="w-64"
             />
-            <Link to="/diagnostic/compare">
+            <Link to="/diagnostic/launch">
               <Button size="sm">New diagnostic run</Button>
             </Link>
           </div>
@@ -71,7 +71,7 @@ export function ExperimentsPage() {
           title="No experiments match"
           description="Adjust your filters or start a new diagnostic run."
           action={
-            <Link to="/diagnostic/compare">
+            <Link to="/diagnostic/launch">
               <Button size="sm">Start diagnostic run</Button>
             </Link>
           }
