@@ -3,6 +3,7 @@ package diagnostic
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/mustafaselman/frameval/engine/pkg/executor"
@@ -273,21 +274,8 @@ func TestFingerprintJSONRoundTrip(t *testing.T) {
 		"premature_completion", "turn_efficiency",
 		"context_reference_rate", "idle_thinking_ratio",
 	} {
-		if !contains(string(bytes), `"`+key+`":`) {
+		if !strings.Contains(string(bytes), `"`+key+`":`) {
 			t.Errorf("JSON missing key %q in %s", key, string(bytes))
 		}
 	}
-}
-
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || (len(sub) > 0 && indexOf(s, sub) >= 0))
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
 }

@@ -77,7 +77,11 @@ var (
 	fileReadRE      = regexp.MustCompile(`(?i)\b(read_file|cat\b|file_read|view_file|open\s+["'])`)
 	filePathRE      = regexp.MustCompile(`(?:^|[\s"'(])([./]?[a-zA-Z0-9_\-]+(?:/[a-zA-Z0-9_\-./]+)*\.[a-zA-Z]{1,6})`)
 	stateChangingRE = regexp.MustCompile(`(?i)\b(write_file|edit_file|create_file|file_write|file_edit|str_replace|run_command|shell_exec|bash|sh\s+-c)\b`)
-	roleAssistant   = "assistant"
+	// errorSignatureRE is the hot-path detector for "this turn carries an
+	// error". Promoted out of looksLikeError so it compiles once at init
+	// rather than on every turn of a long transcript.
+	errorSignatureRE = regexp.MustCompile(`(?i)\b(traceback|importerror|modulenotfounderror|attributeerror|syntaxerror|exception\s*:|exit code [1-9])`)
+	roleAssistant    = "assistant"
 )
 
 // planningDepth: ratio of turns that announce intent / plan structure WITHOUT
@@ -101,10 +105,12 @@ func planningDepth(turns []executor.ParsedTurn) float64 {
 	return safeDivide(planning, len(turns))
 }
 
-// toolCallDiversity: Shannon entropy of the tool-call type distribution.
-// Higher = the agent reaches for varied tools; lower = monoculture (one tool
-// repeated). Normalized to [0, 1] by dividing by log2(N) where N = unique
-// tool count.
+// toolCallDiversity: Shannon entropy of the tool-call type distribution,
+// **normalized** to [0, 1] by dividing by log2(N) where N is the unique tool
+// count. Spec Appendix B's table lists the range as `[0, log(N)]` (the raw
+// entropy); the spec body §4.7.1 and the public Fingerprint.ToolCallDiversity
+// field both expect a clamped [0, 1] value, so this implementation matches
+// the latter. The Appendix B table will be corrected in a follow-up doc PR.
 func toolCallDiversity(turns []executor.ParsedTurn) float64 {
 	counts := map[string]int{}
 	total := 0
@@ -314,7 +320,7 @@ func looksLikeError(t executor.ParsedTurn) bool {
 			return true
 		}
 	}
-	return regexp.MustCompile(`(?i)\b(traceback|importerror|modulenotfounderror|attributeerror|syntaxerror|exception\s*:|exit code [1-9])`).MatchString(c)
+	return errorSignatureRE.MatchString(c)
 }
 
 func safeDivide(numerator, denominator int) float64 {
