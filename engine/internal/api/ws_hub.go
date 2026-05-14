@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"expvar"
 	"sync"
-	"sync/atomic"
 )
 
 type Event struct {
@@ -16,7 +15,18 @@ type Event struct {
 // droppedBroadcasts is an expvar-exposed counter so operators can spot
 // the engine shedding WS messages without instrumenting the source.
 // Available at /debug/vars on any engine binary with the default mux.
-var droppedBroadcasts = expvar.NewInt("frameval_ws_dropped_total")
+//
+// init() pattern (not a top-level NewInt call) so a second package that
+// might also register the same name does not panic the process.
+var droppedBroadcasts *expvar.Int
+
+func init() {
+	if v := expvar.Get("frameval_ws_dropped_total"); v != nil {
+		droppedBroadcasts = v.(*expvar.Int)
+		return
+	}
+	droppedBroadcasts = expvar.NewInt("frameval_ws_dropped_total")
+}
 
 type Hub struct {
 	clients    map[chan []byte]struct{}
@@ -24,10 +34,6 @@ type Hub struct {
 	unregister chan chan []byte
 	broadcast  chan []byte
 	mu         sync.RWMutex
-	// dropped counts broadcasts the hub had to drop because the buffered
-	// broadcast channel was full. Atomic so DroppedBroadcasts() can read
-	// it without taking the hub lock.
-	dropped atomic.Uint64
 }
 
 func NewHub() *Hub {
@@ -67,14 +73,16 @@ func (h *Hub) Run(ctx context.Context) {
 }
 
 // Broadcast publishes an event to every connected client. Non-blocking:
-// if the broadcast channel is full (orchestrator producing faster than
-// the hub can fan out), the message is dropped and the dropped counter
-// is incremented rather than stalling the caller.
+// if the broadcast channel is full (orchestrator producing events
+// faster than connected WS clients can consume them), the message is
+// dropped and the package-level dropped counter is incremented rather
+// than stalling the caller.
 //
 // The trade-off is intentional. The orchestrator runs the experiment
 // lifecycle; a wedged WS pipeline must not be allowed to halt run
 // finalization. Operators see droppage via expvar
-// (frameval_ws_dropped_total) and the DroppedBroadcasts accessor.
+// (frameval_ws_dropped_total) or DroppedBroadcasts() which read the
+// same underlying counter.
 func (h *Hub) Broadcast(eventType string, payload any) {
 	message, err := json.Marshal(Event{Type: eventType, Payload: payload})
 	if err != nil {
@@ -83,13 +91,15 @@ func (h *Hub) Broadcast(eventType string, payload any) {
 	select {
 	case h.broadcast <- message:
 	default:
-		h.dropped.Add(1)
 		droppedBroadcasts.Add(1)
 	}
 }
 
 // DroppedBroadcasts returns the total number of broadcasts the hub
-// dropped because its buffer was full. Safe to call from any goroutine.
+// dropped because its buffer was full. Reads the same expvar counter
+// the operator-facing /debug/vars endpoint exposes, so the two surfaces
+// can never diverge. Safe to call from any goroutine — expvar.Int is
+// atomic underneath.
 func (h *Hub) DroppedBroadcasts() uint64 {
-	return h.dropped.Load()
+	return uint64(droppedBroadcasts.Value())
 }

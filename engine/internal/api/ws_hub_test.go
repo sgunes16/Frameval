@@ -69,9 +69,11 @@ func TestHub_SlowClientDoesNotBlockOtherClients(t *testing.T) {
 
 	slow := make(chan []byte, 1) // capacity 1 — saturates immediately
 	fast := make(chan []byte, 64)
+	// register is unbuffered: each send blocks until Run's select arm
+	// receives it, so by the time the second send returns both clients
+	// are guaranteed to be in the hub's client map.
 	hub.register <- slow
 	hub.register <- fast
-	time.Sleep(20 * time.Millisecond) // let registers land
 
 	var wg sync.WaitGroup
 	wg.Add(1)
