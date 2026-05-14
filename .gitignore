@@ -40,3 +40,8 @@ memory/
 
 # Claude Code session state (user-local)
 .claude/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/.playwright/
