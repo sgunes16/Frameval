@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -22,9 +23,12 @@ func NewService(store *storage.Store, orchestrator *experiment.Orchestrator, har
 	return &Service{store: store, orchestrator: orchestrator, harnesses: harnesses, executors: executors, hub: hub}
 }
 
-func NewRouter(service *Service) http.Handler {
+func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 	r := chi.NewRouter()
-	r.Use(logger)
+	// trace_id middleware must run first so subsequent middleware
+	// (including requestLogger) sees it on the context.
+	r.Use(WithTraceID)
+	r.Use(requestLogger(logger))
 	r.Use(corsMiddleware())
 	r.Get("/ws", service.HandleWS)
 	r.Route("/api", func(r chi.Router) {

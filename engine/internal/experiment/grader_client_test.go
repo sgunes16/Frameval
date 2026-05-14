@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewGraderClient_EmptyAddrReturnsClientWithNilStub(t *testing.T) {
-	c := NewGraderClient("")
+	c := NewGraderClient("", nil)
 	if c == nil {
 		t.Fatal("NewGraderClient returned nil")
 	}
@@ -18,7 +18,7 @@ func TestNewGraderClient_EmptyAddrReturnsClientWithNilStub(t *testing.T) {
 }
 
 func TestGraderClient_CloseIsIdempotent(t *testing.T) {
-	c := NewGraderClient("")
+	c := NewGraderClient("", nil)
 	if err := c.Close(); err != nil {
 		t.Errorf("first Close on no-grader client: %v", err)
 	}
