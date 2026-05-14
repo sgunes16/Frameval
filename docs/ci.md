@@ -13,18 +13,21 @@ Two GitHub Actions workflows live in `.github/workflows/`:
 
 ### `ci.yml` jobs
 
-A small `changes` job runs first and detects which subdirectories the PR touched. The three service jobs then run **conditionally** based on those paths:
+A small `changes` job runs first and detects which subdirectories the PR touched. The three service jobs then run **conditionally** based on those paths. A final `ci-gate` job is the single required status check.
 
 | Job | Runs when | Steps |
 |---|---|---|
-| **changes** | always | `dorny/paths-filter@v3` — sets `engine`, `grader`, `frontend`, `ci` outputs |
-| **Engine (Go)** | push to main, or PR touching `engine/**`, `proto/**`, or CI files | `go vet`, `go build`, `go test -race`, `go test -race -tags=integration ./test/integration/...` |
+| **changes** | always | `dorny/paths-filter` (SHA-pinned to v3.0.2) — sets `engine`, `grader`, `frontend`, `ci` outputs |
+| **Engine (Go)** | push to main, or PR touching `engine/**`, `proto/**`, `tasks/**`, `baselines/**`, or CI files | `go vet`, `go build`, `go test -race`, `go test -race -tags=integration ./test/integration/...` |
 | **Grader (Python)** | push to main, or PR touching `grader/**`, `proto/**`, or CI files | `uv sync`, `uv run ruff check .`, `uv run pytest` |
 | **Frontend (TypeScript)** | push to main, or PR touching `frontend/**` or CI files | `npm ci`, `npm run lint` (`tsc --noEmit`), `npm run build`, `npm test` |
+| **CI gate** | always | Asserts every dependent job either succeeded or was legitimately skipped by the path filter. Single required check for branch protection. |
 
-On every push to `main`, all three jobs always run regardless of paths — this is the final guarantee that nothing broken lands. On PRs, the path filter trims out jobs that can't possibly be affected, cutting typical PR runtime by 2–3×. The `ci` filter is the safety net: any change to `.github/workflows/**` or the `Makefile` runs every job so a broken pipeline can't slip through by touching only the workflow file.
+On every push to `main`, all three service jobs always run regardless of paths — this is the final guarantee that nothing broken lands. On PRs, the path filter trims out jobs that can't possibly be affected, cutting typical PR runtime by 2–3×. The `ci` filter is the safety net: any change to `.github/workflows/**`, the `Makefile`, `docs/ci.md`, `docker/**`, or `docker-compose.yml` runs every job so a broken pipeline or container change can't slip through.
 
-`proto/**` belongs to both engine *and* grader filters because the protobuf stubs cross both services.
+`proto/**` belongs to both engine *and* grader filters because the protobuf stubs cross both services. `tasks/**` and `baselines/**` belong to engine because they ship inside the engine container.
+
+**Why `ci-gate`:** without a sentinel, a failure inside `changes` cascades as `skipped` status on the service jobs, which branch-protection rules can misinterpret as success. `ci-gate` fails closed when `changes` did not succeed.
 
 The default Linux runners are used; no self-hosted runners.
 
