@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -380,19 +381,33 @@ func (m *Manager) CollectOutputFiles(workspace string) ([]models.OutputFile, err
 	return files, nil
 }
 
+// defaultLogCap bounds the in-memory transcript a single sandbox run
+// can produce. 8 MiB is far more than the largest realistic agent
+// transcript (Aider with verbose output runs ~1 MiB for a 200-turn
+// session) and gives a generous margin for the future. Override via
+// FRAMEVAL_LOG_RING_BYTES if a use case justifies more.
+const defaultLogCap = 8 << 20 // 8 MiB
+
 type outputCollector struct {
 	mu       sync.Mutex
-	output   bytes.Buffer
+	output   *ringBuffer
 	onOutput func(string)
 }
 
 func newOutputCollector(onOutput func(string)) *outputCollector {
-	return &outputCollector{onOutput: onOutput}
+	cap := defaultLogCap
+	if v := os.Getenv("FRAMEVAL_LOG_RING_BYTES"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			cap = parsed
+		}
+	}
+	return &outputCollector{output: newRingBuffer(cap), onOutput: onOutput}
 }
 
 func (c *outputCollector) String() string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	// ringBuffer is internally locked; no need to take c.mu here. The
+	// caller-side mutex remains for write-line atomicity (line + newline
+	// must land together).
 	return c.output.String()
 }
 
@@ -414,8 +429,7 @@ func (c *outputCollector) copyDockerLogs(reader io.Reader) {
 
 func (c *outputCollector) writeLine(line string) {
 	c.mu.Lock()
-	c.output.WriteString(line)
-	c.output.WriteByte('\n')
+	c.output.WriteString(line + "\n")
 	c.mu.Unlock()
 	if c.onOutput != nil && strings.TrimSpace(line) != "" {
 		c.onOutput(line)
