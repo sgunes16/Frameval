@@ -13,7 +13,11 @@ import { emptyExperimentList } from '../fixtures/experiments';
  * response shape.
  */
 export const defaultHandlers = [
-  http.get('/api/experiments/', () => HttpResponse.json(emptyExperimentList)),
+  // api.ts builds URLs as `${API_BASE}${path}` without normalizing trailing
+  // slashes; every current hook uses the no-trailing-slash form, so we only
+  // mock that. If a future API change introduces trailing slashes the test
+  // will fail loudly under `onUnhandledRequest: 'error'` rather than mask
+  // the inconsistency behind a duplicate handler.
   http.get('/api/experiments', () => HttpResponse.json(emptyExperimentList)),
   http.get('/api/tasks', () => HttpResponse.json([])),
   http.get('/api/config/models', () => HttpResponse.json([])),

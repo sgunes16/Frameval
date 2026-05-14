@@ -22,6 +22,13 @@ beforeAll(() => {
   // unmocked endpoint silently. Tests that intentionally call new
   // endpoints must add a handler — either to the defaults file or via
   // `server.use(...)` in the test body.
+  //
+  // Note: MSW only intercepts fetch(). Native WebSocket connections
+  // (e.g., the engine's /ws stream consumed by useWebSocket) are not
+  // intercepted. Tests that render components calling useWebSocket
+  // will see a WebSocket connect-error in the happy-dom environment;
+  // mock the hook directly or stub global.WebSocket per test until
+  // an MSW WebSocket handler ships in a follow-up.
   server.listen({ onUnhandledRequest: 'error' });
 });
 

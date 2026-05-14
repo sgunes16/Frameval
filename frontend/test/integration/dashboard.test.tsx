@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -23,7 +24,7 @@ import { DashboardPage } from '../../src/pages/dashboard';
  *      async resolution.
  */
 
-function renderWithProviders(node: React.ReactNode) {
+function renderWithProviders(node: ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
