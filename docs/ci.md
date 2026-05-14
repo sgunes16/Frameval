@@ -89,12 +89,15 @@ A coverage baseline will live at `coverage-baseline.txt` (added incrementally as
 
 | Check | Status | Why | Becomes blocking when |
 |---|---|---|---|
-| `ruff check` in grader | Non-blocking | 6 pre-existing F401 lint errors (see #88) | Issue #88 lands |
 | Playwright E2E | Placeholder no-op | `docker-compose.test.yml` and smoke specs not yet authored (see #83) | Issue #83 lands |
 | `mypy` in grader | Not yet wired | Grader code not type-clean yet | Story TBD |
 | LLM-fidelity nightly | Placeholder no-op | `respx` cassettes don't exist yet (see #81) | Issue #81 lands |
 | Stress tests | Placeholder no-op | No `stress`-tagged tests yet (see #58) | Backend Robustness epic lands |
 | Visual regression | Not wired | Design System V2 has not stabilized (see #57) | Issue #74 lands |
+
+### Recently flipped to blocking
+
+- **`ruff check` in grader** — was non-blocking through PR #89; flipped to blocking in #88 once the 6 F401 errors were fixed.
 
 This list is the authoritative source for "checks that *will* be enforced but currently are not". Updating it is part of the PR that flips the corresponding gate to blocking.
 
