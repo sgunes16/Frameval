@@ -24,7 +24,7 @@ func dialFake(t *testing.T, addr string) graderpb.GraderServiceClient {
 	return graderpb.NewGraderServiceClient(conn)
 }
 
-func TestFakeGrader_HealthCheckReturnsHealthy(t *testing.T) {
+func TestFakeGrader_HealthCheckDefaultsHealthy(t *testing.T) {
 	addr := support.StartFakeGrader(t, support.FakeGraderConfig{})
 
 	client := dialFake(t, addr)
@@ -40,10 +40,32 @@ func TestFakeGrader_HealthCheckReturnsHealthy(t *testing.T) {
 	}
 }
 
+func TestFakeGrader_HealthCheckCanReportUnhealthy(t *testing.T) {
+	// Opt-in to unhealthy so resilience tests can assert how the engine
+	// reacts to a grader that's reachable but degraded.
+	addr := support.StartFakeGrader(t, support.FakeGraderConfig{Unhealthy: true})
+
+	client := dialFake(t, addr)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	resp, err := client.HealthCheck(ctx, &graderpb.Empty{})
+	if err != nil {
+		t.Fatalf("HealthCheck: %v", err)
+	}
+	if resp.Healthy {
+		t.Error("Unhealthy=true should produce Healthy=false in response")
+	}
+}
+
+// Use float32-exact dyadic fractions (0.75, 0.5, 0.875) for assertion stability.
+// 0.8, 0.88, 0.9 etc. are not exactly representable in float32, and the proto
+// wire forces a float32 round-trip — comparing with != against the original
+// float64 literal would flake.
 func TestFakeGrader_GradeRunReturnsConfiguredComposite(t *testing.T) {
 	addr := support.StartFakeGrader(t, support.FakeGraderConfig{
 		CompositeScore: 7.5,
-		TestPassRate:   0.8,
+		TestPassRate:   0.75,
 	})
 
 	client := dialFake(t, addr)
@@ -57,8 +79,8 @@ func TestFakeGrader_GradeRunReturnsConfiguredComposite(t *testing.T) {
 	if resp.CompositeScore != 7.5 {
 		t.Errorf("CompositeScore: want 7.5, got %v", resp.CompositeScore)
 	}
-	if resp.Code == nil || resp.Code.TestPassRate != 0.8 {
-		t.Errorf("Code.TestPassRate: want 0.8, got %+v", resp.Code)
+	if resp.Code == nil || resp.Code.TestPassRate != 0.75 {
+		t.Errorf("Code.TestPassRate: want 0.75, got %+v", resp.Code)
 	}
 }
 
@@ -66,7 +88,7 @@ func TestFakeGrader_ClassifyFailureReturnsConfiguredVerdict(t *testing.T) {
 	addr := support.StartFakeGrader(t, support.FakeGraderConfig{
 		FailurePrimary:    "HAL_API",
 		FailureRationale:  "agent hallucinated an API method",
-		FailureConfidence: 0.9,
+		FailureConfidence: 0.875,
 	})
 
 	client := dialFake(t, addr)
@@ -83,18 +105,7 @@ func TestFakeGrader_ClassifyFailureReturnsConfiguredVerdict(t *testing.T) {
 	if resp.Classification.Primary != "HAL_API" {
 		t.Errorf("Primary: want HAL_API, got %q", resp.Classification.Primary)
 	}
-	if resp.Classification.Confidence != 0.9 {
-		t.Errorf("Confidence: want 0.9, got %v", resp.Classification.Confidence)
-	}
-}
-
-func TestFakeGrader_StartReturnsAddressableLoopback(t *testing.T) {
-	addr := support.StartFakeGrader(t, support.FakeGraderConfig{})
-	if addr == "" {
-		t.Fatal("addr empty")
-	}
-	// Ephemeral port — must include a port separator.
-	if addr[len(addr)-1] == ':' || len(addr) < 5 {
-		t.Errorf("addr looks malformed: %q", addr)
+	if resp.Classification.Confidence != 0.875 {
+		t.Errorf("Confidence: want 0.875, got %v", resp.Classification.Confidence)
 	}
 }

@@ -12,10 +12,11 @@ import (
 // FakeGraderConfig controls the canned responses the FakeGrader sends.
 // Zero values produce a healthy grader that returns an empty grade with
 // CompositeScore=0 — sufficient for tests that only need the grader to
-// be reachable.
+// be reachable. Opt into unhealthy behavior via Unhealthy=true.
 type FakeGraderConfig struct {
-	// HealthCheck
-	Healthy bool
+	// HealthCheck — set true to make the grader report itself unhealthy.
+	// Default (false) reports healthy.
+	Unhealthy bool
 
 	// GradeRun
 	CompositeScore float64
@@ -43,7 +44,7 @@ func StartFakeGrader(t *testing.T, cfg FakeGraderConfig) string {
 	}
 
 	srv := grpc.NewServer()
-	graderpb.RegisterGraderServiceServer(srv, &fakeGraderServer{cfg: applyFakeGraderDefaults(cfg)})
+	graderpb.RegisterGraderServiceServer(srv, &fakeGraderServer{cfg: cfg})
 
 	done := make(chan struct{})
 	go func() {
@@ -59,21 +60,13 @@ func StartFakeGrader(t *testing.T, cfg FakeGraderConfig) string {
 	return lis.Addr().String()
 }
 
-func applyFakeGraderDefaults(cfg FakeGraderConfig) FakeGraderConfig {
-	// Healthy defaults to true — most tests want a working grader.
-	if !cfg.Healthy {
-		cfg.Healthy = true
-	}
-	return cfg
-}
-
 type fakeGraderServer struct {
 	graderpb.UnimplementedGraderServiceServer
 	cfg FakeGraderConfig
 }
 
 func (s *fakeGraderServer) HealthCheck(_ context.Context, _ *graderpb.Empty) (*graderpb.HealthResponse, error) {
-	return &graderpb.HealthResponse{Healthy: s.cfg.Healthy, Version: "fake"}, nil
+	return &graderpb.HealthResponse{Healthy: !s.cfg.Unhealthy, Version: "fake"}, nil
 }
 
 func (s *fakeGraderServer) GradeRun(_ context.Context, _ *graderpb.GradeRunRequest) (*graderpb.GradeRunResponse, error) {

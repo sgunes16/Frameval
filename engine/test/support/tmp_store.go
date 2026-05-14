@@ -7,7 +7,6 @@ package support
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -27,9 +26,8 @@ func TmpStore(t *testing.T) *storage.Store {
 	if err != nil {
 		t.Fatalf("open test store: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = store.Close()
-		_ = os.Remove(dbPath)
-	})
+	// t.TempDir cleans up the entire directory tree at test end, so we only
+	// need to close the connection here — the file goes with the temp dir.
+	t.Cleanup(func() { _ = store.Close() })
 	return store
 }

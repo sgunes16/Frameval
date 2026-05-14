@@ -72,7 +72,7 @@ frameval/
 - Concurrency: use `context.Context` for cancellation, `errgroup` for parallel operations
 - HTTP: Chi router, middleware for logging and recovery, JSON responses via a `render` helper
 - Database: raw SQL with `database/sql` + go-sqlite3 driver. Use prepared statements. No ORM.
-- Testing: table-driven tests, `testify/assert` for assertions, `testcontainers-go` for integration tests
+- Testing: table-driven tests, stdlib `testing` package (`t.Fatalf` / `t.Errorf`). `testify` is permitted when assertions get noisy but is not required — existing tests use stdlib only. `testcontainers-go` for tests that need a real Docker daemon; in-process helpers in `engine/test/support/` (`TmpStore`, `FakeExecutor`, `FakeGrader`) cover most needs. Integration tests live under `engine/test/integration/` behind the `integration` build tag
 - Naming: follow standard Go conventions (unexported by default, interfaces named by behavior)
 - Docker SDK: `github.com/docker/docker/client` for container lifecycle
 - gRPC: generated stubs from `proto/grader.proto`, client lives in `engine/proto/`
