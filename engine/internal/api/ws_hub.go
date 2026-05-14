@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"expvar"
 	"sync"
+	"sync/atomic"
 )
 
 type Event struct {
@@ -11,12 +13,21 @@ type Event struct {
 	Payload any    `json:"payload"`
 }
 
+// droppedBroadcasts is an expvar-exposed counter so operators can spot
+// the engine shedding WS messages without instrumenting the source.
+// Available at /debug/vars on any engine binary with the default mux.
+var droppedBroadcasts = expvar.NewInt("frameval_ws_dropped_total")
+
 type Hub struct {
 	clients    map[chan []byte]struct{}
 	register   chan chan []byte
 	unregister chan chan []byte
 	broadcast  chan []byte
 	mu         sync.RWMutex
+	// dropped counts broadcasts the hub had to drop because the buffered
+	// broadcast channel was full. Atomic so DroppedBroadcasts() can read
+	// it without taking the hub lock.
+	dropped atomic.Uint64
 }
 
 func NewHub() *Hub {
@@ -55,10 +66,30 @@ func (h *Hub) Run(ctx context.Context) {
 	}
 }
 
+// Broadcast publishes an event to every connected client. Non-blocking:
+// if the broadcast channel is full (orchestrator producing faster than
+// the hub can fan out), the message is dropped and the dropped counter
+// is incremented rather than stalling the caller.
+//
+// The trade-off is intentional. The orchestrator runs the experiment
+// lifecycle; a wedged WS pipeline must not be allowed to halt run
+// finalization. Operators see droppage via expvar
+// (frameval_ws_dropped_total) and the DroppedBroadcasts accessor.
 func (h *Hub) Broadcast(eventType string, payload any) {
 	message, err := json.Marshal(Event{Type: eventType, Payload: payload})
 	if err != nil {
 		return
 	}
-	h.broadcast <- message
+	select {
+	case h.broadcast <- message:
+	default:
+		h.dropped.Add(1)
+		droppedBroadcasts.Add(1)
+	}
+}
+
+// DroppedBroadcasts returns the total number of broadcasts the hub
+// dropped because its buffer was full. Safe to call from any goroutine.
+func (h *Hub) DroppedBroadcasts() uint64 {
+	return h.dropped.Load()
 }
