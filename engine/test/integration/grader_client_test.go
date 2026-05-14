@@ -51,7 +51,7 @@ func TestGraderClient_GradeRun_RoundTripsThroughFakeGrader(t *testing.T) {
 		RawOutput: "fake",
 	}
 
-	grade, err := client.GradeRun(ctx, task, nil, transcript)
+	grade, err := client.GradeRun(ctx, task, nil, transcript, "")
 	if err != nil {
 		t.Fatalf("GradeRun: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestGraderClient_FallsBackWhenGraderUnreachable(t *testing.T) {
 	task := models.Task{ID: "task-1", TaskPrompt: "p"}
 	transcript := models.Transcript{RunID: "run-1", TotalTokens: 100}
 
-	grade, err := client.GradeRun(ctx, task, nil, transcript)
+	grade, err := client.GradeRun(ctx, task, nil, transcript, "")
 	if err != nil {
 		t.Fatalf("expected fallback, got error: %v", err)
 	}

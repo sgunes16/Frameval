@@ -1,9 +1,12 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/mustafaselman/frameval/engine/internal/experiment"
 )
 
 func (s *Service) ListExperimentRuns(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +54,12 @@ func (s *Service) RetryRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) RegradeRun(w http.ResponseWriter, r *http.Request) {
-	if err := s.orchestrator.RegradeRun(r.Context(), chi.URLParam(r, "id")); err != nil {
+	err := s.orchestrator.RegradeRun(r.Context(), chi.URLParam(r, "id"))
+	if errors.Is(err, experiment.ErrGraderUnavailable) {
+		renderError(w, r.Context(), http.StatusServiceUnavailable, ErrCodeGraderDown, "grader is unavailable; original grade preserved", err)
+		return
+	}
+	if err != nil {
 		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}

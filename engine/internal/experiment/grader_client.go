@@ -170,7 +170,22 @@ func failureClassificationFromProto(p *graderpb.FailureClassificationProto) diag
 	}
 }
 
-func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript) (models.Grade, error) {
+// defaultJudgeModel is the cross-model judge baseline per CLAUDE.md.
+// Used when the experiment row doesn't specify one explicitly.
+const defaultJudgeModel = "gpt-4o"
+
+// GradeRun calls the Python grader's GradeRun RPC. The judgeModel arg
+// controls which model the grader uses for its LLM-as-judge stage —
+// passing "" falls back to defaultJudgeModel. The returned grade
+// always has Source set: GradeSourceGrader on a real round-trip,
+// GradeSourceFallback on any error (no grader configured, breaker
+// open, RPC failure, retry exhaustion). Callers that need to surface
+// "grading actually happened" — e.g. the regrade HTTP handler — should
+// branch on grade.Source rather than assuming a non-empty grade is real.
+func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript, judgeModel string) (models.Grade, error) {
+	if judgeModel == "" {
+		judgeModel = defaultJudgeModel
+	}
 	if c.client == nil {
 		return fallbackGrade(transcript), nil
 	}
@@ -181,7 +196,7 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 		TranscriptJson: transcript.RawOutput,
 		FilesystemDiff: transcript.FilesystemDiff,
 		Task:           &graderpb.TaskSpec{Id: task.ID, Prompt: task.TaskPrompt, CodebaseType: task.CodebaseType, SetupScript: task.SetupScript},
-		JudgeConfig:    &graderpb.JudgeConfig{Model: "gpt-5.4", Provider: "openai", JudgeRounds: 1},
+		JudgeConfig:    &graderpb.JudgeConfig{Model: judgeModel, Provider: "openai", JudgeRounds: 1},
 	}
 	for _, testCase := range task.TestCases {
 		if strings.EqualFold(strings.TrimSpace(testCase.Visibility), "hidden") || strings.TrimSpace(testCase.SetupScript) != "" {
@@ -206,7 +221,9 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 		}
 		return fallbackGrade(transcript), nil
 	}
-	return gradeFromProto(response), nil
+	grade := gradeFromProto(response)
+	grade.Source = models.GradeSourceGrader
+	return grade, nil
 }
 
 func fallbackGrade(transcript models.Transcript) models.Grade {
@@ -238,6 +255,7 @@ func fallbackGrade(transcript models.Transcript) models.Grade {
 		SpecInstructionCompliance: 0,
 		SpecConventionAdherence:   0,
 		CompositeScore:            compositeScore,
+		Source:                    models.GradeSourceFallback,
 	}
 }
 
