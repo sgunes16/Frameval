@@ -37,3 +37,6 @@ memory/
 
 # Python build artifacts (setuptools editable install metadata)
 *.egg-info/
+
+# Claude Code session state (user-local)
+.claude/
