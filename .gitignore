@@ -34,3 +34,6 @@ tmp/
 
 # AI-session memory artifacts — keep local, never publish
 memory/
+
+# Python build artifacts (setuptools editable install metadata)
+*.egg-info/
