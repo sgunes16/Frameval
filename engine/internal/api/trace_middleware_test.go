@@ -2,8 +2,11 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mustafaselman/frameval/engine/internal/logging"
@@ -43,6 +46,66 @@ func TestWithBodyCap_TruncatesOversizedBody(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/x", bytes.NewReader(make([]byte, 2<<20)))
 	handler.ServeHTTP(httptest.NewRecorder(), req)
+}
+
+func TestRequestLogger_CapturesStatusCode(t *testing.T) {
+	cases := []struct {
+		name       string
+		handler    http.HandlerFunc
+		wantStatus int
+	}{
+		{
+			name: "200_default",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte("ok"))
+			},
+			wantStatus: 200,
+		},
+		{
+			name: "201_created",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusCreated)
+			},
+			wantStatus: 201,
+		},
+		{
+			name: "500_explicit",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			},
+			wantStatus: 500,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			logger := slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+			wrapped := requestLogger(logger)(tc.handler)
+
+			req := httptest.NewRequest(http.MethodGet, "/x", nil)
+			rec := httptest.NewRecorder()
+			wrapped.ServeHTTP(rec, req)
+
+			// One JSON log line should have been emitted.
+			line := strings.TrimSpace(buf.String())
+			if line == "" {
+				t.Fatal("requestLogger did not emit a log line")
+			}
+			var record map[string]any
+			if err := json.Unmarshal([]byte(line), &record); err != nil {
+				t.Fatalf("log line not JSON: %v (raw=%q)", err, line)
+			}
+			gotStatus, ok := record["status"].(float64)
+			if !ok {
+				t.Fatalf("status field missing or wrong type; record=%v", record)
+			}
+			if int(gotStatus) != tc.wantStatus {
+				t.Errorf("status: want %d, got %d", tc.wantStatus, int(gotStatus))
+			}
+		})
+	}
 }
 
 func TestWithTraceID_HonorsIncomingHeader(t *testing.T) {
