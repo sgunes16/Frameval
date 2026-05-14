@@ -3,10 +3,13 @@ package experiment
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"math"
 	"strings"
 	"time"
+
+	"github.com/sony/gobreaker/v2"
 
 	"github.com/mustafaselman/frameval/engine/internal/models"
 	"github.com/mustafaselman/frameval/engine/pkg/diagnostic"
@@ -26,8 +29,10 @@ import (
 // contract that callers can construct a GraderClient unconditionally,
 // whether the addr is empty, unreachable, or wrong-formatted.
 type GraderClient struct {
-	conn   *grpc.ClientConn
-	client graderpb.GraderServiceClient
+	conn    *grpc.ClientConn
+	client  graderpb.GraderServiceClient
+	breaker *gobreaker.CircuitBreaker[any]
+	logger  *slog.Logger
 }
 
 // NewGraderClient dials the grader at addr and stores the resulting
@@ -41,16 +46,18 @@ func NewGraderClient(addr string, logger *slog.Logger) *GraderClient {
 		logger = slog.Default()
 	}
 	if addr == "" {
-		return &GraderClient{}
+		return &GraderClient{logger: logger, breaker: newGraderBreaker()}
 	}
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Warn("grader dial failed (will fall back to local grading)", "err", err, "addr", addr)
-		return &GraderClient{}
+		return &GraderClient{logger: logger, breaker: newGraderBreaker()}
 	}
 	return &GraderClient{
-		conn:   conn,
-		client: graderpb.NewGraderServiceClient(conn),
+		conn:    conn,
+		client:  graderpb.NewGraderServiceClient(conn),
+		breaker: newGraderBreaker(),
+		logger:  logger,
 	}
 }
 
@@ -110,14 +117,22 @@ func (c *GraderClient) ClassifyFailure(
 	}
 	ctx, cancel := context.WithTimeout(ctx, classifyFailureTimeout)
 	defer cancel()
-	response, err := c.client.ClassifyFailure(ctx, &graderpb.ClassifyFailureRequest{
-		RunId:            runID,
-		SymptomsJson:     symptomsJSON,
-		TaskDescription:  taskDescription,
-		TranscriptTail:   transcriptTail,
-		ClassifierModel:  classifierModel,
+	req := &graderpb.ClassifyFailureRequest{
+		RunId:           runID,
+		SymptomsJson:    symptomsJSON,
+		TaskDescription: taskDescription,
+		TranscriptTail:  transcriptTail,
+		ClassifierModel: classifierModel,
+	}
+	response, err := breakerExec(c.breaker, func() (*graderpb.ClassifyFailureResponse, error) {
+		return retryGrader(ctx, defaultGraderRetry, func(ctx context.Context) (*graderpb.ClassifyFailureResponse, error) {
+			return c.client.ClassifyFailure(ctx, req)
+		})
 	})
 	if err != nil || response == nil || response.Classification == nil {
+		if errors.Is(err, ErrGraderUnavailable) {
+			c.logger.Warn("classify_failure: breaker open, returning unclassified", "run_id", runID, "err", err)
+		}
 		return fallback
 	}
 	return ClassifyFailureResult{
@@ -180,8 +195,15 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 	if artifact != nil {
 		request.Artifact = &graderpb.ArtifactSpec{Content: artifact.Content, Type: artifact.ArtifactType}
 	}
-	response, err := c.client.GradeRun(ctx, request)
+	response, err := breakerExec(c.breaker, func() (*graderpb.GradeRunResponse, error) {
+		return retryGrader(ctx, defaultGraderRetry, func(ctx context.Context) (*graderpb.GradeRunResponse, error) {
+			return c.client.GradeRun(ctx, request)
+		})
+	})
 	if err != nil {
+		if errors.Is(err, ErrGraderUnavailable) {
+			c.logger.Warn("grade_run: breaker open, returning fallback grade", "run_id", transcript.RunID, "err", err)
+		}
 		return fallbackGrade(transcript), nil
 	}
 	return gradeFromProto(response), nil
