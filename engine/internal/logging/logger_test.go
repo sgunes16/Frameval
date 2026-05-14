@@ -11,16 +11,6 @@ import (
 	"github.com/mustafaselman/frameval/engine/internal/logging"
 )
 
-// captureLogger returns a logger writing JSON to the supplied buffer plus the
-// buffer itself, so tests can assert structured field presence without
-// scraping text.
-func captureLogger(t *testing.T, level slog.Level) (*slog.Logger, *bytes.Buffer) {
-	t.Helper()
-	buf := &bytes.Buffer{}
-	logger := slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: level}))
-	return logger, buf
-}
-
 func parseLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	t.Helper()
 	var out []map[string]any
@@ -123,6 +113,3 @@ func TestFromContext_NoIDsWhenContextEmpty(t *testing.T) {
 	}
 }
 
-// captureLogger silences the unused-import warning when the helper is added
-// before the rest of the tests reference it.
-var _ = captureLogger

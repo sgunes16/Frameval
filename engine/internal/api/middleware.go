@@ -29,7 +29,15 @@ func WithTraceID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get(traceHeader)
 		if id == "" {
-			id = uuid.NewString()
+			// UUIDv7 is time-sortable, so log consumers can order records
+			// chronologically by trace_id when timestamps are coarse.
+			generated, err := uuid.NewV7()
+			if err != nil {
+				// NewV7 only errors on a clock-source failure; fall back to
+				// random v4 so requests still get a stable ID.
+				generated = uuid.New()
+			}
+			id = generated.String()
 		}
 		w.Header().Set(traceHeader, id)
 		next.ServeHTTP(w, r.WithContext(logging.WithTraceID(r.Context(), id)))
@@ -58,6 +66,11 @@ func corsMiddleware() func(http.Handler) http.Handler {
 	return cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", traceHeader},
+		// ExposedHeaders lets browser JS read the response header (otherwise
+		// the browser strips X-Frameval-Trace from the JS-visible Headers
+		// map). Without this the "echo on response" design goal in
+		// WithTraceID is invisible to cross-origin SPA clients.
+		ExposedHeaders: []string{traceHeader},
 	})
 }
