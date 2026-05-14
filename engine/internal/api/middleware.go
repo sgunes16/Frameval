@@ -62,6 +62,22 @@ func requestLogger(root *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
+// WithBodyCap limits inbound request bodies to maxBytes. Reads past the
+// cap return *http.MaxBytesError, which handlers' JSON decoders surface
+// as a normal decode error — renderError then maps it to a 400 with the
+// ErrCodeBadRequest code. Prevents a malicious or accidental large POST
+// from filling the engine's heap.
+func WithBodyCap(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func corsMiddleware() func(http.Handler) http.Handler {
 	return cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},

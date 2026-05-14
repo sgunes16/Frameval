@@ -23,12 +23,20 @@ func NewService(store *storage.Store, orchestrator *experiment.Orchestrator, har
 	return &Service{store: store, orchestrator: orchestrator, harnesses: harnesses, executors: executors, hub: hub}
 }
 
+// defaultBodyCap is the largest request body the engine accepts. 1 MiB is
+// far more than any current endpoint needs (the largest payload is the
+// experiment-create form, well under 100 KiB) and gives a generous margin
+// for future growth. Crank it via the router-construction path if a real
+// use case justifies more.
+const defaultBodyCap = 1 << 20 // 1 MiB
+
 func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 	// trace_id middleware must run first so subsequent middleware
 	// (including requestLogger) sees it on the context.
 	r.Use(WithTraceID)
 	r.Use(requestLogger(logger))
+	r.Use(WithBodyCap(defaultBodyCap))
 	r.Use(corsMiddleware())
 	r.Get("/ws", service.HandleWS)
 	r.Route("/api", func(r chi.Router) {
