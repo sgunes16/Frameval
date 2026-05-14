@@ -3,6 +3,7 @@ package experiment
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"math"
 	"strings"
 	"time"
@@ -14,12 +15,50 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// GraderClient holds a single gRPC connection to the Python grader and reuses
+// it across all RPC calls. Constructed once at engine startup, closed on
+// graceful shutdown. Opening a fresh *grpc.ClientConn per RPC (the prior
+// design) wastes TCP handshakes and leaks per-connection balance-watcher
+// goroutines under sustained load.
+//
+// addr=="" is the documented "no grader configured" sentinel — every RPC
+// short-circuits to its fallback result. This preserves the original API
+// contract that callers can construct a GraderClient unconditionally.
 type GraderClient struct {
-	addr string
+	addr   string
+	conn   *grpc.ClientConn
+	client graderpb.GraderServiceClient
 }
 
+// NewGraderClient dials the grader at addr and stores the resulting
+// connection + client stub. Errors during dial are logged and the resulting
+// client falls back to "no grader configured" behavior, so the engine still
+// starts even if the grader is unreachable at startup time. grpc.NewClient
+// is lazy — the underlying TCP connection is not established until the first
+// RPC call.
 func NewGraderClient(addr string) *GraderClient {
-	return &GraderClient{addr: addr}
+	c := &GraderClient{addr: addr}
+	if addr == "" {
+		return c
+	}
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Printf("grader dial failed (will fall back to local grading): %v", err)
+		return c
+	}
+	c.conn = conn
+	c.client = graderpb.NewGraderServiceClient(conn)
+	return c
+}
+
+// Close releases the gRPC connection. Safe to call on a client that never
+// successfully dialed (no-op in that case). Should be invoked from the
+// engine's graceful-shutdown path.
+func (c *GraderClient) Close() error {
+	if c == nil || c.conn == nil {
+		return nil
+	}
+	return c.conn.Close()
 }
 
 // classifyFailureTimeout caps how long we wait for the LLM classifier to
@@ -56,7 +95,7 @@ func (c *GraderClient) ClassifyFailure(
 		Classification:  diagnostic.FailureClassification{Primary: diagnostic.FailureNone},
 		ClassifierModel: classifierModel,
 	}
-	if c.addr == "" {
+	if c.client == nil {
 		return fallback
 	}
 	symptomsJSON, err := json.Marshal(symptoms)
@@ -65,13 +104,7 @@ func (c *GraderClient) ClassifyFailure(
 	}
 	ctx, cancel := context.WithTimeout(ctx, classifyFailureTimeout)
 	defer cancel()
-	conn, err := grpc.NewClient(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return fallback
-	}
-	defer conn.Close()
-	client := graderpb.NewGraderServiceClient(conn)
-	response, err := client.ClassifyFailure(ctx, &graderpb.ClassifyFailureRequest{
+	response, err := c.client.ClassifyFailure(ctx, &graderpb.ClassifyFailureRequest{
 		RunId:            runID,
 		SymptomsJson:     symptomsJSON,
 		TaskDescription:  taskDescription,
@@ -117,17 +150,11 @@ func failureClassificationFromProto(p *graderpb.FailureClassificationProto) diag
 }
 
 func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript) (models.Grade, error) {
-	if c.addr == "" {
+	if c.client == nil {
 		return fallbackGrade(transcript), nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	conn, err := grpc.NewClient(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return fallbackGrade(transcript), nil
-	}
-	defer conn.Close()
-	client := graderpb.NewGraderServiceClient(conn)
 	request := &graderpb.GradeRunRequest{
 		RunId:          transcript.RunID,
 		TranscriptJson: transcript.RawOutput,
@@ -147,7 +174,7 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 	if artifact != nil {
 		request.Artifact = &graderpb.ArtifactSpec{Content: artifact.Content, Type: artifact.ArtifactType}
 	}
-	response, err := client.GradeRun(ctx, request)
+	response, err := c.client.GradeRun(ctx, request)
 	if err != nil {
 		return fallbackGrade(transcript), nil
 	}

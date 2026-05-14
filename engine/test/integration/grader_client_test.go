@@ -22,17 +22,14 @@ import (
 // TestMain runs goleak after every test in this package. Long-lived goroutines
 // (gRPC server loops, queue workers, hub goroutines) leaking past test
 // completion are a class of bug we want CI to catch.
+//
+// Previously this called VerifyTestMain with two IgnoreTopFunction exemptions
+// for grpc-go's per-connection balance-watcher goroutines (issue #86 in this
+// repo). After the GraderClient persistent-connection refactor, those
+// exemptions are no longer needed — every connection opened in a test is
+// closed via t.Cleanup before goleak runs.
 func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m,
-		// GraderClient currently opens a fresh *grpc.ClientConn on every RPC
-		// (grader_client.go:68, 125). Each connection spawns a balance-watcher
-		// goroutine that does not always shut down within bounded time at
-		// grpc-go v1.80 (see grpc/grpc-go#5321). Tracked as a follow-up in
-		// #86 — once GraderClient holds a persistent connection, both
-		// ignores can be removed.
-		goleak.IgnoreTopFunction("google.golang.org/grpc.(*ccBalancerWrapper).watcher"),
-		goleak.IgnoreAnyFunction("google.golang.org/grpc/internal/grpcsync.(*CallbackSerializer).run"),
-	)
+	goleak.VerifyTestMain(m)
 }
 
 func TestGraderClient_GradeRun_RoundTripsThroughFakeGrader(t *testing.T) {
@@ -44,6 +41,7 @@ func TestGraderClient_GradeRun_RoundTripsThroughFakeGrader(t *testing.T) {
 	})
 
 	client := experiment.NewGraderClient(addr)
+	t.Cleanup(func() { _ = client.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -73,6 +71,7 @@ func TestGraderClient_ClassifyFailure_RoundTripsThroughFakeGrader(t *testing.T) 
 	})
 
 	client := experiment.NewGraderClient(addr)
+	t.Cleanup(func() { _ = client.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -91,6 +90,7 @@ func TestGraderClient_FallsBackWhenGraderUnreachable(t *testing.T) {
 	// it must return a fallback grade rather than blocking on a dial that
 	// never resolves.
 	client := experiment.NewGraderClient("")
+	t.Cleanup(func() { _ = client.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()

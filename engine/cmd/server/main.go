@@ -54,6 +54,7 @@ func main() {
 	registry := executor.NewRegistry(manager)
 	harnessRegistry := builtinharness.NewRegistry()
 	graderClient := experiment.NewGraderClient(graderAddr)
+	defer func() { _ = graderClient.Close() }()
 	orchestrator := experiment.NewOrchestrator(store, queue, manager, registry, harnessRegistry, graderClient, hub)
 	service := api.NewService(store, orchestrator, harnessRegistry, registry, hub)
 	server := &http.Server{Addr: ":" + port, Handler: api.NewRouter(service)}
