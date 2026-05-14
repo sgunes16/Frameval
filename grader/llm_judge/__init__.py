@@ -1,1 +1,1 @@
-from .grader import grade
+from .grader import grade as grade

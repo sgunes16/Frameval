@@ -10,8 +10,6 @@ import csv
 import json
 from pathlib import Path
 
-import pytest
-
 from grader.failure_classifier.tools import score_validation as sv
 
 

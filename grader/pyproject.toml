@@ -27,3 +27,9 @@ include = ["grader*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.ruff]
+# Generated protobuf stubs are not hand-edited; lint failures there would
+# be churn-only. Regenerate via `buf generate` if anything in the upstream
+# proto changes.
+extend-exclude = ["proto/grader_pb2.py", "proto/grader_pb2_grpc.py"]

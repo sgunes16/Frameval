@@ -69,10 +69,6 @@ jobs:
         run: uv sync
 
       - name: ruff check
-        # Non-blocking until issue #88 lands the F401 cleanup. `continue-on-error`
-        # makes the failed step visible in the job summary instead of hiding it
-        # behind `|| true`. Drop this once #88 merges.
-        continue-on-error: true
         run: uv run ruff check .
 
       - name: pytest
