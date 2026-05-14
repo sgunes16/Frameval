@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,6 +21,24 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		// run() has already invoked every deferred close — we are safe to
+		// terminate the process here without skipping cleanup. The error
+		// is already logged via the structured logger; this line is the
+		// final readable signal when something is hand-tailing the binary.
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// run is the engine's actual lifecycle. It returns nil on a clean signal-
+// driven shutdown (SIGINT / SIGTERM with the server gracefully closing)
+// and an error otherwise. By keeping main() a thin wrapper around run()
+// we guarantee every defer (store.Close, queue.Close, graderClient.Close,
+// signal stop) fires before os.Exit kills the process — the previous
+// log.Fatalf path skipped all defers, leaving sandbox containers and
+// gRPC connections orphaned on startup failure.
+func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -38,7 +57,7 @@ func main() {
 	store, err := storage.Open(ctx, dbPath)
 	if err != nil {
 		logger.Error("open store failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("open store: %w", err)
 	}
 	defer store.Close()
 	if err := store.SeedBuiltinTasks(ctx, tasksRoot); err != nil {
@@ -76,8 +95,9 @@ func main() {
 	logger.Info("frameval engine listening", "port", port)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error("listen and serve", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("listen and serve: %w", err)
 	}
+	return nil
 }
 
 func parseLogLevel(s string) slog.Level {
