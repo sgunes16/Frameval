@@ -71,7 +71,7 @@ type ExperimentRequest struct {
 	JudgeModel          string             `json:"judge_model"`
 	Seed                *int               `json:"seed"`
 	CompositeWeights    map[string]float64 `json:"composite_weights"`
-	Variants            []VariantRequest   `json:"variants"`
+	Variants            []VariantRequest   `json:"variants" validate:"dive"`
 }
 
 type VariantRequest struct {

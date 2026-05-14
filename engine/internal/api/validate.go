@@ -117,14 +117,22 @@ type errorResponse struct {
 // renderError writes a structured JSON error response and logs the
 // internal error (if any) with the request's trace_id. The publicMessage
 // is what the client sees; the internalErr is what operators see in logs.
+//
+// Log level is picked from the HTTP status: 5xx → ERROR (this is an
+// engine bug or downstream failure we need to investigate), 4xx → WARN
+// (the client did something wrong; routine but worth visibility).
+// internalErr == nil skips the log emission entirely — when there's no
+// extra context to surface, the response itself is the only signal worth
+// emitting.
 func renderError(w http.ResponseWriter, ctx context.Context, status int, code, publicMessage string, internalErr error) {
 	if internalErr != nil {
-		logging.FromContext(ctx, nil).Error(
-			"api_error",
-			"code", code,
-			"status", status,
-			"err", internalErr,
-		)
+		logger := logging.FromContext(ctx, nil)
+		attrs := []any{"code", code, "status", status, "err", internalErr}
+		if status >= 500 {
+			logger.Error("api_error", attrs...)
+		} else {
+			logger.Warn("api_error", attrs...)
+		}
 	}
 	JSON(w, status, errorResponse{Error: code, Message: publicMessage})
 }
