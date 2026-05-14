@@ -13,13 +13,20 @@ Two GitHub Actions workflows live in `.github/workflows/`:
 
 ### `ci.yml` jobs
 
-| Job | Steps |
-|---|---|
-| **Engine (Go)** | `go vet ./...`, `go build ./...`, `go test -race ./...`, `go test -race -tags=integration ./test/integration/...` |
-| **Grader (Python)** | `uv sync`, `uv run ruff check .` (currently non-blocking — gate flips on after issue #88), `uv run pytest` |
-| **Frontend (TypeScript)** | `npm ci`, `npm run lint` (`tsc --noEmit`), `npm run build`, `npm test` |
+A small `changes` job runs first and detects which subdirectories the PR touched. The three service jobs then run **conditionally** based on those paths:
 
-All three jobs must pass before a PR is mergeable. The default Linux runners are used; no self-hosted runners.
+| Job | Runs when | Steps |
+|---|---|---|
+| **changes** | always | `dorny/paths-filter@v3` — sets `engine`, `grader`, `frontend`, `ci` outputs |
+| **Engine (Go)** | push to main, or PR touching `engine/**`, `proto/**`, or CI files | `go vet`, `go build`, `go test -race`, `go test -race -tags=integration ./test/integration/...` |
+| **Grader (Python)** | push to main, or PR touching `grader/**`, `proto/**`, or CI files | `uv sync`, `uv run ruff check .`, `uv run pytest` |
+| **Frontend (TypeScript)** | push to main, or PR touching `frontend/**` or CI files | `npm ci`, `npm run lint` (`tsc --noEmit`), `npm run build`, `npm test` |
+
+On every push to `main`, all three jobs always run regardless of paths — this is the final guarantee that nothing broken lands. On PRs, the path filter trims out jobs that can't possibly be affected, cutting typical PR runtime by 2–3×. The `ci` filter is the safety net: any change to `.github/workflows/**` or the `Makefile` runs every job so a broken pipeline can't slip through by touching only the workflow file.
+
+`proto/**` belongs to both engine *and* grader filters because the protobuf stubs cross both services.
+
+The default Linux runners are used; no self-hosted runners.
 
 ## Running CI locally with `act`
 

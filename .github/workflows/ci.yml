@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: read
+  # paths-filter reads PR file changes via the REST API in fork-PR scenarios;
+  # pull-requests:read is the documented minimum for it to function.
+  pull-requests: read
 
 # Cancel in-progress PR runs when a new push lands on the same PR. For pushes
 # to main, each commit gets its own group (keyed on sha) so back-to-back
@@ -17,8 +20,45 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      engine: ${{ steps.filter.outputs.engine }}
+      grader: ${{ steps.filter.outputs.grader }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      ci: ${{ steps.filter.outputs.ci }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            engine:
+              - 'engine/**'
+              - 'proto/**'
+            grader:
+              - 'grader/**'
+              - 'proto/**'
+            frontend:
+              - 'frontend/**'
+            ci:
+              - '.github/workflows/**'
+              - 'Makefile'
+              - 'docs/ci.md'
+
   engine:
     name: Engine (Go)
+    needs: changes
+    # Always run on main pushes. On PRs, run only when engine code, shared
+    # proto, or CI itself changed — the ci filter is the safety net that
+    # forces a full sweep whenever the pipeline definition changes.
+    if: |
+      github.event_name == 'push' ||
+      needs.changes.outputs.engine == 'true' ||
+      needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -47,6 +87,11 @@ jobs:
 
   grader:
     name: Grader (Python)
+    needs: changes
+    if: |
+      github.event_name == 'push' ||
+      needs.changes.outputs.grader == 'true' ||
+      needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -76,6 +121,11 @@ jobs:
 
   frontend:
     name: Frontend (TypeScript)
+    needs: changes
+    if: |
+      github.event_name == 'push' ||
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
