@@ -15,10 +15,12 @@ import { expect, test } from '@playwright/test';
  */
 
 test.beforeEach(async ({ page }) => {
-  // Stub every /api/* call with an empty-ish default. Per-test overrides
-  // go through `page.route('**/api/specific-endpoint', ...)` _before_ this
-  // generic catch-all is registered, so Playwright tries the more specific
-  // route first.
+  // Stub every /api/* call with an empty-ish default. Playwright matches
+  // routes in LIFO order — the *last* registered handler for a URL wins.
+  // Per-test overrides should therefore be added INSIDE the `test()` body
+  // (or via a `beforeEach` that runs after this one); they will take
+  // precedence over this generic catch-all by virtue of being registered
+  // later.
   await page.route('**/api/**', async (route) => {
     const url = route.request().url();
     // Status check endpoints return shaped responses; everything else gets [].
@@ -47,6 +49,13 @@ test('dashboard renders the empty-state CTA', async ({ page }) => {
 
 test('clicking "View experiments" navigates to /experiments', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('link', { name: /view experiments/i }).first().click();
+
+  // The dashboard renders three links that resolve to /experiments: the
+  // hero-card CTA at the top of the page, the "View all" link in the
+  // recent-experiments card header, and the empty-state CTA. They all
+  // route to the same place, so any one is a valid target for this nav
+  // smoke test. We pick the hero CTA explicitly (it is the most prominent
+  // user-facing entry point and the one most likely to regress visibly).
+  await page.locator('a[href="/experiments"]', { hasText: /view experiments/i }).first().click();
   await expect(page).toHaveURL(/\/experiments$/);
 });

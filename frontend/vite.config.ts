@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -20,7 +20,8 @@ export default defineConfig({
     css: false,
     // Playwright owns everything under test/e2e/. Vitest's default glob
     // matches *.spec.ts, which would otherwise try (and fail) to run
-    // Playwright specs.
-    exclude: ['node_modules', 'dist', 'test/e2e/**'],
+    // Playwright specs. Extend (don't replace) the defaults so common
+    // exclusions like .git/, .idea/, *.config.* survive.
+    exclude: [...configDefaults.exclude, 'test/e2e/**'],
   },
 });
