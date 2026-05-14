@@ -154,6 +154,9 @@ SQLite schema lives in `engine/internal/storage/migrations/`. Migrations are num
 | `FRAMEVAL_DB_PATH` | engine | SQLite file path (default: `./frameval.db`) |
 | `FRAMEVAL_GRADER_ADDR` | engine | Grader gRPC address (default: `grader:50051`) |
 | `FRAMEVAL_MAX_CONCURRENT` | engine | Max parallel sandboxes (default: `3`) |
+| `FRAMEVAL_LOG_RING_BYTES` | engine | Max bytes retained per sandbox log (default: `8388608` = 8 MiB) |
+| `FRAMEVAL_LOG_LEVEL` | engine | slog level: `debug` / `info` / `warn` / `error` (default: `info`) |
+| `FRAMEVAL_LOG_FORMAT` | engine | slog format: `json` (default) or `pretty` for human-readable text |
 | `FRAMEVAL_PORT` | engine | HTTP server port (default: `8080`) |
 | `GRADER_PORT` | grader | gRPC server port (default: `50051`) |
 | `ANTHROPIC_API_KEY` | grader, sandbox | Anthropic API key |
