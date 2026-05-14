@@ -21,11 +21,11 @@ import (
 // design) wastes TCP handshakes and leaks per-connection balance-watcher
 // goroutines under sustained load.
 //
-// addr=="" is the documented "no grader configured" sentinel — every RPC
+// A nil client field is the "no grader configured" sentinel — every RPC
 // short-circuits to its fallback result. This preserves the original API
-// contract that callers can construct a GraderClient unconditionally.
+// contract that callers can construct a GraderClient unconditionally,
+// whether the addr is empty, unreachable, or wrong-formatted.
 type GraderClient struct {
-	addr   string
 	conn   *grpc.ClientConn
 	client graderpb.GraderServiceClient
 }
@@ -37,28 +37,31 @@ type GraderClient struct {
 // is lazy — the underlying TCP connection is not established until the first
 // RPC call.
 func NewGraderClient(addr string) *GraderClient {
-	c := &GraderClient{addr: addr}
 	if addr == "" {
-		return c
+		return &GraderClient{}
 	}
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Printf("grader dial failed (will fall back to local grading): %v", err)
-		return c
+		return &GraderClient{}
 	}
-	c.conn = conn
-	c.client = graderpb.NewGraderServiceClient(conn)
-	return c
+	return &GraderClient{
+		conn:   conn,
+		client: graderpb.NewGraderServiceClient(conn),
+	}
 }
 
-// Close releases the gRPC connection. Safe to call on a client that never
-// successfully dialed (no-op in that case). Should be invoked from the
-// engine's graceful-shutdown path.
+// Close releases the gRPC connection. Safe on a client that never dialed
+// (no-op) and idempotent — calling it twice does not double-close. Should
+// be invoked from the engine's graceful-shutdown path.
 func (c *GraderClient) Close() error {
 	if c == nil || c.conn == nil {
 		return nil
 	}
-	return c.conn.Close()
+	conn := c.conn
+	c.conn = nil
+	c.client = nil
+	return conn.Close()
 }
 
 // classifyFailureTimeout caps how long we wait for the LLM classifier to
