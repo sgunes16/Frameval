@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: read
+  # paths-filter reads PR file changes via the REST API in fork-PR scenarios;
+  # pull-requests:read is the documented minimum for it to function.
+  pull-requests: read
 
 # Cancel in-progress PR runs when a new push lands on the same PR. For pushes
 # to main, each commit gets its own group (keyed on sha) so back-to-back
@@ -17,8 +20,52 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      engine: ${{ steps.filter.outputs.engine }}
+      grader: ${{ steps.filter.outputs.grader }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      ci: ${{ steps.filter.outputs.ci }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            engine:
+              - 'engine/**'
+              - 'proto/**'
+              # Built-in task library and baseline data are part of the engine's
+              # runtime image (see docker/engine/Dockerfile).
+              - 'tasks/**'
+              - 'baselines/**'
+            grader:
+              - 'grader/**'
+              - 'proto/**'
+            frontend:
+              - 'frontend/**'
+            ci:
+              - '.github/workflows/**'
+              - 'Makefile'
+              - 'docs/ci.md'
+              # Container build changes can affect any service's runtime.
+              - 'docker/**'
+              - 'docker-compose.yml'
+
   engine:
     name: Engine (Go)
+    needs: changes
+    # Always run on main pushes. On PRs, run only when engine code, shared
+    # proto, or CI itself changed — the ci filter is the safety net that
+    # forces a full sweep whenever the pipeline definition changes.
+    if: |
+      github.event_name == 'push' ||
+      needs.changes.outputs.engine == 'true' ||
+      needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -47,6 +94,11 @@ jobs:
 
   grader:
     name: Grader (Python)
+    needs: changes
+    if: |
+      github.event_name == 'push' ||
+      needs.changes.outputs.grader == 'true' ||
+      needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -76,6 +128,11 @@ jobs:
 
   frontend:
     name: Frontend (TypeScript)
+    needs: changes
+    if: |
+      github.event_name == 'push' ||
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -102,3 +159,46 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+  # Sentinel: a single required check that branch protection can pin to.
+  # Without this, a failure inside the `changes` job would cascade as
+  # "skipped" status on engine/grader/frontend, which branch-protection
+  # rules can interpret as success. ci-gate fails closed: it only succeeds
+  # when every dependent job either succeeded or was legitimately skipped
+  # by the path filter (i.e., changes itself succeeded).
+  ci-gate:
+    name: CI gate
+    needs: [changes, engine, grader, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check results
+        run: |
+          changes_result="${{ needs.changes.result }}"
+          engine_result="${{ needs.engine.result }}"
+          grader_result="${{ needs.grader.result }}"
+          frontend_result="${{ needs.frontend.result }}"
+
+          echo "changes=$changes_result, engine=$engine_result, grader=$grader_result, frontend=$frontend_result"
+
+          # changes must succeed — a skipped or failed changes job means we
+          # cannot trust the path filter and must fail closed.
+          if [ "$changes_result" != "success" ]; then
+            echo "❌ changes job did not succeed; failing the gate to be safe"
+            exit 1
+          fi
+
+          # Service jobs may legitimately be "skipped" because the path
+          # filter excluded them. "success" and "skipped" are both pass;
+          # anything else (failure, cancelled) fails the gate.
+          for name in engine grader frontend; do
+            result_var="${name}_result"
+            result="${!result_var}"
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "❌ $name reported $result; failing the gate"
+              exit 1
+            fi
+          done
+
+          echo "✅ all dependent jobs ok"
