@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -56,11 +55,10 @@ func (e *CursorExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult
 	}
 	command := envOrOSGetenv(cfg.Environment, "FRAMEVAL_CURSOR_COMMAND")
 	if command == "" {
-		if _, err := exec.LookPath("agent"); err != nil {
-			raw := "cursor agent binary not found on PATH; execution skipped\nPrompt:\n" + prompt
-			turns, _ := e.ParseTranscript([]byte(raw))
-			return &RunResult{RawOutput: raw, ParsedTurns: turns}, nil
-		}
+		// LookPath was checking the engine HOST, not the sandbox — false
+		// negatives because the cursor agent CLI lives inside the sandbox image.
+		// Skip the check; if it really is missing inside the container, the
+		// shell command surfaces a real exit code in the transcript.
 		command = `agent -p --force --output-format stream-json --stream-partial-output --model "$FRAMEVAL_MODEL_ID" "$FRAMEVAL_PROMPT"`
 	}
 	env := mergeEnv(map[string]string{

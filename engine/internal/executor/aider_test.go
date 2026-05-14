@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestAiderParseTranscriptTagsRoles(t *testing.T) {
+func TestAiderParseTranscriptGroupsByRole(t *testing.T) {
 	e := &AiderExecutor{}
 	raw := []byte(strings.Join([]string{
 		"user: please add CLI scaffolding",
@@ -20,27 +20,54 @@ func TestAiderParseTranscriptTagsRoles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseTranscript returned error: %v", err)
 	}
-	if len(turns) != 5 {
-		t.Fatalf("expected 5 turns, got %d", len(turns))
+	// Unmarked lines fold into the PREVIOUS role's turn (continuation),
+	// so the trailing "random line" merges into the system turn — yielding
+	// 4 turns total, not 5.
+	if len(turns) != 4 {
+		t.Fatalf("expected 4 turns (unmarked line folded into prior), got %d", len(turns))
 	}
-
-	wantRoles := []string{"user", "assistant", "tool", "system", "assistant"}
+	wantRoles := []string{"user", "assistant", "tool", "system"}
 	for i, want := range wantRoles {
 		if turns[i].Role != want {
 			t.Errorf("turn %d: want role %q, got %q (content=%q)", i, want, turns[i].Role, turns[i].Content)
 		}
 	}
+	if !strings.Contains(turns[3].Content, "random line without role prefix") {
+		t.Errorf("trailing unmarked line should have folded into system turn; got %q", turns[3].Content)
+	}
 }
 
-func TestAiderParseTranscriptSkipsEmpty(t *testing.T) {
+func TestAiderParseTranscriptMultilineAssistant(t *testing.T) {
+	// Reproduces the bug screenshot: a multi-line assistant response should
+	// NOT explode into one turn per line. Before the fix, this raw output
+	// produced 6 turns; after, it produces 1 assistant turn whose Content
+	// is the full multi-line body.
 	e := &AiderExecutor{}
-	raw := []byte("assistant: line one\n\n  \nassistant: line two\n")
+	raw := []byte("assistant: Building wordfreq CLI.\n  -k for top-K\n  -c for case-sensitive\nThis is the plan.")
 	turns, err := e.ParseTranscript(raw)
 	if err != nil {
 		t.Fatalf("ParseTranscript returned error: %v", err)
 	}
-	if len(turns) != 2 {
-		t.Fatalf("expected 2 turns (empty lines skipped), got %d", len(turns))
+	if len(turns) != 1 {
+		t.Fatalf("expected 1 turn (multi-line assistant), got %d", len(turns))
+	}
+	if !strings.Contains(turns[0].Content, "-k for top-K") {
+		t.Errorf("turn should preserve continuation lines, got %q", turns[0].Content)
+	}
+}
+
+func TestAiderParseTranscriptUnstructuredOutput(t *testing.T) {
+	// Tool stdout with no role prefixes anywhere — common when Aider's
+	// CLI emits raw shell-style output. Should render as a single
+	// assistant turn rather than per-line cards.
+	e := &AiderExecutor{}
+	raw := []byte("Loading model...\nReady.\nGenerating output\n")
+	turns, err := e.ParseTranscript(raw)
+	if err != nil {
+		t.Fatalf("ParseTranscript returned error: %v", err)
+	}
+	if len(turns) != 1 || turns[0].Role != "assistant" {
+		t.Fatalf("expected 1 assistant turn for unmarked output, got %d turns role=%v", len(turns), turns)
 	}
 }
 
@@ -55,7 +82,10 @@ func TestAiderParseTranscriptEmptyInput(t *testing.T) {
 	}
 }
 
-func TestDetectAiderRole(t *testing.T) {
+func TestDetectAiderRoleStrict(t *testing.T) {
+	// Strict variant returns "" for unprefixed lines so the parser can
+	// treat them as continuations of the previous turn rather than
+	// fabricating a new assistant turn per line.
 	cases := []struct {
 		line string
 		want string
@@ -65,12 +95,12 @@ func TestDetectAiderRole(t *testing.T) {
 		{"tool: file_write x", "tool"},
 		{"system: ready", "system"},
 		{"USER: caps ok", "user"},
-		{"no prefix", "assistant"},
-		{"asst: not a known prefix", "assistant"},
+		{"no prefix", ""},
+		{"asst: not a known prefix", ""},
 	}
 	for _, tc := range cases {
-		if got := detectAiderRole(tc.line); got != tc.want {
-			t.Errorf("detectAiderRole(%q) = %q, want %q", tc.line, got, tc.want)
+		if got := detectAiderRoleStrict(tc.line); got != tc.want {
+			t.Errorf("detectAiderRoleStrict(%q) = %q, want %q", tc.line, got, tc.want)
 		}
 	}
 }

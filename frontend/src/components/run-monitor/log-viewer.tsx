@@ -454,7 +454,7 @@ function StatusDot({ status }: { status?: string }) {
   return <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400" title="running" />;
 }
 
-function parseAgentEvents(events: AgentLogEvent[], runs: Run[]): { items: TimelineItem[]; usage: Usage } {
+export function parseAgentEvents(events: AgentLogEvent[], runs: Run[]): { items: TimelineItem[]; usage: Usage } {
   const items: TimelineItem[] = [];
   const usage: Usage = {
     inputTokens: 0,
@@ -514,6 +514,22 @@ function appendItem(items: TimelineItem[], item: TimelineItem) {
   ) {
     previous.body = mergeStreamingBody(previous.body, item.body);
     previous.status = item.status ?? previous.status;
+    previous.timestamp = item.timestamp ?? previous.timestamp;
+    return;
+  }
+
+  // Plain-text executors (Aider) emit non-JSON lines that fall through to
+  // the `raw` kind. Each line otherwise becomes its own stub card, producing
+  // dozens of single-line cards in the timeline. Concatenate consecutive
+  // raw lines from the same run into a single multi-line card so RawCard's
+  // <pre whitespace-pre-wrap> renders them as a clean block.
+  if (
+    previous &&
+    previous.kind === 'raw' &&
+    item.kind === 'raw' &&
+    previous.runNumber === item.runNumber
+  ) {
+    previous.body = previous.body ? previous.body + '\n' + item.body : item.body;
     previous.timestamp = item.timestamp ?? previous.timestamp;
     return;
   }

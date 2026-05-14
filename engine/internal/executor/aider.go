@@ -2,7 +2,6 @@ package executor
 
 import (
 	"context"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -50,18 +49,14 @@ func (e *AiderExecutor) SupportedModes() []ExecutionMode {
 
 // Execute invokes Aider in the sandbox workspace with the configured model and endpoint.
 //
-// If the aider binary is not on PATH, returns a fast-fail RunResult with a
-// descriptive raw message; the run is not aborted so downstream diagnostic still
-// receives a transcript (it will be classified as ENV_ERR).
+// The previous LookPath("aider") check ran on the HOST and false-negatived
+// every run because aider lives inside the sandbox image, not on the
+// developer's Mac. The sandbox shell-out below surfaces a real exit
+// code if aider really is missing inside the container.
 func (e *AiderExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	prompt := promptWithDefaultCLILanguage(cfg.Prompt)
 	command := envOrOSGetenv(cfg.Environment, "FRAMEVAL_AIDER_COMMAND")
 	if command == "" {
-		if _, err := exec.LookPath("aider"); err != nil {
-			raw := "aider binary not found on PATH; execution skipped\nPrompt:\n" + prompt
-			turns, _ := e.ParseTranscript([]byte(raw))
-			return &RunResult{RawOutput: raw, ParsedTurns: turns}, nil
-		}
 		command = `aider --model "$AIDER_MODEL" --openai-api-base "$OPENAI_API_BASE" --openai-api-key "$OPENAI_API_KEY" --no-stream --yes-always --no-pretty --message "$FRAMEVAL_PROMPT"`
 	}
 	// Defaults first, caller's cfg.Environment overrides last (caller wins).
@@ -78,39 +73,72 @@ func (e *AiderExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult,
 
 // ParseTranscript turns Aider's stdout into structured turns.
 //
-// Aider's --no-stream output is line-oriented. Lines that start with the agent
-// role prefix Aider emits (e.g., "user: ", "assistant: ", "tool: ") are tagged
-// accordingly; everything else is treated as assistant output. Empty lines are
-// skipped. This is a pragmatic parser tuned for Aider's current text output;
-// the orchestrator wraps the returned turns in a models.Transcript with run-level
-// metadata before persisting.
+// Aider's --no-stream output groups by speaker: a `user:`/`assistant:`/
+// `tool:`/`system:` role marker introduces a turn, then every subsequent line
+// (including blanks and continuations) belongs to that turn until the next
+// role marker. The previous version emitted ONE TURN PER LINE which made the
+// Agent Timeline render 50 tiny cards for a single assistant response.
+//
+// If the raw output has no role markers at all (e.g. raw stdout from a tool
+// invocation), the whole blob is rendered as a single assistant turn.
 func (e *AiderExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
-	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
-	turns := make([]ParsedTurn, 0, len(lines))
+	text := strings.TrimSpace(string(raw))
+	if text == "" {
+		return nil, nil
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
+	lines := strings.Split(text, "\n")
+
+	turns := make([]ParsedTurn, 0)
+	var current ParsedTurn
+	var buf strings.Builder
+	flush := func() {
+		body := strings.TrimRight(buf.String(), "\n")
+		if body == "" && current.Role == "" {
+			return
+		}
+		current.Content = body
+		if current.Role == "" {
+			current.Role = "assistant"
+		}
+		if current.Timestamp == "" {
+			current.Timestamp = now
+		}
+		turns = append(turns, current)
+		current = ParsedTurn{}
+		buf.Reset()
+	}
 	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
+		if role := detectAiderRoleStrict(line); role != "" {
+			flush()
+			current = ParsedTurn{Role: role, Timestamp: now}
+			// Strip the role prefix off the first line; keep the rest.
+			body := aiderRolePrefix.ReplaceAllString(line, "")
+			if body != "" {
+				buf.WriteString(body)
+				buf.WriteString("\n")
+			}
 			continue
 		}
-		role := detectAiderRole(trimmed)
-		turns = append(turns, ParsedTurn{
-			Role:      role,
-			Content:   line,
-			Timestamp: now,
-		})
+		buf.WriteString(line)
+		buf.WriteString("\n")
 	}
+	flush()
 	return turns, nil
 }
 
-var aiderRolePrefix = regexp.MustCompile(`^(user|assistant|tool|system)\s*:\s*`)
+var aiderRolePrefix = regexp.MustCompile(`(?i)^(user|assistant|tool|system)\s*:\s*`)
 
-func detectAiderRole(line string) string {
-	match := aiderRolePrefix.FindStringSubmatch(strings.ToLower(line))
+// detectAiderRoleStrict returns the role IFF the line opens with a role
+// prefix; an empty string otherwise. Unlike the previous detectAiderRole,
+// it does NOT default unmarked lines to "assistant" — that's the caller's
+// job once it knows whether the line is a continuation or a new turn.
+func detectAiderRoleStrict(line string) string {
+	match := aiderRolePrefix.FindStringSubmatch(strings.ToLower(strings.TrimSpace(line)))
 	if len(match) == 2 {
 		return match[1]
 	}
-	return "assistant"
+	return ""
 }
 
 func fallbackAiderModel(model string, env map[string]string) string {
