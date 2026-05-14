@@ -2,6 +2,12 @@
 
 This document describes how Frameval's continuous-integration pipeline is structured and how to run it locally before opening a pull request.
 
+## Actions permissions
+
+Repo setting **Actions → General → Actions permissions** is set to **"Allow all actions and reusable workflows"** so the workflow can use ecosystem actions (`actions/checkout`, `actions/setup-go`, `actions/setup-uv`, `actions/setup-node`, `astral-sh/setup-uv`, `dorny/paths-filter`). The stricter `local_only` policy would block every third-party action and CI runs would fail at startup with no useful error.
+
+The trade-off is documented here so a future contributor tightening security knows why this is broad: solo public repo, the actions we depend on are well-known, SHA-pinning (already enabled for `dorny/paths-filter`) gives per-action integrity.
+
 ## Workflows
 
 Two GitHub Actions workflows live in `.github/workflows/`:
