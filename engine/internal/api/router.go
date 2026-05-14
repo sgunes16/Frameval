@@ -1,6 +1,7 @@
 package api
 
 import (
+	"expvar"
 	"log/slog"
 	"net/http"
 
@@ -39,6 +40,13 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 	r.Use(WithBodyCap(defaultBodyCap))
 	r.Use(corsMiddleware())
 	r.Get("/ws", service.HandleWS)
+	// /debug/vars exposes every expvar registered across the engine —
+	// frameval_ws_dropped_total, frameval_grader_breaker_state, etc.
+	// Mount the standard handler explicitly because chi does not share
+	// http.DefaultServeMux. The output is JSON in the expvar format.
+	r.Get("/debug/vars", func(w http.ResponseWriter, r *http.Request) {
+		expvar.Handler().ServeHTTP(w, r)
+	})
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", service.GetHealth)
 		r.Get("/system/docker", service.GetDockerStatus)
