@@ -10,7 +10,7 @@ import (
 func (s *Service) ListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks, err := s.store.ListTasks(r.Context())
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	for idx := range tasks {
@@ -22,12 +22,12 @@ func (s *Service) ListTasks(w http.ResponseWriter, r *http.Request) {
 func (s *Service) CreateTask(w http.ResponseWriter, r *http.Request) {
 	var task models.Task
 	if err := decodeJSON(r, &task); err != nil {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "invalid request", err)
 		return
 	}
 	created, err := s.store.UpsertTask(r.Context(), task)
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	sanitized := sanitizeTaskForAPI(*created)
@@ -37,7 +37,7 @@ func (s *Service) CreateTask(w http.ResponseWriter, r *http.Request) {
 func (s *Service) GetTask(w http.ResponseWriter, r *http.Request) {
 	task, err := s.store.GetTask(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		JSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusNotFound, ErrCodeNotFound, "not found", err)
 		return
 	}
 	sanitized := sanitizeTaskForAPI(*task)

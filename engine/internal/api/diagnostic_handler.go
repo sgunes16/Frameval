@@ -17,11 +17,11 @@ func (s *Service) GetRunDiagnostic(w http.ResponseWriter, r *http.Request) {
 	runID := chi.URLParam(r, "id")
 	rec, err := s.store.GetDiagnosticByRun(r.Context(), runID)
 	if errors.Is(err, sql.ErrNoRows) {
-		JSON(w, http.StatusNotFound, map[string]string{"error": "diagnostic not yet available for run"})
+		renderError(w, r.Context(), http.StatusNotFound, ErrCodeNotFound, "diagnostic not yet available for run", nil)
 		return
 	}
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusOK, rec)
