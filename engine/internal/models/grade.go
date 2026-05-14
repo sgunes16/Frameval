@@ -34,7 +34,21 @@ type Grade struct {
 	CompositeScore            float64             `json:"composite_score"`
 	GradedAt                  string              `json:"graded_at"`
 	TestResults               []TestResult        `json:"test_results,omitempty"`
+	// Source records who produced this grade. "grader" means the Python
+	// grader returned a real verdict; "fallback" means the gRPC call
+	// failed (breaker open, dial error, etc.) and the engine synthesized
+	// a placeholder grade. Consumers that care about correctness — the
+	// regrade API endpoint, future calibration tooling — should branch
+	// on this field rather than assuming a non-empty grade is real.
+	Source string `json:"source,omitempty"`
 }
+
+// GradeSource constants exported for callers that want a stable
+// identifier rather than the string literal.
+const (
+	GradeSourceGrader   = "grader"
+	GradeSourceFallback = "fallback"
+)
 
 type TestResult struct {
 	Name   string `json:"name"`

@@ -92,9 +92,17 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 		return err
 	}
 	artifact, _ := o.store.GetLatestArtifactByVariant(ctx, run.VariantID)
-	grade, err := o.grader.GradeRun(ctx, *task, artifact, *run.Transcript)
+	grade, err := o.grader.GradeRun(ctx, *task, artifact, *run.Transcript, experiment.JudgeModel)
 	if err != nil {
 		return err
+	}
+	// Re-grade is supposed to replace the existing grade with a fresh
+	// real verdict. If the grader was unavailable and GradeRun returned
+	// a synthetic fallback, refuse to overwrite the existing grade and
+	// surface ErrGraderUnavailable so the HTTP handler can return 503
+	// instead of silently persisting placeholder data.
+	if grade.Source != models.GradeSourceGrader {
+		return ErrGraderUnavailable
 	}
 	grade.ID = uuid.NewString()
 	grade.RunID = run.ID
@@ -102,7 +110,11 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 }
 
 func (o *Orchestrator) RegradeRunPayload(ctx context.Context, runID string, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript) (*models.Grade, error) {
-	grade, err := o.grader.GradeRun(ctx, task, artifact, transcript)
+	// JudgeModel deliberately empty here — RegradeRunPayload is the
+	// re-grade-from-arbitrary-transcript path used by tests and CLI tools
+	// that don't have an experiment row handy. GradeRun applies the
+	// defaultJudgeModel fallback.
+	grade, err := o.grader.GradeRun(ctx, task, artifact, transcript, "")
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +271,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	_ = o.store.UpdateRunStatus(ctx, run.ID, "grading", "")
 	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "grading", "variant_id": run.VariantID})
 	o.broadcast("grading.progress", map[string]any{"run_id": run.ID, "grader": "composite", "status": "running"})
-	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript)
+	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript, experiment.JudgeModel)
 	if gradeErr != nil {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", gradeErr.Error())
 		return gradeErr
