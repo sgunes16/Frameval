@@ -30,8 +30,12 @@ func TestHealth_ReturnsSubcomponentMap(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("response not JSON: %v (raw=%q)", err, rec.Body.String())
 	}
-	if !body.OK {
-		t.Errorf("ok should be true; got %v", body.OK)
+	// All sub-components are 'degraded' under a bare &Service{} (nil store
+	// + nil orchestrator). The top-level ok must reflect that: any non-ok
+	// component flips ok to false. Readiness probes that gate on `ok`
+	// would otherwise see a half-broken engine as healthy.
+	if body.OK {
+		t.Errorf("ok should be false when components are degraded; got %v", body.OK)
 	}
 	if body.Version == "" {
 		t.Errorf("version should be non-empty")

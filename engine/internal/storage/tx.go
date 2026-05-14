@@ -31,8 +31,9 @@ func (s *Store) Tx(ctx context.Context, fn func(*sql.Tx) error) (err error) {
 		}
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
-				// Surface a rollback failure only if the original error was
-				// nil — otherwise the original is what the caller wants.
+				// Wrap both errors: %w preserves errors.Is on the original
+				// fn error (the one callers route on), %v surfaces the
+				// rollback failure as supplementary diagnostic info.
 				err = fmt.Errorf("storage.Tx: rollback after %w: %v", err, rbErr)
 			}
 		}

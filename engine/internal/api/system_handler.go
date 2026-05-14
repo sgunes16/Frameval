@@ -48,9 +48,13 @@ func (s *Service) GetHealth(w http.ResponseWriter, r *http.Request) {
 		"queue":  s.queueHealth(),
 	}
 
+	// ok is the top-level readiness signal — any non-ok component flips
+	// it to false. Returning ok=true with a degraded component would let
+	// readiness probes / monitoring tools treat a half-broken engine as
+	// healthy.
 	ok := true
 	for _, c := range components {
-		if c.Status == "unavailable" {
+		if c.Status != "ok" {
 			ok = false
 			break
 		}
@@ -120,13 +124,23 @@ func (s *Service) queueHealth() componentStatus {
 }
 
 // GetDockerStatus is the legacy endpoint kept for the frontend's
-// system-status strip; new code should prefer /api/health.
+// system-status strip; new code should prefer /api/health. nil-guarded
+// the same way dockerHealth() is so a partial-wiring test or a future
+// lazy-orchestrator design cannot panic the route.
 func (s *Service) GetDockerStatus(w http.ResponseWriter, r *http.Request) {
+	if s == nil || s.orchestrator == nil {
+		JSON(w, http.StatusOK, map[string]any{"healthy": false, "mode": "unavailable"})
+		return
+	}
 	JSON(w, http.StatusOK, s.orchestrator.SandboxHealth(r.Context()))
 }
 
 // GetQueueStatus is the legacy endpoint kept for the frontend's
 // system-status strip; new code should prefer /api/health.
 func (s *Service) GetQueueStatus(w http.ResponseWriter, r *http.Request) {
+	if s == nil || s.orchestrator == nil {
+		JSON(w, http.StatusOK, map[string]any{"depth": 0, "active_workers": 0, "max_workers": 0})
+		return
+	}
 	JSON(w, http.StatusOK, s.orchestrator.QueueSnapshot())
 }
