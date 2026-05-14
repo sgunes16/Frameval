@@ -113,6 +113,49 @@ func TestBreaker_OpensAfterConsecutiveFailures(t *testing.T) {
 	}
 }
 
+func TestBreaker_ContextCancelDoesNotCountAsFailure(t *testing.T) {
+	b := newGraderBreaker()
+
+	// Hit the breaker with 6 context-cancelled calls — well above the
+	// 5-failure threshold. The breaker must stay closed; otherwise an
+	// operator cancelling experiments could degrade grading for 30s.
+	for i := 0; i < 6; i++ {
+		_, _ = breakerExec(b, func() (int, error) {
+			return 0, context.Canceled
+		})
+	}
+
+	// A subsequent success-path call must invoke op (breaker not open).
+	calls := 0
+	_, err := breakerExec(b, func() (int, error) {
+		calls++
+		return 1, nil
+	})
+	if err != nil {
+		t.Fatalf("breaker should still be closed; got %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("op should have been invoked (breaker closed); calls=%d", calls)
+	}
+}
+
+func TestRetry_DoesNotRetryDeadlineExceeded(t *testing.T) {
+	// DeadlineExceeded is no longer retried — retrying on a context
+	// whose deadline has elapsed wastes work. The test asserts the
+	// classifier surfaces the first error immediately.
+	calls := 0
+	_, err := retryGrader(context.Background(), defaultGraderRetry, func(_ context.Context) (int, error) {
+		calls++
+		return 0, status.Error(codes.DeadlineExceeded, "ran out of time")
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if calls != 1 {
+		t.Errorf("DeadlineExceeded must not retry; calls=%d", calls)
+	}
+}
+
 func TestBreaker_PassesThroughWhenClosed(t *testing.T) {
 	b := newGraderBreaker()
 	got, err := breakerExec(b, func() (int, error) {

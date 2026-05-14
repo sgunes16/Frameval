@@ -36,10 +36,17 @@ var defaultGraderRetry = graderRetryConfig{
 }
 
 // isRetryableGRPC reports whether a gRPC error represents a transient
-// fault worth retrying. Unavailable means the server (or a proxy) is
-// momentarily down; DeadlineExceeded usually means an in-flight call
-// has stalled — a fresh attempt may succeed. Every other code (logic
-// errors, protocol violations) retries cost more than they help.
+// fault worth retrying.
+//
+// Only Unavailable: a server-side transient (proxy down, brief restart,
+// connection refused). Retrying a few times almost always recovers.
+//
+// DeadlineExceeded is NOT retried. By the time gRPC surfaces it the
+// caller's deadline has already elapsed; a retry on the same context
+// fails immediately, and a retry on a fresh context would silently
+// ignore the caller's stated SLA. If the grader is slow enough to
+// blow the deadline, the right answer is to raise the per-call
+// timeout, not to retry harder.
 func isRetryableGRPC(err error) bool {
 	if err == nil {
 		return false
@@ -48,11 +55,15 @@ func isRetryableGRPC(err error) bool {
 	if !ok {
 		return false
 	}
-	switch s.Code() {
-	case codes.Unavailable, codes.DeadlineExceeded:
-		return true
-	}
-	return false
+	return s.Code() == codes.Unavailable
+}
+
+// isContextError reports whether err originates from a cancelled or
+// expired context. The breaker treats these as "successes" so an
+// operator cancelling a long-running experiment cannot trip the
+// breaker for everyone else.
+func isContextError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // retryGrader runs op up to cfg.MaxAttempts times, retrying only on
@@ -101,6 +112,12 @@ func init() {
 // allows a single probe in half-open. The state callback keeps the
 // expvar metric in sync so external monitoring picks the transition up
 // without polling Go internals.
+//
+// IsSuccessful: context-cancel and deadline-exceeded errors are
+// classified as successes so user-initiated cancellation and timeouts
+// don't count toward the failure budget. Five cancelled runs in a row
+// would otherwise open the breaker and degrade grading for everyone
+// for 30 seconds.
 func newGraderBreaker() *gobreaker.CircuitBreaker[any] {
 	return gobreaker.NewCircuitBreaker[any](gobreaker.Settings{
 		Name:        "grader",
@@ -108,6 +125,9 @@ func newGraderBreaker() *gobreaker.CircuitBreaker[any] {
 		Timeout:     30 * time.Second,
 		ReadyToTrip: func(counts gobreaker.Counts) bool {
 			return counts.ConsecutiveFailures >= 5
+		},
+		IsSuccessful: func(err error) bool {
+			return err == nil || isContextError(err)
 		},
 		OnStateChange: func(_ string, _, to gobreaker.State) {
 			graderBreakerState.Set(to.String())
