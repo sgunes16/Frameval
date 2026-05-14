@@ -24,11 +24,16 @@ type ringBuffer struct {
 	truncated bool
 }
 
-// newRingBuffer returns a ringBuffer with the given byte cap. A cap
-// of 0 is invalid in production but valid here — every write is
-// immediately truncated, which is exactly what a "discard all output"
-// test would want.
+// newRingBuffer returns a ringBuffer with the given byte cap. A
+// non-positive cap is a programming error — panic at construction
+// rather than silently discard every write. Unit tests pass small but
+// positive caps to exercise eviction logic; the only invalid input is
+// cap <= 0, which would mean "discard all output", an operational
+// nightmare we never want in production.
 func newRingBuffer(cap int) *ringBuffer {
+	if cap <= 0 {
+		panic("sandbox.newRingBuffer: cap must be > 0")
+	}
 	return &ringBuffer{cap: cap}
 }
 
