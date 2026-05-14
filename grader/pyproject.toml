@@ -18,7 +18,8 @@ dependencies = [
   "openai>=1.76.0",
   "pytest>=8.3.0",
   "mypy>=1.15.0",
-  "ruff>=0.11.0"
+  "ruff>=0.11.0",
+  "respx>=0.21.0"
 ]
 
 [tool.setuptools.packages.find]
@@ -26,7 +27,15 @@ where = ["."]
 include = ["grader*"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+# rootdir is grader/ when pytest is invoked as `cd grader && uv run pytest`
+# (the documented invocation in CLAUDE.md and the CI workflow). Under that
+# rootdir, "." resolves to grader/ — but code imports `from grader.X import Y`,
+# which means Python needs the *parent* of grader/ on sys.path. ".." points
+# at Frameval/ so `import grader` resolves to the local package.
+#
+# NOTE: this is fragile if pytest is invoked from Frameval/ instead. Always
+# `cd grader && uv run pytest` (or use `make test-grader`).
+pythonpath = [".."]
 
 [tool.ruff]
 # Generated protobuf stubs are not hand-edited; lint failures there would
