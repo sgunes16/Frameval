@@ -46,7 +46,7 @@ The first invocation downloads a multi-GB Docker image (`catthehacker/ubuntu:act
 
 `act` runs against the same workflow YAML the real CI runner sees, but it differs in a few ways:
 
-- It runs on your local Docker; macOS / Apple Silicon users may need `--container-architecture linux/amd64`.
+- It runs on your local Docker; macOS / Apple Silicon users need `--container-architecture linux/amd64`. The cleanest way to set this once is a `~/.actrc` file containing a single line `--container-architecture linux/amd64` — then every `make ci-*` target picks it up automatically.
 - `secrets.ANTHROPIC_API_KEY` and other secrets are *not* set unless you pass them via `-s ANTHROPIC_API_KEY=...`.
 - Scheduled jobs (`nightly.yml`) don't fire under `act push` / `act pull_request`. Use `act schedule` to test them.
 
@@ -81,7 +81,9 @@ Only PRs that complete every step are mergeable.
 
 ## Coverage gate
 
-A coverage baseline lives at `coverage-baseline.txt` (added incrementally as each service's tests stabilize). Future CI jobs compare current coverage to the baseline and fail the build on a >1% drop. The baseline is raised manually on green `main` only — never on a feature branch.
+> **Not yet wired** — this section describes the planned mechanism.
+
+A coverage baseline will live at `coverage-baseline.txt` (added incrementally as each service's tests stabilize). Future CI jobs will compare current coverage to the baseline and fail the build on a >1% drop. The baseline is raised manually on green `main` only — never on a feature branch. Tracked alongside the testing foundation epic (#59).
 
 ## Currently non-blocking checks
 

@@ -30,7 +30,7 @@ test-grader:
 	cd grader && uv run pytest
 
 test-frontend:
-	cd frontend && npm test -- --run
+	cd frontend && npm test
 
 test-e2e:
 	cd frontend && npx playwright test

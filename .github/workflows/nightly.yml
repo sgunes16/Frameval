@@ -5,6 +5,16 @@ on:
     - cron: "0 4 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# Serialise scheduled and manually-dispatched runs so a workflow_dispatch
+# triggered during a scheduled run does not double up. Cancel-in-progress
+# stays false — we want both runs to complete eventually.
+concurrency:
+  group: nightly-${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   stress:
     name: Engine stress
@@ -25,8 +35,11 @@ jobs:
       - name: Stress tests
         # The stress build tag is empty today — this job will start producing
         # real signal once the Backend Robustness epic (#58) lands the 32x10
-        # orchestrator stress test. Job exits 0 in the meantime.
-        run: go test -tags=stress -count=1 ./test/stress/... || true
+        # orchestrator stress test. `continue-on-error` keeps the step visible
+        # in the job summary so the placeholder state is discoverable; `go test`
+        # against a nonexistent package set still exits 0 anyway.
+        continue-on-error: true
+        run: go test -tags=stress -count=1 ./test/stress/...
 
   e2e-headless:
     name: Playwright E2E
@@ -66,6 +79,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "0.5.x"
+          enable-cache: true
+          cache-dependency-path: grader/uv.lock
 
       - name: Install Python 3.11
         if: steps.precheck.outputs.skip == 'false'
@@ -77,7 +92,13 @@ jobs:
 
       - name: Record + diff cassettes
         if: steps.precheck.outputs.skip == 'false'
-        # Becomes meaningful once #81 lands respx cassettes.
+        # Becomes meaningful once #81 lands respx cassettes under
+        # grader/tests/fixtures/llm_responses/. Until that directory exists,
+        # the diff step is a no-op — guarded so future readers see the intent.
         run: |
-          FRAMEVAL_RECORD=1 uv run pytest tests/integration/test_grade_run.py || true
-          git diff --exit-code tests/fixtures/llm_responses/ || echo "fixtures changed"
+          if [ ! -d tests/integration ]; then
+            echo "tests/integration not yet created (see #81); skipping LLM fidelity diff"
+            exit 0
+          fi
+          FRAMEVAL_RECORD=1 uv run pytest tests/integration/test_grade_run.py
+          git diff --exit-code tests/fixtures/llm_responses/ || (echo "fixtures changed" && exit 1)

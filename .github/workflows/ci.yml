@@ -5,10 +5,16 @@ on:
     branches: [main]
   pull_request:
 
-# Cancel in-progress runs for the same PR when a new push lands.
+permissions:
+  contents: read
+
+# Cancel in-progress PR runs when a new push lands on the same PR. For pushes
+# to main, each commit gets its own group (keyed on sha) so back-to-back
+# merges never cancel each other — important once future jobs publish
+# artifacts or trigger deploy steps.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   engine:
@@ -53,6 +59,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "0.5.x"
+          enable-cache: true
+          cache-dependency-path: grader/uv.lock
 
       - name: Install Python 3.11
         run: uv python install 3.11
@@ -61,9 +69,11 @@ jobs:
         run: uv sync
 
       - name: ruff check
-        # ruff is allowed to be non-zero until issue #88 lands.
-        # Once #88 is merged this becomes a hard gate.
-        run: uv run ruff check . || true
+        # Non-blocking until issue #88 lands the F401 cleanup. `continue-on-error`
+        # makes the failed step visible in the job summary instead of hiding it
+        # behind `|| true`. Drop this once #88 merges.
+        continue-on-error: true
+        run: uv run ruff check .
 
       - name: pytest
         run: uv run pytest
