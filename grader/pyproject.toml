@@ -27,10 +27,14 @@ where = ["."]
 include = ["grader*"]
 
 [tool.pytest.ini_options]
-# rootdir is grader/, so "." resolves to grader/. But code imports
-# `from grader.X import Y`, which means Python needs the *parent* of
-# grader/ on sys.path. Use ".." so Frameval/ ends up on sys.path and
-# `import grader` resolves to the local package.
+# rootdir is grader/ when pytest is invoked as `cd grader && uv run pytest`
+# (the documented invocation in CLAUDE.md and the CI workflow). Under that
+# rootdir, "." resolves to grader/ — but code imports `from grader.X import Y`,
+# which means Python needs the *parent* of grader/ on sys.path. ".." points
+# at Frameval/ so `import grader` resolves to the local package.
+#
+# NOTE: this is fragile if pytest is invoked from Frameval/ instead. Always
+# `cd grader && uv run pytest` (or use `make test-grader`).
 pythonpath = [".."]
 
 [tool.ruff]

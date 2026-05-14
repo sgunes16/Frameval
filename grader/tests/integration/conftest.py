@@ -46,4 +46,8 @@ def live_grader_server():
     yield GraderServerHandle(address=f"127.0.0.1:{port}", stub=stub)
 
     channel.close()
-    server.stop(grace=None).wait()
+    # 5s upper bound — a hung RPC thread should not wedge the pytest session
+    # forever. grpc.Server.stop returns a threading.Event; without a timeout
+    # .wait() blocks indefinitely.
+    stopped = server.stop(grace=None)
+    stopped.wait(timeout=5)

@@ -36,7 +36,10 @@ def test_classify_failure_returns_unconfigured_sentinel_when_disabled(live_grade
         )
     )
     assert response.classification is not None
-    # Empty/unconfigured path returns NONE with 0 confidence — same contract
-    # the Go GraderClient relies on to detect "classifier was unavailable".
-    assert response.classification.primary in ("NONE", "")
+    # Unconfigured path returns the FailureCode.NONE sentinel with 0
+    # confidence — same contract the Go GraderClient relies on to detect
+    # "classifier was unavailable". The proto must populate `primary`;
+    # accepting an empty string here would mask a server-side regression
+    # where the field is never set.
+    assert response.classification.primary == "NONE"
     assert response.classification.confidence == 0.0
