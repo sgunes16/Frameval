@@ -9,7 +9,7 @@ import (
 func (s *Service) ListModels(w http.ResponseWriter, r *http.Request) {
 	models, err := s.store.ListModelConfigs(r.Context())
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusOK, models)
@@ -22,7 +22,7 @@ func (s *Service) ListAgents(w http.ResponseWriter, r *http.Request) {
 func (s *Service) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	keys, err := s.store.ListAPIKeys(r.Context())
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusOK, keys)
@@ -34,11 +34,11 @@ func (s *Service) UpsertAPIKey(w http.ResponseWriter, r *http.Request) {
 		APIKey   string `json:"api_key"`
 	}
 	if err := decodeJSON(r, &payload); err != nil {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "invalid request", err)
 		return
 	}
 	if err := s.store.UpsertAPIKey(r.Context(), payload.Provider, payload.APIKey); err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusCreated, map[string]bool{"ok": true})
@@ -46,7 +46,7 @@ func (s *Service) UpsertAPIKey(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.DeleteAPIKey(r.Context(), chi.URLParam(r, "provider")); err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusOK, map[string]bool{"ok": true})

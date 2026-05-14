@@ -31,7 +31,7 @@ func (s *Service) CreateExperiment(w http.ResponseWriter, r *http.Request) {
 func (s *Service) ListExperiments(w http.ResponseWriter, r *http.Request) {
 	experiments, err := s.store.ListExperiments(r.Context())
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusOK, experiments)
@@ -40,7 +40,7 @@ func (s *Service) ListExperiments(w http.ResponseWriter, r *http.Request) {
 func (s *Service) GetExperiment(w http.ResponseWriter, r *http.Request) {
 	experiment, err := s.store.GetExperiment(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		JSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusNotFound, ErrCodeNotFound, "not found", err)
 		return
 	}
 	JSON(w, http.StatusOK, experiment)
@@ -49,12 +49,12 @@ func (s *Service) GetExperiment(w http.ResponseWriter, r *http.Request) {
 func (s *Service) UpdateExperiment(w http.ResponseWriter, r *http.Request) {
 	var req models.ExperimentRequest
 	if err := decodeJSON(r, &req); err != nil {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "invalid request", err)
 		return
 	}
 	experiment, err := s.store.UpdateExperiment(r.Context(), chi.URLParam(r, "id"), req)
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusOK, experiment)
@@ -62,7 +62,7 @@ func (s *Service) UpdateExperiment(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) DeleteExperiment(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.DeleteExperiment(r.Context(), chi.URLParam(r, "id")); err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -71,7 +71,7 @@ func (s *Service) DeleteExperiment(w http.ResponseWriter, r *http.Request) {
 func (s *Service) EstimateExperiment(w http.ResponseWriter, r *http.Request) {
 	estimate, err := s.orchestrator.EstimateExperiment(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusOK, map[string]float64{"estimated_cost_usd": estimate})
@@ -79,7 +79,7 @@ func (s *Service) EstimateExperiment(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) StartExperiment(w http.ResponseWriter, r *http.Request) {
 	if err := s.orchestrator.StartExperiment(r.Context(), chi.URLParam(r, "id")); err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusAccepted, map[string]bool{"started": true})
@@ -87,7 +87,7 @@ func (s *Service) StartExperiment(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) CancelExperiment(w http.ResponseWriter, r *http.Request) {
 	if err := s.orchestrator.CancelExperiment(r.Context(), chi.URLParam(r, "id")); err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 	JSON(w, http.StatusOK, map[string]bool{"cancelled": true})
@@ -98,7 +98,7 @@ func (s *Service) ExportExperiment(w http.ResponseWriter, r *http.Request) {
 	format := chi.URLParam(r, "format")
 	experiment, err := s.store.GetExperiment(r.Context(), experimentID)
 	if err != nil {
-		JSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusNotFound, ErrCodeNotFound, "not found", err)
 		return
 	}
 	if format == "csv" {

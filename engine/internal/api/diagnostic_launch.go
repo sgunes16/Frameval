@@ -37,35 +37,35 @@ type LaunchDiagnosticResponse struct {
 func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 	var req LaunchDiagnosticRequest
 	if err := decodeJSON(r, &req); err != nil {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "invalid request", err)
 		return
 	}
 	if strings.TrimSpace(req.TaskID) == "" {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": "task_id is required"})
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "task_id is required", nil)
 		return
 	}
 	if strings.TrimSpace(req.ExecutorID) == "" {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": "executor_id is required"})
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "executor_id is required", nil)
 		return
 	}
 	if len(req.HarnessIDs) == 0 {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": "harness_ids must contain at least one harness"})
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "harness_ids must contain at least one harness", nil)
 		return
 	}
 	for _, hid := range req.HarnessIDs {
 		if _, err := s.harnesses.Get(hid); err != nil {
-			JSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown harness %q", hid)})
+			renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, fmt.Sprintf("unknown harness %q", hid), err)
 			return
 		}
 	}
 	if _, err := s.executors.Get(req.ExecutorID); err != nil {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown executor %q", req.ExecutorID)})
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, fmt.Sprintf("unknown executor %q", req.ExecutorID), err)
 		return
 	}
 
 	task, err := s.store.GetTask(r.Context(), req.TaskID)
 	if err != nil {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("task %q not found", req.TaskID)})
+		renderError(w, r.Context(), http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("task %q not found", req.TaskID), err)
 		return
 	}
 
@@ -106,7 +106,7 @@ func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 		Variants:       variants,
 	})
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 
@@ -115,7 +115,7 @@ func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 		// exist. Mark it failed so the ghost row doesn't sit at status="" or
 		// "draft" forever — the user can find it in /experiments and delete it.
 		_ = s.store.UpdateExperimentStatus(r.Context(), experiment.ID, "failed")
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
 		return
 	}
 
