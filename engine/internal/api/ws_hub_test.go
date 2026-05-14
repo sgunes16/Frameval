@@ -85,10 +85,22 @@ func TestHub_SlowClientDoesNotBlockOtherClients(t *testing.T) {
 	}()
 	wg.Wait()
 
+	// Wait for hub.Run's fan-out goroutine to drain the broadcast channel
+	// into the per-client channels. Without this, the test was flaky under
+	// `-race` because the scheduler could leave the hub loop unscheduled
+	// while the producer finished. Poll up to 2s for fast to receive
+	// anything; that is plenty of headroom even on a slow CI runner.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(fast) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	// fast must have received SOME messages; if the slow client
 	// dragged everyone down, fast would be empty or near-empty.
-	received := len(fast)
-	if received == 0 {
+	if len(fast) == 0 {
 		t.Error("fast client received nothing — slow client appears to be blocking the hub")
 	}
 }
