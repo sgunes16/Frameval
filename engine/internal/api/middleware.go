@@ -44,18 +44,48 @@ func WithTraceID(next http.Handler) http.Handler {
 	})
 }
 
-// requestLogger logs every HTTP request with method, path, duration, and
-// the request's trace_id. Takes the engine's root *slog.Logger so we can
-// avoid singleton state.
+// statusRecorder wraps http.ResponseWriter so the request logger can
+// see what status code the handler ultimately wrote. Without it, the
+// log line says "the request finished" but not "with what outcome",
+// which is the single most useful field in any access log.
+//
+// Handlers that never call WriteHeader still get the implicit 200 that
+// http.ResponseWriter assigns when Write fires — the zero value here
+// is treated as 200 on emit so logged status matches what the client
+// actually received.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (sr *statusRecorder) WriteHeader(status int) {
+	sr.status = status
+	sr.ResponseWriter.WriteHeader(status)
+}
+
+// statusOrOK reports the captured status, or 200 if the handler wrote
+// the body without an explicit WriteHeader call (Go's default).
+func (sr *statusRecorder) statusOrOK() int {
+	if sr.status == 0 {
+		return http.StatusOK
+	}
+	return sr.status
+}
+
+// requestLogger logs every HTTP request with method, path, status,
+// duration, and the request's trace_id. Takes the engine's root
+// *slog.Logger so we can avoid singleton state.
 func requestLogger(root *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			started := time.Now()
-			next.ServeHTTP(w, r)
+			rec := &statusRecorder{ResponseWriter: w}
+			next.ServeHTTP(rec, r)
 			logging.FromContext(r.Context(), root).Info(
 				"http_request",
 				"method", r.Method,
 				"path", r.URL.Path,
+				"status", rec.statusOrOK(),
 				"duration_ms", time.Since(started).Milliseconds(),
 			)
 		})
