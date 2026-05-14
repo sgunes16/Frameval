@@ -1,1 +1,3 @@
-from .grader import grade as grade
+from .grader import grade
+
+__all__ = ["grade"]
