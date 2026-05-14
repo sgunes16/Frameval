@@ -3,7 +3,7 @@ package experiment
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -31,18 +31,21 @@ type GraderClient struct {
 }
 
 // NewGraderClient dials the grader at addr and stores the resulting
-// connection + client stub. Errors during dial are logged and the resulting
-// client falls back to "no grader configured" behavior, so the engine still
-// starts even if the grader is unreachable at startup time. grpc.NewClient
-// is lazy — the underlying TCP connection is not established until the first
-// RPC call.
-func NewGraderClient(addr string) *GraderClient {
+// connection + client stub. Errors during dial are logged on the supplied
+// logger (or slog.Default() when nil) and the resulting client falls back
+// to "no grader configured" behavior, so the engine still starts even if
+// the grader is unreachable at startup time. grpc.NewClient is lazy — the
+// underlying TCP connection is not established until the first RPC call.
+func NewGraderClient(addr string, logger *slog.Logger) *GraderClient {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	if addr == "" {
 		return &GraderClient{}
 	}
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Printf("grader dial failed (will fall back to local grading): %v", err)
+		logger.Warn("grader dial failed (will fall back to local grading)", "err", err, "addr", addr)
 		return &GraderClient{}
 	}
 	return &GraderClient{

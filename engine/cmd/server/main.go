@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +14,7 @@ import (
 	builtinharness "github.com/mustafaselman/frameval/engine/internal/builtin/harness"
 	"github.com/mustafaselman/frameval/engine/internal/executor"
 	"github.com/mustafaselman/frameval/engine/internal/experiment"
+	"github.com/mustafaselman/frameval/engine/internal/logging"
 	"github.com/mustafaselman/frameval/engine/internal/sandbox"
 	"github.com/mustafaselman/frameval/engine/internal/storage"
 )
@@ -21,6 +22,11 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	logger := logging.New(logging.Config{
+		Level:  parseLogLevel(getenv("FRAMEVAL_LOG_LEVEL", "info")),
+		Format: getenv("FRAMEVAL_LOG_FORMAT", "json"),
+	})
 
 	dbPath := getenv("FRAMEVAL_DB_PATH", "./frameval.db")
 	graderAddr := getenv("FRAMEVAL_GRADER_ADDR", "localhost:50051")
@@ -31,19 +37,20 @@ func main() {
 
 	store, err := storage.Open(ctx, dbPath)
 	if err != nil {
-		log.Fatalf("open store: %v", err)
+		logger.Error("open store failed", "err", err)
+		os.Exit(1)
 	}
 	defer store.Close()
 	if err := store.SeedBuiltinTasks(ctx, tasksRoot); err != nil {
-		log.Printf("seed tasks: %v", err)
+		logger.Warn("seed tasks", "err", err)
 	}
 	if err := store.SeedModelConfigs(ctx); err != nil {
-		log.Printf("seed model configs: %v", err)
+		logger.Warn("seed model configs", "err", err)
 	}
 	if count, err := store.ReconcileCompletedExperiments(ctx); err != nil {
-		log.Printf("reconcile completed experiments: %v", err)
+		logger.Warn("reconcile completed experiments", "err", err)
 	} else if count > 0 {
-		log.Printf("reconciled %d completed experiments", count)
+		logger.Info("reconciled completed experiments", "count", count)
 	}
 
 	hub := api.NewHub()
@@ -53,11 +60,11 @@ func main() {
 	defer queue.Close()
 	registry := executor.NewRegistry(manager)
 	harnessRegistry := builtinharness.NewRegistry()
-	graderClient := experiment.NewGraderClient(graderAddr)
+	graderClient := experiment.NewGraderClient(graderAddr, logger)
 	defer func() { _ = graderClient.Close() }()
 	orchestrator := experiment.NewOrchestrator(store, queue, manager, registry, harnessRegistry, graderClient, hub)
 	service := api.NewService(store, orchestrator, harnessRegistry, registry, hub)
-	server := &http.Server{Addr: ":" + port, Handler: api.NewRouter(service)}
+	server := &http.Server{Addr: ":" + port, Handler: api.NewRouter(service, logger)}
 
 	go func() {
 		<-ctx.Done()
@@ -66,9 +73,23 @@ func main() {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("frameval engine listening on :%s", port)
+	logger.Info("frameval engine listening", "port", port)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("listen and serve: %v", err)
+		logger.Error("listen and serve", "err", err)
+		os.Exit(1)
+	}
+}
+
+func parseLogLevel(s string) slog.Level {
+	switch s {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
 	}
 }
 
