@@ -54,20 +54,20 @@ type ArtifactVersion struct {
 }
 
 type ExperimentRequest struct {
-	Name                string             `json:"name"`
-	Description         string             `json:"description"`
-	TaskID              string             `json:"task_id"`
+	Name                string             `json:"name" validate:"required,max=200"`
+	Description         string             `json:"description" validate:"max=2000"`
+	TaskID              string             `json:"task_id" validate:"required"`
 	WorkspaceSourceType string             `json:"workspace_source_type"`
 	LocalPath           string             `json:"local_path"`
 	GitURL              string             `json:"git_url"`
 	GitRef              string             `json:"git_ref"`
-	Model               string             `json:"model"`
-	AgentCLI            string             `json:"agent_cli"`
+	Model               string             `json:"model" validate:"required"`
+	AgentCLI            string             `json:"agent_cli" validate:"required"`
 	ExecutionMode       string             `json:"execution_mode"`
-	RunsPerVariant      int                `json:"runs_per_variant"`
-	Temperature         float64            `json:"temperature"`
-	TimeoutSeconds      int                `json:"timeout_seconds"`
-	MaxConcurrent       int                `json:"max_concurrent"`
+	RunsPerVariant      int                `json:"runs_per_variant" validate:"min=5,max=200"`
+	Temperature         float64            `json:"temperature" validate:"gte=0,lte=2"`
+	TimeoutSeconds      int                `json:"timeout_seconds" validate:"min=60,max=7200"`
+	MaxConcurrent       int                `json:"max_concurrent" validate:"min=1,max=16"`
 	JudgeModel          string             `json:"judge_model"`
 	Seed                *int               `json:"seed"`
 	CompositeWeights    map[string]float64 `json:"composite_weights"`

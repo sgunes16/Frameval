@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/csv"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -10,13 +11,18 @@ import (
 
 func (s *Service) CreateExperiment(w http.ResponseWriter, r *http.Request) {
 	var req models.ExperimentRequest
-	if err := decodeJSON(r, &req); err != nil {
-		JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	if err := decodeAndValidate(r, &req); err != nil {
+		var verr *ValidationError
+		if errors.As(err, &verr) {
+			renderValidationError(w, r.Context(), verr.Fields)
+			return
+		}
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "request body is not valid JSON", err)
 		return
 	}
 	experiment, err := s.store.CreateExperiment(r.Context(), req)
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "failed to create experiment", err)
 		return
 	}
 	JSON(w, http.StatusCreated, experiment)
