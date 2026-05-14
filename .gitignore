@@ -31,3 +31,6 @@ engine/.cache/
 *.exe
 *.log
 tmp/
+
+# AI-session memory artifacts — keep local, never publish
+memory/

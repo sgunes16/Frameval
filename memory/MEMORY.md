@@ -1,1 +1,0 @@
-- [GitHub issue permissions](feedback_gh_issue_permissions.md) — user expects gh issue create/edit/comment without per-call prompts; recommend `.claude/settings.json` Bash allowlist when blocked
