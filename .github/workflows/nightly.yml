@@ -1,0 +1,83 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  stress:
+    name: Engine stress
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+          cache-dependency-path: engine/go.sum
+
+      - name: Stress tests
+        # The stress build tag is empty today — this job will start producing
+        # real signal once the Backend Robustness epic (#58) lands the 32x10
+        # orchestrator stress test. Job exits 0 in the meantime.
+        run: go test -tags=stress -count=1 ./test/stress/... || true
+
+  e2e-headless:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        # Becomes a real Playwright run once #83 lands docker-compose.test.yml
+        # and the six smoke specs. Exits 0 today.
+        run: echo "e2e nightly placeholder — see issue #83"
+
+  llm-fidelity:
+    name: LLM fidelity (record + diff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: grader
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if no API key
+        id: precheck
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "ANTHROPIC_API_KEY not set; skipping LLM fidelity job."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install uv
+        if: steps.precheck.outputs.skip == 'false'
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.5.x"
+
+      - name: Install Python 3.11
+        if: steps.precheck.outputs.skip == 'false'
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        if: steps.precheck.outputs.skip == 'false'
+        run: uv sync
+
+      - name: Record + diff cassettes
+        if: steps.precheck.outputs.skip == 'false'
+        # Becomes meaningful once #81 lands respx cassettes.
+        run: |
+          FRAMEVAL_RECORD=1 uv run pytest tests/integration/test_grade_run.py || true
+          git diff --exit-code tests/fixtures/llm_responses/ || echo "fixtures changed"
