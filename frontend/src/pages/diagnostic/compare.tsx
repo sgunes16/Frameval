@@ -11,8 +11,9 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardHeader } from '../../components/ui/card';
 import { EmptyState } from '../../components/ui/empty-state';
-import { useCompareDiagnostics, useExperiments, useRuns } from '../../lib/hooks';
-import type { Diagnostic } from '../../lib/types';
+import { ScoreBar } from '../../components/system/composite/ScoreBar';
+import { useCompareDiagnostics, useCompareGrades, useExperiments, useRuns } from '../../lib/hooks';
+import type { Diagnostic, Grade } from '../../lib/types';
 import { formatTimeAgo, statusLabel, statusTone } from '../../lib/utils';
 
 /**
@@ -80,6 +81,7 @@ export function DiagnosticComparePage() {
   const { data: diagnostics, isLoading: diagLoading, isError, error } = useCompareDiagnostics(
     overLimit ? [] : runIds,
   );
+  const { data: grades } = useCompareGrades(overLimit ? [] : runIds);
 
   // Drop any diagnostic that lacks the fingerprint surface the charts
   // read from. A missing fingerprint indicates the diagnostic row was
@@ -190,7 +192,7 @@ export function DiagnosticComparePage() {
         <Card>
           <EmptyState
             title="Pick an experiment to start"
-            description="Diagnostic profiles compare runs against each other. Choose an experiment above, then tick at least two of its runs."
+            description="Compare runs side-by-side: deterministic grader metrics + behavioral diagnostic profile. Choose an experiment above, then tick at least two of its runs."
           />
         </Card>
       ) : runIds.length === 0 ? (
@@ -204,76 +206,102 @@ export function DiagnosticComparePage() {
         <Card>
           <div className="text-sm text-warning-fg">Too many runs selected. The compare view tops out at 5.</div>
         </Card>
-      ) : diagLoading ? (
-        <Card>
-          <div className="flex h-32 items-center justify-center text-sm text-fg-muted">Loading diagnostics…</div>
-        </Card>
-      ) : isError ? (
-        <Card>
-          <div className="text-sm text-danger-fg">
-            Failed to load diagnostics. One or more runs may not have a diagnostic profile yet.
-            {error instanceof Error ? ` (${error.message})` : ''}
-          </div>
-        </Card>
-      ) : series.length === 0 ? (
-        <Card>
-          <EmptyState
-            title="No diagnostic profiles to show"
-            description="The selected runs don't have diagnostic data yet. Wait for the diagnostic stage to finish, or pick runs that completed grading."
-          />
-        </Card>
       ) : (
-        <ErrorBoundary
-          title="A chart failed to render"
-          description="One of the diagnostic charts threw while drawing this selection. Try a different set of runs or refresh."
-        >
-          {droppedDiagnostics > 0 && (
-            <Card>
-              <div className="text-xs text-warning-fg">
-                Skipped {droppedDiagnostics} run{droppedDiagnostics === 1 ? '' : 's'} with incomplete diagnostic data.
-              </div>
-            </Card>
-          )}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader
-                title="Behavioral fingerprint"
-                description="9 of the 10 fingerprint dimensions overlaid; recovery latency is unbounded (turn count) so it appears in the recovery timeline below instead of on this normalized radar."
-              />
-              <BehavioralRadar series={series} />
-            </Card>
-            <Card>
-              <CardHeader
-                title="Failure breakdown"
-                description="Stacked counts of primary + secondary failure labels per run."
-              />
-              <FailureBreakdown series={series} />
-            </Card>
-          </div>
+        <>
+          {/* Grade comparison renders independently of the diagnostic
+              profile — grader writes its row as soon as the run
+              finishes, while the diagnostic stage is a separate
+              downstream step that can lag or fail. Showing grades
+              even when diagnostic is missing is the difference
+              between "useful for thesis writing" and "blank page". */}
           <Card>
             <CardHeader
-              title="Recovery timeline"
-              description="Error events along the run's turn axis; one row per run."
+              title="Grade comparison"
+              description="Deterministic scores from the grader sidecar — code, judge, spec, and process metrics side-by-side."
             />
-            <RecoveryTimeline series={series} />
+            <GradeComparisonTable runIds={runIds} runs={experimentRuns} grades={grades ?? []} />
           </Card>
-          <div className="grid gap-4 lg:grid-cols-2">
+
+          {/* Behavioral diagnostic charts. These need fingerprint /
+              symptoms / recovery rows in the diagnostic table,
+              which the diagnostic-extraction step writes after
+              grading. If they're missing we render a small notice
+              instead of swallowing the whole page. */}
+          {diagLoading ? (
             <Card>
-              <CardHeader
-                title="Pass rate vs wall clock"
-                description="Higher / faster is better. Eyeball the Pareto frontier."
-              />
-              <CostQualityScatter series={series} />
+              <div className="flex h-32 items-center justify-center text-sm text-fg-muted">
+                Loading behavioral diagnostics…
+              </div>
             </Card>
+          ) : isError ? (
             <Card>
-              <CardHeader
-                title="Transcript evidence"
-                description="Verbatim quotes the classifier latched onto, grouped by failure code."
-              />
-              <TranscriptEvidence series={series} />
+              <div className="text-sm text-danger-fg">
+                Failed to load diagnostic profiles.
+                {error instanceof Error ? ` (${error.message})` : ''}
+              </div>
             </Card>
-          </div>
-        </ErrorBoundary>
+          ) : series.length === 0 ? (
+            <Card>
+              <div className="text-sm text-fg-muted">
+                Behavioral diagnostic profile not yet available for the selected runs — the
+                diagnostic stage runs after grading and may still be in progress.
+                Grade metrics above are independent and ready now.
+              </div>
+            </Card>
+          ) : (
+            <ErrorBoundary
+              title="A chart failed to render"
+              description="One of the diagnostic charts threw while drawing this selection. Try a different set of runs or refresh."
+            >
+              {droppedDiagnostics > 0 && (
+                <Card>
+                  <div className="text-xs text-warning-fg">
+                    Skipped {droppedDiagnostics} run{droppedDiagnostics === 1 ? '' : 's'} with incomplete diagnostic data.
+                  </div>
+                </Card>
+              )}
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader
+                    title="Behavioral fingerprint"
+                    description="9 of the 10 fingerprint dimensions overlaid; recovery latency is unbounded (turn count) so it appears in the recovery timeline below instead of on this normalized radar."
+                  />
+                  <BehavioralRadar series={series} />
+                </Card>
+                <Card>
+                  <CardHeader
+                    title="Failure breakdown"
+                    description="Stacked counts of primary + secondary failure labels per run."
+                  />
+                  <FailureBreakdown series={series} />
+                </Card>
+              </div>
+              <Card>
+                <CardHeader
+                  title="Recovery timeline"
+                  description="Error events along the run's turn axis; one row per run."
+                />
+                <RecoveryTimeline series={series} />
+              </Card>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader
+                    title="Pass rate vs wall clock"
+                    description="Higher / faster is better. Eyeball the Pareto frontier."
+                  />
+                  <CostQualityScatter series={series} />
+                </Card>
+                <Card>
+                  <CardHeader
+                    title="Transcript evidence"
+                    description="Verbatim quotes the classifier latched onto, grouped by failure code."
+                  />
+                  <TranscriptEvidence series={series} />
+                </Card>
+              </div>
+            </ErrorBoundary>
+          )}
+        </>
       )}
     </div>
   );
@@ -346,6 +374,93 @@ function RunPicker({ experimentId, runs, isLoading, selected, onToggle }: RunPic
         );
       })}
     </ul>
+  );
+}
+
+interface GradeComparisonTableProps {
+  runIds: string[];
+  runs: Array<{ id: string; run_number: number; status: string }>;
+  grades: Array<Grade | null>;
+}
+
+/**
+ * Side-by-side grade table for 2-5 selected runs. Each metric is one
+ * row; each run is one column. ScoreBars on 0..1-scale metrics make
+ * the deltas legible at a glance — operators can spot which variant
+ * dominated which axis without reading numbers off a tooltip.
+ *
+ * composite_score is the only metric on a 0..10 scale (see backend
+ * `composite()`); we divide by 10 before feeding ScoreBar.
+ */
+function GradeComparisonTable({ runIds, runs, grades }: GradeComparisonTableProps) {
+  if (runIds.length === 0) {
+    return <div className="text-sm text-fg-muted">No runs selected.</div>;
+  }
+  const headers = runIds.map((id) => shortLabel(runs, id));
+  const metrics: Array<{ label: string; pick: (g: Grade) => number; scale?: number }> = [
+    { label: 'Composite', pick: (g) => g.composite_score, scale: 10 },
+    { label: 'Test pass rate', pick: (g) => g.test_pass_rate },
+    { label: 'Judge correctness', pick: (g) => g.judge_correctness },
+    { label: 'Spec compliance', pick: (g) => g.spec_instruction_compliance },
+    { label: 'Tool call accuracy', pick: (g) => g.tool_call_accuracy ?? 0 },
+    { label: 'Token efficiency', pick: (g) => g.token_efficiency },
+  ];
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs text-fg-muted">
+            <th className="py-2 pr-3 font-medium">Metric</th>
+            {headers.map((label, i) => (
+              <th key={i} className="py-2 pr-3 font-medium">{label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {metrics.map((m) => (
+            <tr key={m.label} className="border-b border-border last:border-b-0">
+              <td className="py-2 pr-3 text-fg-muted">{m.label}</td>
+              {grades.map((g, i) => {
+                if (!g) {
+                  return <td key={i} className="py-2 pr-3 text-xs text-fg-subtle">—</td>;
+                }
+                const raw = m.pick(g);
+                const normalized = m.scale ? raw / m.scale : raw;
+                return (
+                  <td key={i} className="py-2 pr-3">
+                    <div className="flex items-center gap-2">
+                      <ScoreBar value={normalized} label={`${m.label} ${headers[i]}`} />
+                      <span className="font-mono text-xs text-fg">{raw.toFixed(2)}</span>
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+          <tr className="border-b border-border last:border-b-0">
+            <td className="py-2 pr-3 text-fg-muted">Premature completion</td>
+            {grades.map((g, i) => (
+              <td key={i} className="py-2 pr-3 font-mono text-xs">
+                {!g ? '—' : g.premature_completion ? (
+                  <span className="text-warning-fg">yes</span>
+                ) : (
+                  <span className="text-success-fg">no</span>
+                )}
+              </td>
+            ))}
+          </tr>
+          <tr>
+            <td className="py-2 pr-3 text-fg-muted">Tests passed</td>
+            {grades.map((g, i) => (
+              <td key={i} className="py-2 pr-3 font-mono text-xs text-fg">
+                {!g ? '—' : `${g.test_pass_count ?? 0} / ${(g.test_pass_count ?? 0) + (g.test_fail_count ?? 0)}`}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
   );
 }
 

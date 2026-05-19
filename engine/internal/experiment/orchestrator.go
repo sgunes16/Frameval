@@ -509,20 +509,34 @@ type incrementalTranscriptStreamer struct {
 	lastFlushLen int
 }
 
-// append accumulates `line` and triggers a flush on a paragraph
-// break (two consecutive blank lines). The first blank line marks
-// the END of a paragraph; we flush there so each finalized
-// paragraph becomes a ParsedTurn in the live view before the next
-// one starts arriving. Aider prints lots of blank lines in steady
-// state — only flush when the buffer actually grew since the last
-// flush, otherwise we'd hammer the DB with no-op writes.
+// append accumulates `line` and decides whether the buffer is in a
+// flushable state. Two executor output styles have to be supported:
+//
+//   - aider prints chat-style prose where paragraphs are delimited
+//     by blank lines. We flush on the first blank line ending a
+//     paragraph.
+//   - opencode (--format json) emits one JSON event per line, no
+//     blank lines at all. Without a JSON-line trigger here, flush
+//     would never fire mid-run and the Inspector would only show
+//     turns after the end-of-run SaveTranscript call — i.e. all at
+//     once.
+//
+// Both triggers gate on `buf.Len() > lastFlushLen` so empty no-op
+// flushes never reach the DB.
 func (s *incrementalTranscriptStreamer) append(line string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.buf.WriteString(line)
 	s.buf.WriteByte('\n')
-	blank := strings.TrimSpace(line) == ""
-	if blank && !s.prevWasBlank && s.buf.Len() > s.lastFlushLen {
+	trimmed := strings.TrimSpace(line)
+	blank := trimmed == ""
+	// NDJSON heuristic: a complete JSON object line — opencode emits
+	// these one per event (step_start, tool_use, text, …). We don't
+	// fully validate; the parser will quietly drop malformed lines
+	// at flush time anyway.
+	isJSONLine := strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")
+	paragraphEnd := blank && !s.prevWasBlank
+	if (paragraphEnd || isJSONLine) && s.buf.Len() > s.lastFlushLen {
 		s.flushLocked()
 	}
 	s.prevWasBlank = blank
@@ -781,7 +795,7 @@ func recomputeCompositeScore(grade models.Grade) float64 {
 func runEnvironment(taskID string) map[string]string {
 	return map[string]string{
 		"FRAMEVAL_TASK_ID": taskID,
-		"PATH":             ".frameval-venv/bin:node_modules/.bin:/root/.local/bin:/root/.cursor/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"PATH":             ".frameval-venv/bin:node_modules/.bin:/root/.local/bin:/root/.cursor/bin:/root/.opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"PYTHONPATH":       ".",
 		"VIRTUAL_ENV":      ".frameval-venv",
 	}

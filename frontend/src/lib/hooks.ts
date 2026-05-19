@@ -105,6 +105,24 @@ export function useGrade(runId?: string) {
   return useQuery({ queryKey: ['grade', runId], enabled: Boolean(runId), queryFn: () => api.get<Grade>(`/runs/${runId}/grade`) });
 }
 
+// useCompareGrades parallels useCompareDiagnostics: one query that
+// fans out to N runs' grade endpoints and resolves to a Grade[] in
+// the same order as the input ids. A missing grade (run not yet
+// graded, 404) resolves to null so the caller can render a
+// placeholder row rather than blowing up the whole panel.
+export function useCompareGrades(runIds: string[]) {
+  return useQuery({
+    queryKey: ['compare-grades', runIds],
+    enabled: runIds.length > 0,
+    queryFn: () =>
+      Promise.all(
+        runIds.map((id) =>
+          api.get<Grade>(`/runs/${id}/grade`).catch(() => null),
+        ),
+      ),
+  });
+}
+
 export function useTasks() {
   return useQuery({ queryKey: ['tasks'], queryFn: () => api.get<Task[]>('/tasks') });
 }

@@ -85,5 +85,13 @@ stop:
 # inside the image (aider, cursor, opencode) are NOT auto-rebuilt by
 # the dev scripts. Tag override: SANDBOX_IMAGE=foo make sandbox.
 SANDBOX_IMAGE ?= frameval-sandbox:local
+# Force empty proxy build-args so Docker Desktop's auto-injected
+# http.docker.internal:3128 proxy is bypassed during apt-get. The proxy
+# (set when "use system proxy" is on, or pulled from an active VPN) breaks
+# outbound to ports.ubuntu.com inside the buildkit container.
 sandbox:
-	docker build -t $(SANDBOX_IMAGE) -f docker/sandbox/Dockerfile .
+	docker build \
+		--build-arg http_proxy= --build-arg HTTP_PROXY= \
+		--build-arg https_proxy= --build-arg HTTPS_PROXY= \
+		--build-arg no_proxy= --build-arg NO_PROXY= \
+		-t $(SANDBOX_IMAGE) -f docker/sandbox/Dockerfile .

@@ -64,7 +64,7 @@ type ExperimentRequest struct {
 	Model               string             `json:"model" validate:"required"`
 	AgentCLI            string             `json:"agent_cli" validate:"required"`
 	ExecutionMode       string             `json:"execution_mode"`
-	RunsPerVariant      int                `json:"runs_per_variant" validate:"min=5,max=200"`
+	RunsPerVariant      int                `json:"runs_per_variant" validate:"min=1,max=200"`
 	Temperature         float64            `json:"temperature" validate:"gte=0,lte=2"`
 	TimeoutSeconds      int                `json:"timeout_seconds" validate:"min=60,max=7200"`
 	MaxConcurrent       int                `json:"max_concurrent" validate:"min=1,max=16"`

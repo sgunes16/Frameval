@@ -7,10 +7,95 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
+	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/mustafaselman/frameval/engine/internal/models"
 )
+
+// OpenCodeModelsRunner is the minimal sandbox interface SeedOpenCodeModels
+// depends on. Defined here (not pulled from the sandbox package) so the
+// storage layer stays leaf-level — *sandbox.Manager satisfies it
+// implicitly. Callers in tests can pass a fake runner instead.
+type OpenCodeModelsRunner interface {
+	RunShell(ctx context.Context, workspace string, env map[string]string, script string) (string, error)
+}
+
+// SeedOpenCodeModels queries `opencode models` inside the sandbox image
+// and upserts every opencode/* id into model_configs as provider="opencode".
+// Best-effort: a missing Docker daemon, a slow image pull, or an
+// unauthenticated opencode CLI return nil rather than failing startup —
+// the dropdown still works off the static seed list and the user can
+// pick a local Ollama model.
+//
+// Idempotent thanks to UpsertModelConfig's ON CONFLICT clause, so running
+// this on every boot is safe.
+func (s *Store) SeedOpenCodeModels(ctx context.Context, runner OpenCodeModelsRunner) error {
+	if runner == nil {
+		return nil
+	}
+	// runInDocker tars and copies the workspace dir into the container,
+	// which fails when workspace is "" (empty path can't be tarred).
+	// `opencode models` doesn't actually need any files, but we still
+	// have to hand it a real (empty) directory.
+	tmpDir, err := os.MkdirTemp("", "frameval-opencode-models-")
+	if err != nil {
+		slog.Warn("seed opencode models: mktemp failed", "err", err)
+		return nil
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Stderr is dropped so opencode's first-run sqlite-migration banner
+	// doesn't pollute the parse.
+	output, err := runner.RunShell(ctx, tmpDir, nil, "opencode models 2>/dev/null")
+	if err != nil {
+		slog.Warn("seed opencode models: RunShell failed", "err", err, "output_prefix", truncate(output, 200))
+		return nil
+	}
+	inserted := 0
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "opencode/") {
+			continue
+		}
+		cfg := models.ModelConfig{
+			Provider:    "opencode",
+			ModelID:     line,
+			DisplayName: opencodeDisplayName(line),
+		}
+		if err := s.UpsertModelConfig(ctx, cfg); err != nil {
+			return err
+		}
+		inserted++
+	}
+	slog.Info("seed opencode models", "count", inserted)
+	return nil
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
+// opencodeDisplayName turns "opencode/deepseek-v4-flash-free" into
+// "Deepseek V4 Flash (opencode free)" for the dropdown. Plain title-
+// casing is enough — the CLI already uses friendly names with `-free`
+// suffixes that we surface explicitly.
+func opencodeDisplayName(modelID string) string {
+	suffix := strings.TrimPrefix(modelID, "opencode/")
+	free := strings.HasSuffix(suffix, "-free")
+	suffix = strings.TrimSuffix(suffix, "-free")
+	pretty := strings.ReplaceAll(suffix, "-", " ")
+	pretty = strings.Title(pretty) //nolint:staticcheck // titles for display only
+	if free {
+		return pretty + " (opencode free)"
+	}
+	return pretty + " (opencode)"
+}
 
 func (s *Store) SeedModelConfigs(ctx context.Context) error {
 	defaults := []models.ModelConfig{
@@ -19,6 +104,8 @@ func (s *Store) SeedModelConfigs(ctx context.Context) error {
 		// OLLAMA_BASE_URL transparently). These are the typical "already
 		// pulled" set on a fresh macOS install; for tags not in this list
 		// pull them with `ollama pull <tag>` and add a row via the API.
+		{Provider: "ollama", ModelID: "openai/qwen2.5-coder:7b", DisplayName: "Qwen2.5 Coder 7B (Ollama)", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 32768, SupportsStructuredOutput: false, SupportsSeed: false},
+		{Provider: "ollama", ModelID: "openai/qwen2.5-coder:1.5b", DisplayName: "Qwen2.5 Coder 1.5B (Ollama)", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 32768, SupportsStructuredOutput: false, SupportsSeed: false},
 		{Provider: "ollama", ModelID: "openai/llama3.1:8b", DisplayName: "Llama 3.1 8B (Ollama)", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 8192, SupportsStructuredOutput: false, SupportsSeed: false},
 		{Provider: "ollama", ModelID: "openai/llama3.2:3b", DisplayName: "Llama 3.2 3B (Ollama)", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 131072, SupportsStructuredOutput: false, SupportsSeed: false},
 		{Provider: "ollama", ModelID: "openai/llama3.2:1b", DisplayName: "Llama 3.2 1B (Ollama)", InputPricePer1K: 0, OutputPricePer1K: 0, MaxContextTokens: 131072, SupportsStructuredOutput: false, SupportsSeed: false},

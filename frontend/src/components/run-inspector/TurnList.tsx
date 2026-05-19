@@ -77,7 +77,7 @@ export function TurnList({ turns, onFocusChange, evidenceByTurn }: TurnListProps
               }}
               className={isFocused ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}
             >
-              <div className="px-1 py-1">
+              <div>
                 <TurnGroupCard
                   group={group}
                   evidenceByTurn={evidenceByTurn}

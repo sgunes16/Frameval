@@ -6,11 +6,14 @@ import (
 )
 
 // TestOpenCodeParseTranscriptHappyPath pins the event-type → BlockKind
-// mapping for the four event types opencode actually emits in steady
-// state. Each line of the stream is one JSON event; the parser
-// translates them into structured ParsedTurns with no heuristics
-// (unlike the aider parser which has to recover structure from chat
-// output).
+// mapping for the event types opencode emits in steady state. Each
+// line of the stream is one JSON event; the parser translates them
+// into structured ParsedTurns with no heuristics (unlike the aider
+// parser which has to recover structure from chat output).
+//
+// step_start / step_finish are intentionally dropped — they're agent
+// iteration boundaries with no human-readable payload and just create
+// "System: step_start" noise rows between every real action.
 func TestOpenCodeParseTranscriptHappyPath(t *testing.T) {
 	raw := strings.Join([]string{
 		`{"type":"step_start","timestamp":1,"sessionID":"s"}`,
@@ -25,25 +28,21 @@ func TestOpenCodeParseTranscriptHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseTranscript: %v", err)
 	}
-	if len(turns) != 5 {
-		t.Fatalf("expected 5 turns, got %d: %+v", len(turns), turns)
+	if len(turns) != 3 {
+		t.Fatalf("expected 3 turns (step_* dropped), got %d: %+v", len(turns), turns)
 	}
-	kinds := []string{
-		turns[0].BlockKind, turns[1].BlockKind, turns[2].BlockKind, turns[3].BlockKind, turns[4].BlockKind,
-	}
-	want := []string{
-		BlockKindSystem, BlockKindThinking, BlockKindToolUse, BlockKindText, BlockKindSystem,
-	}
+	kinds := []string{turns[0].BlockKind, turns[1].BlockKind, turns[2].BlockKind}
+	want := []string{BlockKindThinking, BlockKindToolUse, BlockKindText}
 	for i, k := range want {
 		if kinds[i] != k {
 			t.Errorf("turn %d: kind = %q, want %q", i, kinds[i], k)
 		}
 	}
-	if turns[2].ToolName != "Edit" {
-		t.Errorf("tool_use turn: tool_name = %q, want Edit", turns[2].ToolName)
+	if turns[1].ToolName != "Edit" {
+		t.Errorf("tool_use turn: tool_name = %q, want Edit", turns[1].ToolName)
 	}
-	if len(turns[2].FilesTouched) != 1 || turns[2].FilesTouched[0] != "app/user_service.py" {
-		t.Errorf("tool_use turn: files_touched = %v, want [app/user_service.py]", turns[2].FilesTouched)
+	if len(turns[1].FilesTouched) != 1 || turns[1].FilesTouched[0] != "app/user_service.py" {
+		t.Errorf("tool_use turn: files_touched = %v, want [app/user_service.py]", turns[1].FilesTouched)
 	}
 }
 

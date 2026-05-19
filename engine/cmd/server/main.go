@@ -75,6 +75,13 @@ func run() error {
 	hub := api.NewHub()
 	go hub.Run(ctx)
 	manager := sandbox.NewManager(ctx, sandboxImage)
+	// Fan out from the static seed (in SeedModelConfigs) to whatever
+	// opencode's bundled cloud provider currently exposes. Best-effort —
+	// SeedOpenCodeModels swallows transient errors so a missing daemon or
+	// slow image pull never blocks engine startup.
+	if err := store.SeedOpenCodeModels(ctx, manager); err != nil {
+		logger.Warn("seed opencode models failed", "err", err)
+	}
 	queue := experiment.NewQueue(ctx, maxConcurrent)
 	defer queue.Close()
 	registry := executor.NewRegistry(manager)

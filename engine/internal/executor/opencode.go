@@ -49,21 +49,38 @@ func (e *OpenCodeExecutor) SupportedModes() []ExecutionMode {
 func (e *OpenCodeExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	prompt := promptWithDefaultCLILanguage(cfg.Prompt)
 	model := fallbackOpenCodeModel(cfg.Model, cfg.Environment)
-	ollamaBase := fallbackOllamaBase(cfg.Environment)
 
-	if err := writeOpenCodeConfig(cfg.WorkspacePath, ollamaBase); err != nil {
-		raw := "opencode setup failed: " + err.Error()
-		turns, _ := e.ParseTranscript([]byte(raw))
-		return &RunResult{RawOutput: raw, ParsedTurns: turns}, nil
+	// Only the local Ollama path needs us to drop a custom opencode.json
+	// (so opencode learns the http://host.docker.internal:11434 base URL).
+	// opencode's built-in cloud models (opencode/*) ship pre-configured;
+	// writing an Ollama-only config there would force the run onto a
+	// provider the model id doesn't belong to. Same for any future first-
+	// class provider we surface — only ollama/* needs the override.
+	if strings.HasPrefix(model, "ollama/") {
+		ollamaBase := fallbackOllamaBase(cfg.Environment)
+		if err := writeOpenCodeConfig(cfg.WorkspacePath, ollamaBase, model); err != nil {
+			raw := "opencode setup failed: " + err.Error()
+			turns, _ := e.ParseTranscript([]byte(raw))
+			return &RunResult{RawOutput: raw, ParsedTurns: turns}, nil
+		}
 	}
 
 	command := envOrOSGetenv(cfg.Environment, "FRAMEVAL_OPENCODE_COMMAND")
 	if command == "" {
 		// --format json gives us the structured event stream.
 		// --model ollama/<id> uses the provider we defined above.
-		// The prompt is positional and goes last via a here-doc so
-		// shell quoting doesn't mangle multiline content.
-		command = `opencode run --format json --model "$OPENCODE_MODEL" "$FRAMEVAL_PROMPT"`
+		// --dangerously-skip-permissions auto-approves "ask" permission
+		//   prompts (e.g. `doom_loop`, `external_directory`). Without
+		//   it the build agent silently aborts tool calls in our
+		//   non-interactive `sh -c` sandbox and falls back to plain
+		//   text output, so the model never actually edits files.
+		// `stdbuf -oL` forces opencode's stdout into line-buffered
+		//   mode. Without it Node/Bun block-buffers when stdout is a
+		//   pipe (i.e. docker logs), holding events in 4-8 KiB chunks
+		//   and only flushing at process exit — that's what made the
+		//   Inspector "wait until the run finishes, then dump
+		//   everything at once" instead of streaming turn-by-turn.
+		command = `stdbuf -oL opencode run --format json --dangerously-skip-permissions --model "$OPENCODE_MODEL" "$FRAMEVAL_PROMPT"`
 	}
 	env := mergeEnv(map[string]string{
 		"FRAMEVAL_PROMPT": prompt,
@@ -108,9 +125,44 @@ func (e *OpenCodeExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 			continue
 		}
 		turn.Timestamp = formatTimestamp(event.Timestamp)
+		turn.ToolUseID = extractPartMessageID(event.Part)
 		turns = append(turns, *turn)
 	}
-	return AssignTurnGrouping(turns), nil
+	return assignOpenCodeGrouping(turns), nil
+}
+
+// assignOpenCodeGrouping stamps ParentTurnIndex by the opencode
+// `messageID` carried on every event's part. Each unique messageID
+// is one "agent decision" (a single model invocation + all the
+// tool calls that decision spawned), so the Inspector renders them
+// as a single TurnGroupCard — matching how the opencode TUI and
+// Claude Code render an assistant step.
+//
+// Falls back to the per-event index when messageID is missing
+// (junk lines, custom event types) so legacy callers keep working.
+func assignOpenCodeGrouping(turns []ParsedTurn) []ParsedTurn {
+	if len(turns) == 0 {
+		return turns
+	}
+	groupFor := map[string]int{}
+	nextGroup := 0
+	for i := range turns {
+		turns[i].TurnIndex = i
+		msgID := turns[i].ToolUseID
+		if msgID == "" {
+			turns[i].ParentTurnIndex = nextGroup
+			nextGroup++
+			continue
+		}
+		if g, ok := groupFor[msgID]; ok {
+			turns[i].ParentTurnIndex = g
+		} else {
+			groupFor[msgID] = nextGroup
+			turns[i].ParentTurnIndex = nextGroup
+			nextGroup++
+		}
+	}
+	return turns
 }
 
 // opencodeEvent is the minimal shape we read from opencode's
@@ -138,6 +190,23 @@ func opencodeEventToTurn(event opencodeEvent) *ParsedTurn {
 		if body == "" {
 			return nil
 		}
+		// Ollama's OpenAI-compatible /v1/chat/completions endpoint
+		// often returns a model's tool-call as plain text content
+		// instead of populating message.tool_calls. opencode then
+		// forwards that as a `text` event and the UI loses the
+		// structure. Recover here: if the text body is itself a
+		// `{"name": ..., "arguments": {...}}` envelope, promote it
+		// back to a tool_use turn so the Inspector renders it under
+		// "Tool use" and the right pane can display the target file.
+		if toolName, files := detectTextToolCall(body); toolName != "" {
+			return &ParsedTurn{
+				Role:         "assistant",
+				Content:      body,
+				BlockKind:    BlockKindToolUse,
+				ToolName:     toolName,
+				FilesTouched: files,
+			}
+		}
 		return &ParsedTurn{Role: "assistant", Content: body, BlockKind: BlockKindText}
 
 	case "tool_use":
@@ -145,16 +214,34 @@ func opencodeEventToTurn(event opencodeEvent) *ParsedTurn {
 		if toolName == "" && input == "" {
 			return nil
 		}
+		// opencode reports a model-side mistake (calling a tool that
+		// doesn't exist, e.g. `globe` for `glob`) by emitting a
+		// tool_use whose tool name is the literal "invalid" — the
+		// `state.error` field then carries the human-readable reason.
+		// Stamp Stage="error" so the Inspector's "Errors only" filter
+		// chip surfaces it instead of treating it as a routine call.
+		stage := ""
+		if strings.EqualFold(toolName, "invalid") {
+			stage = "error"
+		}
 		return &ParsedTurn{
 			Role:         "assistant",
 			Content:      input,
 			BlockKind:    BlockKindToolUse,
 			ToolName:     toolName,
 			FilesTouched: files,
+			Stage:        stage,
 		}
 
 	case "step_start", "step_finish":
-		return &ParsedTurn{Role: "system", Content: event.Type, BlockKind: BlockKindSystem}
+		// step_start/finish are opencode's agent-loop iteration
+		// boundaries (one "step" = one model call + its tools).
+		// They have no human-readable payload — surfacing them as
+		// turns just pollutes the Inspector with "System: step_start"
+		// rows between every real action. Drop them here; the
+		// underlying token/timing info lives on the surrounding
+		// tool_use events that the user actually wants to see.
+		return nil
 
 	case "error":
 		if event.Error == "" {
@@ -163,6 +250,24 @@ func opencodeEventToTurn(event opencodeEvent) *ParsedTurn {
 		return &ParsedTurn{Role: "system", Content: "error: " + event.Error, BlockKind: BlockKindSystem, Stage: "error"}
 	}
 	return nil
+}
+
+// extractPartMessageID pulls opencode's per-step `messageID` off any
+// event's `part` payload. Returns "" if the field is absent (junk
+// lines, custom event types, or partial flush windows). Used to
+// group every turn from the same agent decision under one
+// TurnGroupCard in the Inspector.
+func extractPartMessageID(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var part struct {
+		MessageID string `json:"messageID"`
+	}
+	if err := json.Unmarshal(raw, &part); err != nil {
+		return ""
+	}
+	return part.MessageID
 }
 
 // extractPartText pulls the user-visible body out of a `part`
@@ -237,11 +342,17 @@ func formatTimestamp(ms int64) string {
 // CLI picks up the file automatically from CWD.
 //
 // The provider block uses `@ai-sdk/openai-compatible` because
-// Ollama exposes an OpenAI-shaped /v1 API. The models map is
-// intentionally empty — opencode will accept any model id under
-// the `ollama/` prefix at invocation time (matches whatever the
-// user has pulled in their local Ollama).
-func writeOpenCodeConfig(workspacePath, ollamaBase string) error {
+// Ollama exposes an OpenAI-shaped /v1 API. opencode (≥1.15) refuses
+// any --model not enumerated in the provider's `models` map with
+// "Model not found", so we register the exact model id the run will
+// invoke.
+func writeOpenCodeConfig(workspacePath, ollamaBase, model string) error {
+	// model arrives as "ollama/<id>"; strip the provider segment to
+	// get the bare id opencode expects as the models map key.
+	modelID := model
+	if idx := strings.Index(model, "/"); idx >= 0 {
+		modelID = model[idx+1:]
+	}
 	cfg := map[string]any{
 		"$schema": "https://opencode.ai/config.json",
 		"provider": map[string]any{
@@ -251,7 +362,9 @@ func writeOpenCodeConfig(workspacePath, ollamaBase string) error {
 				"options": map[string]any{
 					"baseURL": ollamaBase,
 				},
-				"models": map[string]any{},
+				"models": map[string]any{
+					modelID: map[string]any{},
+				},
 			},
 		},
 	}
@@ -267,27 +380,90 @@ func writeOpenCodeConfig(workspacePath, ollamaBase string) error {
 // `opencode run --model …`. Caller's cfg.Model wins; then the
 // OPENCODE_MODEL env override; then a sane Ollama default.
 func fallbackOpenCodeModel(model string, env map[string]string) string {
-	if strings.TrimSpace(model) != "" {
-		if !strings.Contains(model, "/") {
-			// Caller passed a bare model ID; assume Ollama.
-			return "ollama/" + model
-		}
-		return model
+	if n := normalizeOpenCodeModel(model); n != "" {
+		return n
 	}
-	if value := envOrOSGetenv(env, "OPENCODE_MODEL"); value != "" {
-		return value
+	if n := normalizeOpenCodeModel(envOrOSGetenv(env, "OPENCODE_MODEL")); n != "" {
+		return n
 	}
-	if value := envOrOSGetenv(env, "AIDER_MODEL"); value != "" {
-		// Reuse the AIDER_MODEL env when migrating from the old
-		// executor. aider format is `openai/qwen2.5-coder:7b`;
-		// opencode wants `ollama/qwen2.5-coder:7b`. Swap the
-		// provider segment and keep the model id.
-		if idx := strings.Index(value, "/"); idx >= 0 {
-			return "ollama/" + value[idx+1:]
-		}
-		return "ollama/" + value
+	if n := normalizeOpenCodeModel(envOrOSGetenv(env, "AIDER_MODEL")); n != "" {
+		return n
 	}
 	return "ollama/qwen2.5-coder:7b"
+}
+
+// detectTextToolCall inspects a text part body for the
+// `{"name": "...", "arguments": {...}}` shape that Ollama-hosted
+// models commonly emit when the underlying chat API doesn't surface
+// proper tool_calls. Returns the tool name and any file paths
+// referenced in the arguments, or ("", nil) if the body is plain
+// prose. Tolerant of leading/trailing whitespace and code-fence
+// wrappers ("```json ... ```") since small models sometimes wrap
+// their structured output that way.
+func detectTextToolCall(body string) (toolName string, files []string) {
+	trimmed := strings.TrimSpace(body)
+	// Strip a leading ```json (or just ```) and trailing ``` fence.
+	if strings.HasPrefix(trimmed, "```") {
+		if idx := strings.Index(trimmed, "\n"); idx >= 0 {
+			trimmed = trimmed[idx+1:]
+		}
+		trimmed = strings.TrimSuffix(strings.TrimSpace(trimmed), "```")
+		trimmed = strings.TrimSpace(trimmed)
+	}
+	if !strings.HasPrefix(trimmed, "{") {
+		return "", nil
+	}
+	var envelope struct {
+		Name      string         `json:"name"`
+		Arguments map[string]any `json:"arguments"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &envelope); err != nil {
+		return "", nil
+	}
+	if envelope.Name == "" || envelope.Arguments == nil {
+		return "", nil
+	}
+	// Pull every plausible path key. Different opencode tools use
+	// different field names (write → filePath, edit → path,
+	// multi-edit → files[].path). We collect the union so the
+	// Inspector's file-filter chips light up regardless of which
+	// shape the model used.
+	for _, key := range []string{"filePath", "file_path", "path"} {
+		if v, ok := envelope.Arguments[key].(string); ok && v != "" {
+			files = append(files, v)
+		}
+	}
+	if raw, ok := envelope.Arguments["files"].([]any); ok {
+		for _, item := range raw {
+			if obj, ok := item.(map[string]any); ok {
+				if p, ok := obj["path"].(string); ok && p != "" {
+					files = append(files, p)
+				}
+			} else if s, ok := item.(string); ok && s != "" {
+				files = append(files, s)
+			}
+		}
+	}
+	return envelope.Name, files
+}
+
+// normalizeOpenCodeModel rewrites bare or LiteLLM-style ids onto the
+// `ollama/` provider (the one writeOpenCodeConfig registers locally).
+// Built-in opencode providers (opencode/*) are passed through
+// unchanged so they reach opencode's bundled cloud transport rather
+// than being misrouted through the local Ollama config.
+func normalizeOpenCodeModel(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ""
+	}
+	if strings.HasPrefix(model, "opencode/") {
+		return model
+	}
+	if idx := strings.Index(model, "/"); idx >= 0 {
+		return "ollama/" + model[idx+1:]
+	}
+	return "ollama/" + model
 }
 
 // envOrOSGetenv is a tiny helper local to this package: prefer the

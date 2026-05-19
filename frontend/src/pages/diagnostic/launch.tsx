@@ -13,7 +13,11 @@ import {
 } from '../../lib/hooks';
 
 const DEFAULT_RUNS_PER_VARIANT = 5;
-const MIN_RUNS_PER_VARIANT = 5;
+// Lowered from 5 to 1 to allow single-run smoke tests during
+// development. The statistical-power argument for 5+ still holds for
+// real diagnostics, but the slider lets users opt into that range —
+// the framework no longer refuses 1-run experiments outright.
+const MIN_RUNS_PER_VARIANT = 1;
 
 export function DiagnosticLaunchPage() {
   const [searchParams] = useSearchParams();
@@ -49,6 +53,12 @@ export function DiagnosticLaunchPage() {
         return ['cursor'];
       case 'aider':
         return ['ollama', 'openai', 'anthropic', 'google'];
+      case 'opencode':
+        // opencode reaches its bundled free cloud models via opencode/*
+        // and local Ollama via ollama/*. We surface both so users can
+        // toggle between a fast cloud model and an offline run without
+        // switching executors.
+        return ['opencode', 'ollama'];
       default:
         return [];
     }
@@ -230,7 +240,7 @@ export function DiagnosticLaunchPage() {
       <Card>
         <CardHeader
           title="4. Sample size"
-          description={`Minimum ${MIN_RUNS_PER_VARIANT} runs per variant for statistical power. Bigger = slower but cleaner profile.`}
+          description={`${MIN_RUNS_PER_VARIANT}-run minimum for fast smoke tests; 5+ recommended for statistical power. Bigger = slower but cleaner profile.`}
         />
         <div className="flex flex-wrap items-center gap-3">
           <input

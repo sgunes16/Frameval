@@ -189,6 +189,8 @@ export type Transcript = {
 export type Grade = {
   composite_score: number;
   test_pass_rate: number;
+  test_pass_count?: number;
+  test_fail_count?: number;
   lint_score: number;
   token_efficiency: number;
   context_utilization: number;
@@ -196,6 +198,9 @@ export type Grade = {
   total_tokens?: number;
   judge_correctness: number;
   spec_instruction_compliance: number;
+  premature_completion?: boolean;
+  tool_call_accuracy?: number;
+  cost_usd?: number;
   test_results?: Array<{ name: string; passed: boolean; output: string }>;
 };
 
