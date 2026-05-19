@@ -50,4 +50,39 @@ describe('InspectorSearch', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
+  it('marks the dialog as aria-modal', async () => {
+    render(<InspectorSearch turns={turns} onFocus={() => {}} />);
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('exposes the active option via aria-activedescendant for AT', async () => {
+    render(<InspectorSearch turns={turns} onFocus={() => {}} />);
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const input = await screen.findByLabelText(/search query/i);
+    const user = userEvent.setup();
+    await user.type(input, 'rate');
+    expect(input).toHaveAttribute('aria-activedescendant');
+    const activeId = input.getAttribute('aria-activedescendant');
+    expect(activeId).toBeTruthy();
+    expect(document.getElementById(activeId!)).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('ignores Cmd-K when focus is in a foreign input', () => {
+    // Render the palette alongside an unrelated input. Focusing the
+    // foreign input and pressing Cmd-K must NOT open the palette,
+    // because the user is mid-typing somewhere else on the page.
+    render(
+      <>
+        <input data-testid="foreign" />
+        <InspectorSearch turns={turns} onFocus={() => {}} />
+      </>,
+    );
+    const foreign = screen.getByTestId('foreign') as HTMLInputElement;
+    foreign.focus();
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

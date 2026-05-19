@@ -31,12 +31,30 @@ export function InspectorSearch({ turns, onFocus }: InspectorSearchProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // Tracks whether the previous render had the modal open, so we can
+  // return focus to the trigger button only on close transitions (not
+  // on the initial render where open starts as false).
+  const wasOpenRef = useRef(false);
 
   // Global Cmd-K / Ctrl-K listener. Bound once at mount; cleanup on
   // unmount keeps test renders from leaking listeners across runs.
+  // The activeElement guard prevents Cmd-K from hijacking the
+  // shortcut while the user is editing an unrelated input — e.g. a
+  // text field elsewhere on the page. We do not guard when the
+  // palette's own input is the active element, because Cmd-K should
+  // still toggle the modal closed from inside it.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        const active = document.activeElement as HTMLElement | null;
+        const isOwnInput = active !== null && active === inputRef.current;
+        const tag = (active?.tagName ?? '').toLowerCase();
+        const isEditable =
+          tag === 'input' ||
+          tag === 'textarea' ||
+          active?.getAttribute('contenteditable') === 'true';
+        if (isEditable && !isOwnInput) return;
         e.preventDefault();
         setOpen((prev) => !prev);
       }
@@ -52,7 +70,12 @@ export function InspectorSearch({ turns, onFocus }: InspectorSearchProps) {
       // Defer one tick — the input mounts inside the same effect
       // cycle, so focus() before paint would no-op.
       queueMicrotask(() => inputRef.current?.focus());
+    } else if (wasOpenRef.current) {
+      // Close transition: return focus to the trigger so keyboard
+      // users land back where they started (WCAG 2.1 SC 3.2.2).
+      queueMicrotask(() => triggerRef.current?.focus());
     }
+    wasOpenRef.current = open;
   }, [open]);
 
   const results = useMemo<TurnSearchResult[]>(
@@ -63,6 +86,7 @@ export function InspectorSearch({ turns, onFocus }: InspectorSearchProps) {
   if (!open) {
     return (
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-2 rounded-md border border-border bg-bg-elev-2 px-2 py-1 text-xs text-fg-muted hover:bg-bg-elev-1"
@@ -95,9 +119,16 @@ export function InspectorSearch({ turns, onFocus }: InspectorSearchProps) {
     }
   };
 
+  const listboxId = 'inspector-search-results';
+  const activeOptionId =
+    results.length > 0 && selected < results.length
+      ? `${listboxId}-opt-${selected}`
+      : undefined;
+
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label="Search turns"
       className="fixed inset-0 z-50 flex items-start justify-center bg-bg/60 p-4 pt-24"
       onClick={() => setOpen(false)}
@@ -106,9 +137,20 @@ export function InspectorSearch({ turns, onFocus }: InspectorSearchProps) {
         className="w-full max-w-xl rounded-md border border-border bg-bg-elev-1 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
+        {/*
+          Combobox pattern: the input owns selection state via
+          aria-activedescendant pointing at the highlighted option's
+          id. The listbox is referenced via aria-controls so AT can
+          discover the popup it commands.
+        */}
         <input
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls={listboxId}
+          aria-activedescendant={activeOptionId}
+          aria-autocomplete="list"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -119,39 +161,44 @@ export function InspectorSearch({ turns, onFocus }: InspectorSearchProps) {
           className="w-full rounded-t-md border-b border-border bg-transparent px-4 py-3 text-sm text-fg placeholder:text-fg-subtle focus:outline-none"
           aria-label="Search query"
         />
-        <ul
-          role="listbox"
-          aria-label="Search results"
-          className="max-h-80 overflow-y-auto"
-        >
-          {results.length === 0 && query.trim().length > 0 && (
-            <li className="px-4 py-3 text-sm text-fg-muted">No matching turns.</li>
-          )}
-          {results.map((row, i) => {
-            const active = i === selected;
-            const parent = row.turn.parent_turn_index ?? row.turn.turn_index ?? 0;
-            return (
-              <li
-                key={`${parent}-${i}`}
-                role="option"
-                aria-selected={active}
-                onMouseEnter={() => setSelected(i)}
-                onClick={() => choose(i)}
-                className={`cursor-pointer border-b border-border px-4 py-2 text-sm last:border-b-0 ${
-                  active ? 'bg-bg-elev-2' : ''
-                }`}
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono text-xs text-fg-muted">Turn {parent}</span>
-                  {row.turn.tool_name && (
-                    <span className="font-mono text-xs text-fg-subtle">{row.turn.tool_name}</span>
-                  )}
-                </div>
-                <div className="mt-0.5 text-fg">{row.snippet || '(no preview)'}</div>
-              </li>
-            );
-          })}
-        </ul>
+        {results.length === 0 && query.trim().length > 0 ? (
+          <div className="px-4 py-3 text-sm text-fg-muted" role="status">
+            No matching turns.
+          </div>
+        ) : (
+          <ul
+            id={listboxId}
+            role="listbox"
+            aria-label="Search results"
+            className="max-h-80 overflow-y-auto"
+          >
+            {results.map((row, i) => {
+              const active = i === selected;
+              const parent = row.turn.parent_turn_index ?? row.turn.turn_index ?? 0;
+              return (
+                <li
+                  key={`${parent}-${i}`}
+                  id={`${listboxId}-opt-${i}`}
+                  role="option"
+                  aria-selected={active}
+                  onMouseEnter={() => setSelected(i)}
+                  onClick={() => choose(i)}
+                  className={`cursor-pointer border-b border-border px-4 py-2 text-sm last:border-b-0 ${
+                    active ? 'bg-bg-elev-2' : ''
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-mono text-xs text-fg-muted">Turn {parent}</span>
+                    {row.turn.tool_name && (
+                      <span className="font-mono text-xs text-fg-subtle">{row.turn.tool_name}</span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-fg">{row.snippet || '(no preview)'}</div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );
