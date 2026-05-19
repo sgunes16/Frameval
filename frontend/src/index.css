@@ -1,22 +1,36 @@
+/**
+ * Design tokens live in their own file so consumers (and tests) can
+ * audit the surface without scrolling past Tailwind directives.
+ *
+ * @import must precede every other at-rule per the CSS spec; PostCSS
+ * and Vite tolerate a misplaced import today but a future tooling
+ * upgrade could silently drop it and leave every hsl(var(--*))
+ * reference resolving to transparent.
+ */
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  /* Legacy RGB-tuple variables kept temporarily so any in-tree component
+   * still consuming rgb(var(--background)) etc. continues to resolve.
+   * The migration story (#74) removes these once every callsite has
+   * switched to the new token utilities. */
   --background: 255 255 255;
   --foreground: 15 23 42;
   --muted: 248 250 252;
   --muted-foreground: 100 116 139;
-  --border: 226 232 240;
   --primary: 15 23 42;
   --primary-foreground: 248 250 252;
-  --accent: 99 102 241;
-  --success: 22 163 74;
-  --warning: 217 119 6;
-  --danger: 220 38 38;
+  color-scheme: light;
   font-family: 'Inter', 'SF Pro Text', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+.dark {
+  color-scheme: dark;
 }
 
 html,
@@ -27,8 +41,8 @@ body,
 
 body {
   margin: 0;
-  color: rgb(var(--foreground));
-  background: radial-gradient(circle at top, #fbfcff 0%, #f5f7fb 45%, #eef2f8 100%);
+  color: hsl(var(--fg));
+  background: hsl(var(--bg));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -43,15 +57,15 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
+  background: hsl(var(--border-strong) / 0.55);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.55);
+  background: hsl(var(--fg-subtle) / 0.55);
 }
 
 .glass-panel {
-  background: rgba(255, 255, 255, 0.78);
+  background: hsl(var(--bg-elev-1) / 0.78);
   backdrop-filter: saturate(140%) blur(8px);
 }

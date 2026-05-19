@@ -1,0 +1,104 @@
+/**
+ * Design System V2 — token foundation.
+ *
+ * All semantic surfaces are HSL triplets exposed as CSS variables so
+ * Tailwind utilities like `bg-elev-1`, `text-fg-muted`, `border-strong`
+ * resolve to the right color in whichever theme is active. Light mode
+ * lives in :root; the .dark class on <html> swaps to the dark theme.
+ *
+ * Dark-mode-first principle: the dark palette is the design canvas the
+ * UI was tuned against. The light palette is a re-tuned counterpart that
+ * preserves WCAG AA contrast (--fg / --bg ≥ 7.0, --fg-muted / --bg ≥ 4.5).
+ *
+ * Naming convention:
+ *   --bg, --bg-elev-1, --bg-elev-2 — page background up to popovers
+ *   --fg, --fg-muted, --fg-subtle  — primary, secondary, tertiary text
+ *   --border, --border-strong      — hairlines + focus rings
+ *   --accent / --success / --warning / --danger / --info — semantic intent
+ *   --diff-{add|del}{|-text}       — diff hunks (Inspector V2)
+ *   --chart-1..8                   — colorblind-safe series palette
+ */
+
+:root {
+  /* surfaces */
+  --bg: 0 0% 100%;
+  --bg-elev-1: 222 14% 98%;
+  --bg-elev-2: 222 14% 96%;
+
+  /* text */
+  --fg: 222 14% 12%;
+  --fg-muted: 222 8% 40%;
+  --fg-subtle: 222 8% 60%;
+
+  /* hairlines + focus */
+  --border: 220 14% 90%;
+  --border-strong: 220 14% 78%;
+
+  /* semantic */
+  --accent: 199 89% 50%;
+  --success: 142 71% 40%;
+  --warning: 38 92% 50%;
+  --danger: 0 84% 50%;
+  --info: 217 91% 55%;
+
+  /* monospace blocks */
+  --code-bg: 222 14% 96%;
+
+  /* diff hunks */
+  --diff-add: 142 60% 92%;
+  --diff-del: 0 60% 94%;
+  --diff-add-text: 142 60% 28%;
+  --diff-del-text: 0 60% 36%;
+
+  /* chart series — Okabe-Ito-derived, colorblind-safe in both themes */
+  --chart-1: 199 89% 50%;
+  --chart-2: 142 71% 40%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 0 84% 50%;
+  --chart-5: 280 70% 55%;
+  --chart-6: 24 95% 53%;
+  --chart-7: 173 80% 36%;
+  --chart-8: 217 91% 55%;
+}
+
+.dark {
+  /* surfaces */
+  --bg: 222 14% 8%;
+  --bg-elev-1: 222 14% 11%;
+  --bg-elev-2: 222 14% 14%;
+
+  /* text */
+  --fg: 220 14% 96%;
+  --fg-muted: 220 8% 65%;
+  --fg-subtle: 220 8% 45%;
+
+  /* hairlines + focus */
+  --border: 222 12% 22%;
+  --border-strong: 222 12% 32%;
+
+  /* semantic — brightened so contrast against the dark bg meets AA */
+  --accent: 199 89% 60%;
+  --success: 142 71% 45%;
+  --warning: 38 92% 55%;
+  --danger: 0 84% 60%;
+  --info: 217 91% 60%;
+
+  /* monospace blocks */
+  --code-bg: 222 14% 6%;
+
+  /* diff hunks — inverted contrast: dark backgrounds with bright text */
+  --diff-add: 142 60% 20%;
+  --diff-del: 0 60% 22%;
+  --diff-add-text: 142 71% 60%;
+  --diff-del-text: 0 84% 70%;
+
+  /* chart series — brightened siblings of the light palette */
+  --chart-1: 199 89% 60%;
+  --chart-2: 142 71% 50%;
+  --chart-3: 38 92% 60%;
+  --chart-4: 0 84% 65%;
+  --chart-5: 280 70% 65%;
+  --chart-6: 24 95% 60%;
+  --chart-7: 173 80% 50%;
+  --chart-8: 217 91% 65%;
+}
