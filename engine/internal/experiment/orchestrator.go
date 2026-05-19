@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -224,12 +225,30 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", fmt.Sprintf("harness setup: %v", setupErr))
 		return setupErr
 	}
+	// Incremental transcript streamer: each output line is appended to
+	// a running buffer; on every paragraph break (blank line) the
+	// buffer is re-parsed via the executor's structural parser, the
+	// transcript row is UPSERTed with the latest ParsedTurns, and a
+	// run.turn event is broadcast so the frontend invalidates its
+	// turns query. The end-of-run SaveTranscript call OVERWRITES this
+	// partial state with the full transcript (patch + output_files +
+	// filesystem_diff), so no data is lost. Lock guards against
+	// concurrent OnOutput invocations from the sandbox writer.
+	stream := &incrementalTranscriptStreamer{
+		store:        o.store,
+		exec:         execImpl,
+		runID:        run.ID,
+		experimentID: experiment.ID,
+		broadcast:    o.broadcast,
+		ctx:          ctx,
+	}
 	hRun.BaseRunConfig = pkgexec.RunConfig{
 		WorkspacePath: workspace,
 		Model:         experiment.Model,
 		Environment:   runEnvironment(task.ID),
 		OnOutput: func(line string) {
 			o.broadcastRunLog(*experiment, *run, "executor", line)
+			stream.append(line)
 		},
 	}
 	result, execErr := harnessImpl.Invoke(ctx, hRun, execImpl)
@@ -461,6 +480,79 @@ func (o *Orchestrator) ReparseRunTranscript(ctx context.Context, runID string) (
 	// Re-anchor since structure changed.
 	o.refreshExperimentAnchors(ctx, run.ExperimentID)
 	return len(turns), nil
+}
+
+// incrementalTranscriptStreamer drives live Inspector V2 updates
+// while a run is still in progress. The executor's OnOutput callback
+// feeds it one line at a time; on every paragraph break (a blank
+// line in the agent's output) the buffer is re-parsed via the
+// executor's structural parser and the transcript row is UPSERTed
+// with the latest ParsedTurns. A run.turn WS event then fires so
+// the frontend's useTurnStream invalidates its cache and refetches
+// the new turns via REST.
+//
+// The end-of-run SaveTranscript call OVERWRITES this partial state
+// with the full transcript (patch, output_files, filesystem_diff),
+// so the streaming intermediate writes never lose data — they're
+// just a strictly-monotonic prefix of the final transcript.
+type incrementalTranscriptStreamer struct {
+	store        *storage.Store
+	exec         pkgexec.AgentExecutor
+	runID        string
+	experimentID string
+	broadcast    func(eventType string, payload any)
+	ctx          context.Context
+
+	mu           sync.Mutex
+	buf          strings.Builder
+	prevWasBlank bool
+	lastFlushLen int
+}
+
+// append accumulates `line` and triggers a flush on a paragraph
+// break (two consecutive blank lines). The first blank line marks
+// the END of a paragraph; we flush there so each finalized
+// paragraph becomes a ParsedTurn in the live view before the next
+// one starts arriving. Aider prints lots of blank lines in steady
+// state — only flush when the buffer actually grew since the last
+// flush, otherwise we'd hammer the DB with no-op writes.
+func (s *incrementalTranscriptStreamer) append(line string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.buf.WriteString(line)
+	s.buf.WriteByte('\n')
+	blank := strings.TrimSpace(line) == ""
+	if blank && !s.prevWasBlank && s.buf.Len() > s.lastFlushLen {
+		s.flushLocked()
+	}
+	s.prevWasBlank = blank
+}
+
+func (s *incrementalTranscriptStreamer) flushLocked() {
+	text := s.buf.String()
+	s.lastFlushLen = s.buf.Len()
+	turns, err := s.exec.ParseTranscript([]byte(text))
+	if err != nil {
+		return
+	}
+	transcript := models.Transcript{
+		// Leave ID empty — SaveTranscript assigns one the first
+		// time and ON CONFLICT(run_id) reuses the existing row on
+		// every subsequent write.
+		RunID:       s.runID,
+		RawOutput:   text,
+		ParsedTurns: turns,
+		TotalTurns:  len(turns),
+		TotalTokens: len(strings.Fields(text)),
+	}
+	if err := s.store.SaveTranscript(s.ctx, transcript); err != nil {
+		return
+	}
+	s.broadcast("run.turn", map[string]any{
+		"experiment_id": s.experimentID,
+		"run_id":        s.runID,
+		"turn_count":    len(turns),
+	})
 }
 
 // refreshExperimentAnchors rebuilds the cached AnchorBundle for an
