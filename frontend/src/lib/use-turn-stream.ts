@@ -95,6 +95,14 @@ export function useTurnStream(runId: string | undefined): UseTurnStreamResult {
     // double-invoke, or fast navigation between runs) leaves a
     // dangling timer that calls connect() into a stale closure.
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    // Exponential backoff for reconnects. Flat 2s previously
+    // hammered the engine during Air rebuilds (every Inspector tab
+    // re-tried /ws every 2s while the engine was down, filling
+    // Vite proxy logs with ECONNRESET / EPIPE). Doubling up to 30s
+    // keeps the cost down. A successful onopen resets the counter
+    // so a healthy session never sees the long delays.
+    let backoffMs = 1000;
+    const MAX_BACKOFF_MS = 30_000;
 
     const connect = () => {
       const socket = new WebSocket(wsBase);
@@ -102,6 +110,9 @@ export function useTurnStream(runId: string | undefined): UseTurnStreamResult {
 
       socket.onopen = () => {
         if (cancelled) return;
+        // Successful open: reset the backoff so the next disconnect
+        // (e.g. engine restart) reconnects quickly again.
+        backoffMs = 1000;
         setState((prev) => ({ ...prev, isConnected: true }));
         // Reconcile any turns we missed while disconnected.
         client.invalidateQueries({ queryKey: ['run-turns', runId] });
@@ -131,14 +142,12 @@ export function useTurnStream(runId: string | undefined): UseTurnStreamResult {
       socket.onclose = () => {
         if (cancelled) return;
         setState((prev) => ({ ...prev, isConnected: false }));
-        // Backoff before reconnect. 2s is a deliberate compromise:
-        // long enough that a brief blip doesn't thrash the engine,
-        // short enough that the user doesn't perceive a gap. The
-        // handle is tracked so the effect's cleanup can clear it.
+        const delay = backoffMs;
+        backoffMs = Math.min(MAX_BACKOFF_MS, backoffMs * 2);
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
           if (!cancelled) connect();
-        }, 2000);
+        }, delay);
       };
 
       socket.onerror = () => {

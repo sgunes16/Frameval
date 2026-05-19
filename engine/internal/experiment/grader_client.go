@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/sony/gobreaker/v2"
@@ -33,6 +34,13 @@ type GraderClient struct {
 	client  graderpb.GraderServiceClient
 	breaker *gobreaker.CircuitBreaker[any]
 	logger  *slog.Logger
+	// Logged-once latch for the grader-unavailable warning. Without
+	// it the orchestrator floods the log with one WARN line per run
+	// while the grader is offline (the common dev case: nobody
+	// started the Python sidecar). Once tripped, subsequent calls
+	// fall back silently and rely on the original WARN being
+	// visible above in the log.
+	graderDownLogged atomic.Bool
 }
 
 // NewGraderClient dials the grader at addr and stores the resulting
@@ -217,10 +225,19 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 	})
 	if err != nil {
 		if errors.Is(err, ErrGraderUnavailable) {
-			c.logger.Warn("grade_run: breaker open, returning fallback grade", "run_id", transcript.RunID, "err", err)
+			// Log loudly ONCE so operators see the grader is down;
+			// subsequent runs fall back silently. The earlier per-
+			// run WARN flooded the log when the grader sidecar was
+			// off (the common dev case).
+			if c.graderDownLogged.CompareAndSwap(false, true) {
+				c.logger.Warn("grade_run: grader unavailable, returning fallback grade for this and subsequent runs until the grader returns", "run_id", transcript.RunID, "err", err)
+			}
 		}
 		return fallbackGrade(transcript), nil
 	}
+	// Reset the "down logged" latch on the first successful grade
+	// after an outage so a NEW outage produces a fresh WARN.
+	c.graderDownLogged.Store(false)
 	grade := gradeFromProto(response)
 	grade.Source = models.GradeSourceGrader
 	return grade, nil
