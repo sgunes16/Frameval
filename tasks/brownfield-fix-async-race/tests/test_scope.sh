@@ -28,9 +28,12 @@ if ! git rev-parse --verify --quiet baseline >/dev/null; then
 fi
 
 # Anything tracked-and-modified or staged or newly committed since the
-# baseline tag set by setup.sh.
-CHANGED=$(git diff --name-only baseline -- 2>/dev/null || true)
-UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+# baseline tag set by setup.sh. Excludes tests/ because Frameval
+# materializes the truth-set into the workspace right before verification
+# (it's not on disk during the agent's turn). Without the exclusion, the
+# scope check sees tests/* as new untracked files and blames the agent.
+CHANGED=$(git diff --name-only baseline -- ':!tests' ':!tests/**' 2>/dev/null || true)
+UNTRACKED=$(git ls-files --others --exclude-standard -- ':!tests' ':!tests/**' 2>/dev/null || true)
 ALL_TOUCHED=$(printf "%s\n%s\n" "$CHANGED" "$UNTRACKED" | sed '/^$/d' | sort -u)
 
 EXPECTED="app/user_service.py"

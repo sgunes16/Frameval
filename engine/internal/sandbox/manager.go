@@ -676,9 +676,34 @@ func (m *Manager) CapturePatch(ctx context.Context, workspace string) (string, e
 }
 
 func ensureWorkspaceGitBaseline(ctx context.Context, workspace string) error {
-	if err := os.RemoveAll(filepath.Join(workspace, ".git")); err != nil {
-		return fmt.Errorf("remove existing git metadata: %w", err)
+	// If setup.sh already initialized the workspace as a git repo
+	// (brownfield tasks like fix-async-race do this so test_scope.sh
+	// can `git diff --name-only baseline`), respect that state.
+	// Wiping .git here used to clobber the task-defined `baseline`
+	// tag and made scope tests fail with "baseline tag missing".
+	// Frameval still ensures *a* baseline commit exists below in case
+	// setup.sh didn't run or didn't commit anything.
+	gitDir := filepath.Join(workspace, ".git")
+	if info, err := os.Stat(gitDir); err == nil && info.IsDir() {
+		// Repo exists. Make sure there's at least one commit so
+		// downstream `git diff` calls have something to compare to;
+		// don't touch existing tags / refs / config.
+		if err := writeGitInfoExclude(workspace); err != nil {
+			return err
+		}
+		if hasCommit := runGitCommand(ctx, workspace, nil, "rev-parse", "--verify", "HEAD") == nil; !hasCommit {
+			if err := runGitCommand(ctx, workspace, nil, "add", "-A"); err != nil {
+				return err
+			}
+			if err := runGitCommand(ctx, workspace, gitIdentityEnv(), "commit", "--allow-empty", "-qm", "frameval baseline"); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
+	// No existing repo — initialize a fresh frameval baseline so
+	// downstream patch capture (CapturePatch) and any task that
+	// expects to diff against HEAD works regardless.
 	if err := runGitCommand(ctx, workspace, nil, "init", "-q"); err != nil {
 		return err
 	}
