@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bufio"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -61,6 +63,30 @@ type statusRecorder struct {
 func (sr *statusRecorder) WriteHeader(status int) {
 	sr.status = status
 	sr.ResponseWriter.WriteHeader(status)
+}
+
+// Hijack proxies the underlying ResponseWriter's Hijacker. The
+// WebSocket upgrade path (gorilla/websocket Upgrade) needs to take
+// over the underlying TCP connection via http.Hijacker — without
+// this method the upgrade fails with "response writer does not
+// support hijacking", and `/ws` returns HTTP 500 instantly. The
+// statusRecorder wraps every request, so the WS handler can't see
+// the real ResponseWriter unless we forward Hijack through.
+func (sr *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := sr.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	return hj.Hijack()
+}
+
+// Flush proxies the underlying ResponseWriter's Flusher. Same
+// rationale as Hijack — streaming endpoints (SSE) need Flush on the
+// wrapped writer, not on the recorder.
+func (sr *statusRecorder) Flush() {
+	if fl, ok := sr.ResponseWriter.(http.Flusher); ok {
+		fl.Flush()
+	}
 }
 
 // statusOrOK reports the captured status, or 200 if the handler wrote
