@@ -161,11 +161,20 @@ export function RunInspectPage() {
           </div>
           <div className="flex items-center gap-3">
             <InspectorSearch turns={turns} onFocus={setFocusedParentIndex} />
-            <LiveCursor
-              isConnected={stream.isConnected}
-              lastEventAt={stream.lastEventAt}
-              turnCount={stream.lastTurnCount}
-            />
+            {/*
+              LiveCursor only makes sense while the run is actively
+              producing turns. A 'completed' / 'failed' run still has
+              the WS connected and lastEventAt populated from the
+              final turn, but rendering "Live" for a finished run
+              would be misleading. Hide it once the run is terminal.
+            */}
+            {run?.status === 'running' && (
+              <LiveCursor
+                isConnected={stream.isConnected}
+                lastEventAt={stream.lastEventAt}
+                turnCount={stream.lastTurnCount}
+              />
+            )}
             {run && (
               <div className="text-xs text-fg-muted">
                 status: <span className="font-mono text-fg">{run.status}</span>

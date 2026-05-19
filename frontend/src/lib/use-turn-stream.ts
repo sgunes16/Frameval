@@ -90,6 +90,11 @@ export function useTurnStream(runId: string | undefined): UseTurnStreamResult {
       import.meta.env.VITE_WS_BASE_URL ||
       `${window.location.origin.replace(/^http/, 'ws')}/ws`;
     let cancelled = false;
+    // Track the in-flight reconnect timer so the cleanup path can
+    // cancel it. Without this a rapid mount/unmount (StrictMode
+    // double-invoke, or fast navigation between runs) leaves a
+    // dangling timer that calls connect() into a stale closure.
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = () => {
       const socket = new WebSocket(wsBase);
@@ -128,8 +133,10 @@ export function useTurnStream(runId: string | undefined): UseTurnStreamResult {
         setState((prev) => ({ ...prev, isConnected: false }));
         // Backoff before reconnect. 2s is a deliberate compromise:
         // long enough that a brief blip doesn't thrash the engine,
-        // short enough that the user doesn't perceive a gap.
-        setTimeout(() => {
+        // short enough that the user doesn't perceive a gap. The
+        // handle is tracked so the effect's cleanup can clear it.
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
           if (!cancelled) connect();
         }, 2000);
       };
@@ -143,6 +150,10 @@ export function useTurnStream(runId: string | undefined): UseTurnStreamResult {
 
     return () => {
       cancelled = true;
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       socketRef.current?.close();
     };
   }, [runId, client]);
