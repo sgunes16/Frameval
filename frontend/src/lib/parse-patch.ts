@@ -40,6 +40,10 @@ export function parsePatch(raw: string): Map<string, FileDiff> {
   // hunkLines collects the raw hunk text per file so we can attach it
   // when we finalise the entry.
   let hunkLines: string[] = [];
+  // Most recent `--- a/<path>` we saw. Used as a fallback when the
+  // matching `+++ /dev/null` line tells us this is a deletion and
+  // the b-side has no path of its own.
+  let pendingSourcePath: string | null = null;
 
   const finalize = () => {
     if (!current) return;
@@ -58,28 +62,34 @@ export function parsePatch(raw: string): Map<string, FileDiff> {
     // optional and we want one code path for both.
     if (line.startsWith('diff --git')) {
       finalize();
-      continue;
-    }
-
-    // The `+++` line carries the post-image path. Use it to open a new
-    // FileDiff if we don't already have one (or to relabel an entry
-    // started by `diff --git` whose path we hadn't yet read).
-    if (line.startsWith('+++ ')) {
-      const path = stripPrefix(line.slice(4));
-      if (path === null) continue; // /dev/null deletion target
-      // If we were collecting an entry, finalize before opening a new one.
-      if (current && current.path !== path) finalize();
-      current = current ?? { path, added: 0, removed: 0, hunks: '' };
-      current.path = path;
+      pendingSourcePath = null;
       continue;
     }
 
     if (line.startsWith('--- ')) {
-      // Source-side path; used only as a fallback when +++ is /dev/null.
-      const path = stripPrefix(line.slice(4));
-      if (current && current.path === '' && path) {
-        current.path = path;
+      // Source-side path; remembered so a `+++ /dev/null` (deletion)
+      // can still produce a FileDiff entry keyed by the deleted path.
+      pendingSourcePath = stripPrefix(line.slice(4));
+      continue;
+    }
+
+    // The `+++` line carries the post-image path. For deletions
+    // (`+++ /dev/null`) we fall back to the `--- a/<path>` we just
+    // saw; otherwise this is an add/modify and we use the b-side path.
+    if (line.startsWith('+++ ')) {
+      let path = stripPrefix(line.slice(4));
+      if (path === null) {
+        // Deletion — recover the path from the matching `---` line.
+        if (!pendingSourcePath) {
+          pendingSourcePath = null;
+          continue;
+        }
+        path = pendingSourcePath;
       }
+      if (current && current.path !== path) finalize();
+      current = current ?? { path, added: 0, removed: 0, hunks: '' };
+      current.path = path;
+      pendingSourcePath = null;
       continue;
     }
 

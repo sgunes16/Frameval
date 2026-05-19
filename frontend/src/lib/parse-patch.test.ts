@@ -75,4 +75,24 @@ describe('parsePatch', () => {
     expect(result.has('foo.txt')).toBe(true);
     expect(result.get('foo.txt')?.added).toBe(1);
   });
+
+  it('keeps deleted files (+++ /dev/null) in the result, keyed by the deleted path', () => {
+    // git emits deletions as: --- a/<path>\n+++ /dev/null. The parser
+    // must recover the path from the `---` line so the diff view can
+    // still show the removed file rather than silently dropping it.
+    const raw = `diff --git a/src/old.go b/src/old.go
+deleted file mode 100644
+--- a/src/old.go
++++ /dev/null
+@@ -1,3 +0,0 @@
+-package old
+-
+-var X = 1
+`;
+    const result = parsePatch(raw);
+    expect(result.has('src/old.go')).toBe(true);
+    const old = result.get('src/old.go') as FileDiff;
+    expect(old.removed).toBe(3);
+    expect(old.added).toBe(0);
+  });
 });

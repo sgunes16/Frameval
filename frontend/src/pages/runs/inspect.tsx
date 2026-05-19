@@ -44,7 +44,7 @@ export function RunInspectPage() {
         : groups.find((g) => g.parentTurnIndex === focusedParentIndex) ?? null,
     [groups, focusedParentIndex],
   );
-  const diffs = usePerTurnDiff(transcriptQuery.data?.patch, focusedGroup?.blocks ?? []);
+  const diffs = usePerTurnDiff(transcriptQuery.data?.patch, focusedGroup?.blocks);
 
   if (runQuery.isError || turnsQuery.isError) {
     return (
