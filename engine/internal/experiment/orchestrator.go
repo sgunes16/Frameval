@@ -424,6 +424,45 @@ func instructionFilesForHarness(harnessID string) []string {
 	}
 }
 
+// ReparseRunTranscript re-runs the executor's ParseTranscript on the
+// stored raw_output of a finished run and overwrites the persisted
+// ParsedTurns. The orchestrator does NOT re-run the agent — this only
+// regenerates the *structured view* of an already-captured output, so
+// transcripts written before a parser improvement can pick up the new
+// classification without a full re-execute.
+//
+// Picks the executor by experiment.agent_cli. Errors when the
+// transcript / experiment / executor is missing; otherwise returns the
+// new turn count so the caller can render a confirmation toast.
+func (o *Orchestrator) ReparseRunTranscript(ctx context.Context, runID string) (int, error) {
+	run, err := o.store.GetRun(ctx, runID)
+	if err != nil {
+		return 0, fmt.Errorf("reparse: get run: %w", err)
+	}
+	transcript, err := o.store.GetTranscriptByRun(ctx, runID)
+	if err != nil {
+		return 0, fmt.Errorf("reparse: get transcript: %w", err)
+	}
+	experiment, err := o.store.GetExperiment(ctx, run.ExperimentID)
+	if err != nil {
+		return 0, fmt.Errorf("reparse: get experiment: %w", err)
+	}
+	exec, err := o.registry.Get(experiment.AgentCLI)
+	if err != nil {
+		return 0, fmt.Errorf("reparse: resolve executor: %w", err)
+	}
+	turns, err := exec.ParseTranscript([]byte(transcript.RawOutput))
+	if err != nil {
+		return 0, fmt.Errorf("reparse: parse: %w", err)
+	}
+	if err := o.store.UpdateTranscriptParsedTurns(ctx, runID, turns); err != nil {
+		return 0, fmt.Errorf("reparse: persist: %w", err)
+	}
+	// Re-anchor since structure changed.
+	o.refreshExperimentAnchors(ctx, run.ExperimentID)
+	return len(turns), nil
+}
+
 // refreshExperimentAnchors rebuilds the cached AnchorBundle for an
 // experiment and persists it to experiments.anchors_json. Called
 // best-effort after each run finalize. Errors flow through slog

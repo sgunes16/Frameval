@@ -106,6 +106,71 @@ package main // updated
 	}
 }
 
+// TestAiderStructuralMarkdownFencedDiff covers the real-world aider
+// output the user pasted in chat — diff edit format with ```diff
+// markdown fences (not <<<<<<< SEARCH), plus the git error wall and
+// 'Tokens:' accounting line. Without the fenced-diff regex these all
+// fell into BlockKindText, which left the Inspector with no tool_use
+// turns to drive the histogram or per-turn diff.
+func TestAiderStructuralMarkdownFencedDiff(t *testing.T) {
+	raw := []byte("Warning: Input is not a terminal (fd=0).\n\n" +
+		"Update git name with: git config user.name \"Your Name\"\n\n" +
+		"Aider v0.86.2\n" +
+		"Model: openai/llama3.1:8b with diff edit format\n" +
+		"Git repo: .git with 6 files\n\n" +
+		"app/user_service.py\n\n" +
+		"To fix the race condition, I will introduce an asyncio.Lock.\n\n" +
+		"```diff\n@@ -10,4 +10,5 @@\n-async def add_credits():\n+async def add_credits():\n+    async with lock:\n```\n\n" +
+		"Tokens: 1.4k sent, 472 received.\n\n" +
+		"Cmd('git') failed due to: exit code(129)\n" +
+		"  cmdline: git diff --cached\n",
+	)
+	e := &AiderExecutor{}
+	turns, err := e.ParseTranscript(raw)
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	if len(turns) < 5 {
+		t.Fatalf("expected at least 5 paragraphs, got %d", len(turns))
+	}
+	var sawDiffEdit bool
+	var diffEditFiles []string
+	for _, turn := range turns {
+		if turn.BlockKind == BlockKindToolUse && strings.Contains(turn.Content, "```diff") {
+			sawDiffEdit = true
+			diffEditFiles = turn.FilesTouched
+		}
+	}
+	if !sawDiffEdit {
+		t.Error("expected the ```diff fenced paragraph to be stamped tool_use; got none")
+	}
+	// The previous paragraph mentioned app/user_service.py — the
+	// parser should have stitched that file mention onto the edit
+	// turn so the per-turn diff has something to scope on.
+	if len(diffEditFiles) == 0 || diffEditFiles[0] != "app/user_service.py" {
+		t.Errorf("expected diff edit to inherit app/user_service.py from prior file-mention; got %v", diffEditFiles)
+	}
+}
+
+// TestAiderStructuralGitErrorIsSystem ensures the giant 'usage: git'
+// wall that aider prints when its internal git invocation fails is
+// classified as system, not text. Otherwise it dominates the
+// Inspector turn list as a noisy assistant paragraph.
+func TestAiderStructuralGitErrorIsSystem(t *testing.T) {
+	raw := []byte("Cmd('git') failed due to: exit code(129)\n  cmdline: git diff --cached\n  stderr: 'error: unknown option `cached'\nusage: git diff --no-index [<options>] <path> <path>\n")
+	e := &AiderExecutor{}
+	turns, err := e.ParseTranscript(raw)
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	if len(turns) != 1 {
+		t.Fatalf("expected 1 turn, got %d", len(turns))
+	}
+	if turns[0].BlockKind != BlockKindSystem {
+		t.Errorf("expected the git error wall to classify as system, got %q", turns[0].BlockKind)
+	}
+}
+
 func TestAiderStructuralEmptyInput(t *testing.T) {
 	e := &AiderExecutor{}
 	turns, err := e.ParseTranscript([]byte(""))

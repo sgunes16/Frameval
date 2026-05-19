@@ -32,6 +32,29 @@ func (s *Store) SaveTranscript(ctx context.Context, transcript models.Transcript
 	return nil
 }
 
+// UpdateTranscriptParsedTurns replaces ONLY the parsed_turns_json
+// column for an existing transcript. Used by the reparse endpoint so
+// transcripts written before a parser improvement can be refreshed
+// without touching raw_output or any of the grade/diagnostic data
+// downstream consumers cache on transcript identity.
+func (s *Store) UpdateTranscriptParsedTurns(ctx context.Context, runID string, turns []models.ParsedTurn) error {
+	res, err := s.DB.ExecContext(ctx,
+		`UPDATE transcripts SET parsed_turns_json = ?, total_turns = ? WHERE run_id = ?`,
+		marshalJSON(turns), len(turns), runID,
+	)
+	if err != nil {
+		return fmt.Errorf("update parsed turns: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update parsed turns rows: %w", err)
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // ListTurns returns the ParsedTurns for a single run. Returns an empty
 // slice (not an error) when the run has no transcript yet — callers can
 // poll this endpoint while a run is still streaming.

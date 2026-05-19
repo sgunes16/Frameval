@@ -170,9 +170,10 @@ func hasAiderRoleMarkers(text string) bool {
 }
 
 // aiderHeaderLine matches the well-known Aider banner lines emitted at
-// the top of every CLI run. These belong to BlockKindSystem.
+// the top of every CLI run AND the misc system lines (token accounting,
+// git errors) that appear in the middle/end of a run.
 var aiderHeaderLine = regexp.MustCompile(
-	`(?i)^(Aider v|Model:|Git repo:|Repo-map:|Warning(?: for [^:]+)?:|Update git \w+ with:|You can skip this check|Tokens: |Cost: |Added [^ ]+ to the chat)`,
+	`(?i)^(Aider v|Model:|Git repo:|Repo-map:|Warning(?: for [^:]+)?:|Update git \w+ with:|You can skip this check|Tokens: |Cost: |Added [^ ]+ to the chat|Cmd\('git'\) failed|usage: git|error: unknown option|Input is not a terminal)`,
 )
 
 // aiderFilePath matches a bare file path on its own — Aider prints
@@ -185,8 +186,16 @@ var aiderFilePath = regexp.MustCompile(
 
 // aiderSearchReplaceStart marks the opening of an Aider edit block —
 // the agent's actual code change. The matching block_kind is tool_use
-// with tool_name=Edit.
+// with tool_name=Edit. Aider emits edits in two formats:
+//   - whole edit format: `<<<<<<< SEARCH … ======= … >>>>>>> REPLACE`
+//   - diff edit format:  fenced markdown `` ```diff `` block
+// Either opener is enough to classify the paragraph as an edit.
 var aiderSearchReplaceStart = regexp.MustCompile(`(?m)^<{5,}\s*SEARCH\b`)
+
+// aiderDiffFenceStart matches a markdown-fenced diff block.
+// Aider's `--edit-format diff` writes patches as ` ```diff ` fences,
+// which we treat as tool_use just like the SEARCH/REPLACE form.
+var aiderDiffFenceStart = regexp.MustCompile("(?m)^```diff\\b")
 
 // fileMentionInLine extracts any file paths referenced inside a
 // paragraph (e.g. "I'll edit src/main.go and tests/foo.py"). Used to
@@ -204,6 +213,12 @@ var fileMentionInLine = regexp.MustCompile(
 func parseAiderStructural(text, now string) []ParsedTurn {
 	paragraphs := splitParagraphs(text)
 	turns := make([]ParsedTurn, 0, len(paragraphs))
+	// Tracks the most-recently-named file across paragraphs so edit
+	// blocks (SEARCH/REPLACE, ```diff fences) inherit the path from
+	// the bare file-mention line aider prints before them. Reset on
+	// any system-class turn so we don't carry a file from one logical
+	// section to the next.
+	var lastMentionedFiles []string
 	for _, p := range paragraphs {
 		if strings.TrimSpace(p) == "" {
 			continue
@@ -217,13 +232,20 @@ func parseAiderStructural(text, now string) []ParsedTurn {
 		switch turn.BlockKind {
 		case BlockKindToolUse:
 			turn.ToolName = "Edit"
-			turn.FilesTouched = extractFileMentions(p)
+			files := extractFileMentions(p)
+			if len(files) == 0 && len(lastMentionedFiles) > 0 {
+				files = append([]string(nil), lastMentionedFiles...)
+			}
+			turn.FilesTouched = files
 		case BlockKindToolResult:
-			// File mention paragraphs name exactly one file most of the
-			// time; use the first match as the touched path so the
-			// histogram has something to group on.
 			turn.ToolName = "Read"
-			turn.FilesTouched = extractFileMentions(p)
+			files := extractFileMentions(p)
+			turn.FilesTouched = files
+			if len(files) > 0 {
+				lastMentionedFiles = files
+			}
+		case BlockKindSystem:
+			lastMentionedFiles = nil
 		}
 		turns = append(turns, turn)
 	}
@@ -263,8 +285,8 @@ func classifyAiderParagraph(p string) string {
 	if trimmed == "" {
 		return BlockKindText
 	}
-	// SEARCH/REPLACE blocks are unambiguous edits.
-	if aiderSearchReplaceStart.MatchString(trimmed) {
+	// SEARCH/REPLACE blocks AND ```diff fences are unambiguous edits.
+	if aiderSearchReplaceStart.MatchString(trimmed) || aiderDiffFenceStart.MatchString(trimmed) {
 		return BlockKindToolUse
 	}
 	firstLine := trimmed
