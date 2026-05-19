@@ -102,8 +102,18 @@ fi
 FRONTEND_PID=$!
 
 echo "[dev-full] all three running — open http://localhost:5173/"
+echo "[dev-full] Ctrl-C to stop everything."
 
-# Wait until ANY child exits, then trigger cleanup. -n waits for
-# the next process in the job table to finish; we don't care which.
-wait -n "$GRADER_PID" "$ENGINE_PID" "$FRONTEND_PID"
-echo "[dev-full] one of the children exited; tearing down the rest"
+# Poll for any child exiting. macOS bash 3.2 lacks `wait -n` (which
+# would let us wait for *any* PID), so we sample every 2s and break
+# when one of them dies. The cleanup trap handles the rest.
+while true; do
+  for pid_var in GRADER_PID ENGINE_PID FRONTEND_PID; do
+    pid="${!pid_var}"
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "[dev-full] $pid_var ($pid) exited; tearing down the rest"
+      exit 0
+    fi
+  done
+  sleep 2
+done
