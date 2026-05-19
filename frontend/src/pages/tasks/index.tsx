@@ -44,7 +44,7 @@ export function TasksPage() {
                 onClick={() => setCategory(value)}
                 className={
                   category === value
-                    ? 'rounded-full bg-fg px-3 py-1 text-xs font-medium capitalize text-white'
+                    ? 'rounded-full bg-fg px-3 py-1 text-xs font-medium capitalize text-bg'
                     : 'rounded-full border border-border bg-bg-elev-1 px-3 py-1 text-xs font-medium capitalize text-fg-muted hover:border-border-strong'
                 }
               >

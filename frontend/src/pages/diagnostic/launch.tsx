@@ -191,7 +191,7 @@ export function DiagnosticLaunchPage() {
                   onClick={() => setExecutorID(e.id)}
                   className={
                     executorID === e.id
-                      ? 'rounded-md bg-fg px-3 py-1.5 text-sm font-medium text-white'
+                      ? 'rounded-md bg-fg px-3 py-1.5 text-sm font-medium text-bg'
                       : 'rounded-md border border-border bg-bg-elev-1 px-3 py-1.5 text-sm font-medium text-fg-muted hover:border-border-strong'
                   }
                 >

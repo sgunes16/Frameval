@@ -44,7 +44,7 @@ export function ExperimentsPage() {
                 onClick={() => setStatus(value)}
                 className={
                   status === value
-                    ? 'rounded-full bg-fg px-3 py-1 text-xs font-medium text-white'
+                    ? 'rounded-full bg-fg px-3 py-1 text-xs font-medium text-bg'
                     : 'rounded-full border border-border bg-bg-elev-1 px-3 py-1 text-xs font-medium text-fg-muted hover:border-border-strong'
                 }
               >
