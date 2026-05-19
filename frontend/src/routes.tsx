@@ -7,6 +7,7 @@ import { TaskDetailPage } from './pages/tasks/detail';
 import { NewTaskPage } from './pages/tasks/new';
 import { ExperimentsPage } from './pages/experiments';
 import { ExperimentMonitorPage } from './pages/experiments/monitor';
+import { RunInspectPage } from './pages/runs/inspect';
 import { DiagnosticComparePage } from './pages/diagnostic/compare';
 import { DiagnosticLaunchPage } from './pages/diagnostic/launch';
 import { SettingsPage } from './pages/settings';
@@ -22,6 +23,7 @@ export function AppRoutes() {
       <Route path="/tasks/:id" element={<TaskDetailPage />} />
       <Route path="/experiments" element={<ExperimentsPage />} />
       <Route path="/experiments/:id/monitor" element={<ExperimentMonitorPage />} />
+      <Route path="/runs/:id/inspect" element={<RunInspectPage />} />
       <Route path="/diagnostic/launch" element={<DiagnosticLaunchPage />} />
       <Route path="/diagnostic/compare" element={<DiagnosticComparePage />} />
       <Route path="/settings" element={<SettingsPage />} />
