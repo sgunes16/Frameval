@@ -2,4 +2,5 @@ export { TurnList } from './TurnList';
 export { TurnGroupCard } from './TurnGroupCard';
 export { TurnDiffPanel } from './TurnDiffPanel';
 export { ToolHistogram } from './ToolHistogram';
+export { InspectorSearch } from './InspectorSearch';
 export { groupTurns, type TurnGroup } from './group-turns';

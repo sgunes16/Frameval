@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { groupTurns, TurnList } from '../../components/run-inspector';
+import { groupTurns, InspectorSearch, TurnList } from '../../components/run-inspector';
 import { ToolHistogram } from '../../components/run-inspector/ToolHistogram';
 import { TurnDiffPanel } from '../../components/run-inspector/TurnDiffPanel';
 import { ErrorState, LoadingSkeleton } from '../../components/system';
@@ -77,13 +77,16 @@ export function RunInspectPage() {
             <div className="text-xs uppercase tracking-wider text-fg-muted">Run</div>
             <div className="font-mono text-sm text-fg">{id}</div>
           </div>
-          {run && (
-            <div className="text-xs text-fg-muted">
-              status: <span className="font-mono text-fg">{run.status}</span>
-              {' · '}
-              variant: <span className="font-mono text-fg">{run.variant_id}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            <InspectorSearch turns={turns} onFocus={setFocusedParentIndex} />
+            {run && (
+              <div className="text-xs text-fg-muted">
+                status: <span className="font-mono text-fg">{run.status}</span>
+                {' · '}
+                variant: <span className="font-mono text-fg">{run.variant_id}</span>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
