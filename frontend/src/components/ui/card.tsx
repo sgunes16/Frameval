@@ -10,9 +10,9 @@ export function Card({ children, className, padded = true, hoverable = false, ..
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200/80 bg-white/90 shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
+        'rounded-xl border border-border bg-bg-elev-1/90 shadow-sm',
         padded && 'p-5',
-        hoverable && 'transition hover:border-slate-300 hover:shadow-[0_6px_16px_-8px_rgba(15,23,42,0.18)]',
+        hoverable && 'transition hover:border-border-strong hover:shadow-md',
         className,
       )}
       {...rest}
@@ -26,8 +26,8 @@ export function CardHeader({ title, description, action }: { title: string; desc
   return (
     <div className="mb-4 flex items-start justify-between gap-4">
       <div>
-        <div className="text-sm font-semibold tracking-tight text-slate-900">{title}</div>
-        {description && <div className="mt-1 text-xs text-slate-500">{description}</div>}
+        <div className="text-sm font-semibold tracking-tight text-fg">{title}</div>
+        {description && <div className="mt-1 text-xs text-fg-muted">{description}</div>}
       </div>
       {action}
     </div>

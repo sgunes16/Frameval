@@ -44,8 +44,8 @@ export function ExperimentsPage() {
                 onClick={() => setStatus(value)}
                 className={
                   status === value
-                    ? 'rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white'
-                    : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+                    ? 'rounded-full bg-fg px-3 py-1 text-xs font-medium text-white'
+                    : 'rounded-full border border-border bg-bg-elev-1 px-3 py-1 text-xs font-medium text-fg-muted hover:border-border-strong'
                 }
               >
                 {value === 'all' ? 'All' : statusLabel(value)}
@@ -79,7 +79,7 @@ export function ExperimentsPage() {
       ) : (
         <Card padded={false} className="overflow-hidden">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+            <thead className="bg-bg-elev-2 text-[11px] uppercase tracking-wider text-fg-muted">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Experiment</th>
                 <th className="px-4 py-2 text-left font-medium">Status</th>
@@ -93,25 +93,25 @@ export function ExperimentsPage() {
             </thead>
             <tbody>
               {filtered.map((experiment) => (
-                <tr key={experiment.id} className="border-t border-slate-100 bg-white hover:bg-slate-50/60">
+                <tr key={experiment.id} className="border-t border-border bg-bg-elev-1 hover:bg-bg-elev-2/60">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-slate-900">{experiment.name}</div>
+                    <div className="font-medium text-fg">{experiment.name}</div>
                     {experiment.description && (
-                      <div className="mt-0.5 line-clamp-1 text-xs text-slate-500">{experiment.description}</div>
+                      <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{experiment.description}</div>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={statusTone(experiment.status)}>{statusLabel(experiment.status)}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="px-4 py-3 text-fg-muted">
                     {experiment.agent_cli}
-                    <span className="text-slate-400"> · </span>
+                    <span className="text-fg-subtle"> · </span>
                     {experiment.model}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{experiment.variants?.length ?? 0}</td>
-                  <td className="px-4 py-3 text-slate-600">{experiment.runs_per_variant}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatCurrency(experiment.estimated_cost_usd)}</td>
-                  <td className="px-4 py-3 text-slate-500">{formatTimeAgo(experiment.created_at)}</td>
+                  <td className="px-4 py-3 text-fg-muted">{experiment.variants?.length ?? 0}</td>
+                  <td className="px-4 py-3 text-fg-muted">{experiment.runs_per_variant}</td>
+                  <td className="px-4 py-3 text-fg-muted">{formatCurrency(experiment.estimated_cost_usd)}</td>
+                  <td className="px-4 py-3 text-fg-muted">{formatTimeAgo(experiment.created_at)}</td>
                   <td className="px-4 py-3 text-right">
                     <Link to={`/experiments/${experiment.id}/monitor`}>
                       <Button variant="outline" size="sm">

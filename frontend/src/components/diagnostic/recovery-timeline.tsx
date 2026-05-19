@@ -36,20 +36,20 @@ export function RecoveryTimeline({ series }: Props) {
   );
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+    <div className="space-y-2 rounded-lg border border-border bg-bg-elev-1 p-4">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">
         Error events by run · width normalized to turn index (max {maxTurn})
       </div>
       {series.map((s) => {
         const events = s.diagnostic.recovery.error_events ?? [];
         return (
           <div key={s.label} className="flex items-center gap-3">
-            <div className="w-28 truncate text-xs font-medium text-slate-700" title={s.label}>
+            <div className="w-28 truncate text-xs font-medium text-fg" title={s.label}>
               {s.label}
             </div>
-            <div className="relative h-6 flex-1 rounded bg-slate-100">
+            <div className="relative h-6 flex-1 rounded bg-bg-elev-2">
               {events.length === 0 ? (
-                <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-400">
+                <div className="absolute inset-0 flex items-center justify-center text-[10px] text-fg-subtle">
                   no errors
                 </div>
               ) : (
@@ -69,7 +69,7 @@ export function RecoveryTimeline({ series }: Props) {
                 })
               )}
             </div>
-            <div className="w-32 shrink-0 text-right text-[11px] text-slate-500">
+            <div className="w-32 shrink-0 text-right text-[11px] text-fg-muted">
               {events.length} err · skip {s.diagnostic.recovery.silent_skip_count}
             </div>
           </div>
@@ -88,7 +88,7 @@ function RecoveryLegend() {
     ['compile_error', 'Compile error'],
   ];
   return (
-    <div className="mt-3 flex flex-wrap gap-3 border-t border-slate-100 pt-2 text-[10px] text-slate-500">
+    <div className="mt-3 flex flex-wrap gap-3 border-t border-border pt-2 text-[10px] text-fg-muted">
       {entries.map(([kind, label]) => (
         <span key={kind} className="inline-flex items-center gap-1">
           <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: KIND_COLORS[kind] }} />
@@ -101,7 +101,7 @@ function RecoveryLegend() {
 
 function EmptyState() {
   return (
-    <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-sm text-slate-500">
+    <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-border bg-bg-elev-2/50 text-sm text-fg-muted">
       No recovery data yet for the selected runs.
     </div>
   );

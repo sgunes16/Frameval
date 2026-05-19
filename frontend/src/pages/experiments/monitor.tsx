@@ -203,8 +203,8 @@ export function ExperimentMonitorPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-lg font-semibold text-slate-900">{experiment?.name ?? 'Experiment monitor'}</div>
-            <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+            <div className="text-lg font-semibold text-fg">{experiment?.name ?? 'Experiment monitor'}</div>
+            <div className="mt-1 flex items-center gap-2 text-xs text-fg-muted">
               <Badge tone={statusTone(experiment?.status)}>{statusLabel(experiment?.status)}</Badge>
               <span>
                 {experiment?.agent_cli} · {experiment?.model}
@@ -228,21 +228,21 @@ export function ExperimentMonitorPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setSelectedRunId(null)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${selectedRunId === null ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${selectedRunId === null ? 'bg-fg text-white' : 'bg-bg-elev-2 text-fg-muted hover:bg-bg-elev-2'}`}
           >
             All runs
           </button>
           {variantGroups.map(({ variant, runs: variantRuns }) => (
             <div key={variant.id} className="flex items-center gap-1">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{variant.name}:</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{variant.name}:</span>
               {variantRuns.map((run) => (
                 <button
                   key={run.id}
                   onClick={() => setSelectedRunId(run.id)}
-                  className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${selectedRunId === run.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${selectedRunId === run.id ? 'bg-fg text-white' : 'bg-bg-elev-2 text-fg-muted hover:bg-bg-elev-2'}`}
                 >
                   #{run.run_number}
-                  <span className={`ml-1 inline-block h-1.5 w-1.5 rounded-full ${run.status === 'completed' ? 'bg-emerald-500' : run.status === 'failed' ? 'bg-red-500' : run.status === 'running' ? 'animate-pulse bg-amber-400' : 'bg-slate-300'}`} />
+                  <span className={`ml-1 inline-block h-1.5 w-1.5 rounded-full ${run.status === 'completed' ? 'bg-emerald-500' : run.status === 'failed' ? 'bg-red-500' : run.status === 'running' ? 'animate-pulse bg-amber-400' : 'bg-fg-subtle'}`} />
                 </button>
               ))}
             </div>

@@ -4,7 +4,7 @@ import { AppRoutes } from './routes';
 
 export default function App() {
   return (
-    <div className="flex min-h-screen bg-transparent text-slate-900">
+    <div className="flex min-h-screen bg-bg text-fg">
       <Sidebar />
       <div className="flex min-h-screen flex-1 flex-col">
         <Header />

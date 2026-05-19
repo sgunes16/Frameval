@@ -10,10 +10,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantStyles: Record<Variant, string> = {
-  primary: 'bg-slate-900 text-white hover:bg-slate-800 border border-transparent',
-  secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200 border border-transparent',
-  outline: 'bg-white text-slate-900 border border-slate-300 hover:border-slate-400',
-  ghost: 'bg-transparent text-slate-700 hover:bg-slate-100 border border-transparent',
+  primary: 'bg-fg text-white hover:bg-fg border border-transparent',
+  secondary: 'bg-bg-elev-2 text-fg hover:bg-bg-elev-2 border border-transparent',
+  outline: 'bg-bg-elev-1 text-fg border border-border-strong hover:border-border-strong',
+  ghost: 'bg-transparent text-fg hover:bg-bg-elev-2 border border-transparent',
   danger: 'bg-red-600 text-white hover:bg-red-500 border border-transparent',
 };
 
@@ -31,7 +31,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus:outline-none focus:ring-2 focus:ring-slate-900/10 disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus:outline-none focus:ring-2 focus:ring-fg/10 disabled:cursor-not-allowed disabled:opacity-50',
         variantStyles[variant],
         sizeStyles[size],
         className,

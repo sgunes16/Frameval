@@ -21,7 +21,7 @@ export function LogViewer({ lines }: { lines: string[] }) {
   }, [lines]);
 
   return (
-    <pre ref={ref} className="min-h-48 max-h-[360px] overflow-auto rounded-lg bg-slate-950 p-4 font-mono text-[11px] leading-5 text-slate-100">
+    <pre ref={ref} className="min-h-48 max-h-[360px] overflow-auto rounded-lg bg-code-bg p-4 font-mono text-[11px] leading-5 text-fg-subtle">
       {lines.length ? lines.join('\n') : 'Waiting for logs...'}
     </pre>
   );
@@ -40,11 +40,11 @@ export function AgentEventViewer({ events, runs }: { events: AgentLogEvent[]; ru
   return (
     <div className="space-y-3">
       <UsageSummary usage={parsed.usage} />
-      <div ref={ref} className="max-h-[640px] space-y-2 overflow-auto rounded-xl border border-slate-200 bg-white p-4">
+      <div ref={ref} className="max-h-[640px] space-y-2 overflow-auto rounded-xl border border-border bg-bg-elev-1 p-4">
         {parsed.items.length ? (
           parsed.items.map((item) => <TimelineEntry key={item.id} item={item} />)
         ) : (
-          <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-xs text-slate-400">
+          <div className="rounded-lg border border-dashed border-border-strong p-6 text-center text-xs text-fg-subtle">
             Waiting for agent events...
           </div>
         )}
@@ -103,9 +103,9 @@ function UsageSummary({ usage }: { usage: Usage }) {
   return (
     <div className="grid gap-2 sm:grid-cols-6">
       {cells.map(([label, value]) => (
-        <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
-          <div className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">{Number(value).toLocaleString()}</div>
+        <div key={label} className="rounded-lg border border-border bg-bg-elev-1 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-wide text-fg-subtle">{label}</div>
+          <div className="mt-0.5 text-sm font-semibold tabular-nums text-fg">{Number(value).toLocaleString()}</div>
         </div>
       ))}
     </div>
@@ -126,12 +126,12 @@ function ThinkingCard({ item }: { item: TimelineItem }) {
   const label = isDone ? `Thought for ${wordCount} words` : 'Thinking...';
   return (
     <details className="group">
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-slate-500 transition hover:bg-slate-50">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-fg-muted transition hover:bg-bg-elev-2">
         <ChevronIcon />
         <span>{label}</span>
         {!isDone && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />}
       </summary>
-      <pre className="mx-3 mt-1 mb-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 font-mono text-[11px] leading-5 text-slate-500">
+      <pre className="mx-3 mt-1 mb-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 p-3 font-mono text-[11px] leading-5 text-fg-muted">
         {item.body}
       </pre>
     </details>
@@ -162,7 +162,7 @@ function RawCard({ item }: { item: TimelineItem }) {
   const parsed = parseJSONLine(item.body);
   if (parsed) return <JSONLite data={parsed} />;
   return (
-    <pre className="whitespace-pre-wrap break-words rounded-lg bg-slate-50 px-3 py-2 font-mono text-[11px] leading-5 text-slate-600">
+    <pre className="whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 px-3 py-2 font-mono text-[11px] leading-5 text-fg-muted">
       {item.body}
     </pre>
   );
@@ -173,13 +173,13 @@ function ToolCard({ item }: { item: TimelineItem }) {
   if (!meta) {
     return (
       <details className="group">
-        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50">
+        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-fg-muted transition hover:bg-bg-elev-2">
           <ChevronIcon />
           <ToolIcon kind="tool" />
           <span className="font-medium">{item.title}</span>
           <StatusDot status={item.status} />
         </summary>
-        <pre className="mx-3 mt-1 mb-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 font-mono text-[11px] leading-5 text-slate-600">
+        <pre className="mx-3 mt-1 mb-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 p-3 font-mono text-[11px] leading-5 text-fg-muted">
           {item.body}
         </pre>
       </details>
@@ -193,13 +193,13 @@ function ToolCard({ item }: { item: TimelineItem }) {
 
   return (
     <details className="group">
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-fg-muted transition hover:bg-bg-elev-2">
         <ChevronIcon />
         <ToolIcon kind={meta.toolKind} />
         <span className="font-medium">{item.title}</span>
         <StatusDot status={item.status} />
       </summary>
-      <pre className="mx-3 mt-1 mb-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 font-mono text-[11px] leading-5 text-slate-600">
+      <pre className="mx-3 mt-1 mb-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 p-3 font-mono text-[11px] leading-5 text-fg-muted">
         {item.body}
       </pre>
     </details>
@@ -213,8 +213,8 @@ function EditToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
   const diffText = meta.diffString ?? meta.content ?? item.body;
 
   return (
-    <details className="group overflow-hidden rounded-lg border border-slate-200">
-      <summary className="flex cursor-pointer list-none items-center gap-2 bg-slate-50 px-3 py-2 text-xs text-slate-700 transition hover:bg-slate-100">
+    <details className="group overflow-hidden rounded-lg border border-border">
+      <summary className="flex cursor-pointer list-none items-center gap-2 bg-bg-elev-2 px-3 py-2 text-xs text-fg transition hover:bg-bg-elev-2">
         <ChevronIcon />
         <ToolIcon kind="edit" />
         <span className="font-mono font-medium">{fileName}</span>
@@ -227,7 +227,7 @@ function EditToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
         <StatusDot status={item.status} />
       </summary>
       {meta.path && (
-        <div className="border-b border-slate-200 bg-slate-50 px-3 py-1 font-mono text-[10px] text-slate-400">
+        <div className="border-b border-border bg-bg-elev-2 px-3 py-1 font-mono text-[10px] text-fg-subtle">
           {meta.path}
         </div>
       )}
@@ -243,8 +243,8 @@ function ShellToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
   const isError = exitCode !== undefined && exitCode !== 0;
 
   return (
-    <details className="group overflow-hidden rounded-lg border border-slate-200">
-      <summary className="flex cursor-pointer list-none items-center gap-2 bg-slate-50 px-3 py-2 text-xs text-slate-700 transition hover:bg-slate-100">
+    <details className="group overflow-hidden rounded-lg border border-border">
+      <summary className="flex cursor-pointer list-none items-center gap-2 bg-bg-elev-2 px-3 py-2 text-xs text-fg transition hover:bg-bg-elev-2">
         <ChevronIcon />
         <ToolIcon kind="shell" />
         <span className="font-medium">{desc}</span>
@@ -256,11 +256,11 @@ function ShellToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
         <StatusDot status={item.status} />
       </summary>
       {meta.command && (
-        <div className="border-b border-slate-800 bg-slate-900 px-3 py-1.5 font-mono text-[11px] text-emerald-400">
+        <div className="border-b border-border bg-fg px-3 py-1.5 font-mono text-[11px] text-emerald-400">
           $ {meta.command}
         </div>
       )}
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-300">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-code-bg p-3 font-mono text-[11px] leading-5 text-fg-subtle">
         {output || 'No output.'}
       </pre>
     </details>
@@ -272,23 +272,23 @@ function SearchToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) 
   const matchCount = meta.matchCount;
 
   return (
-    <details className="group overflow-hidden rounded-lg border border-slate-200">
-      <summary className="flex cursor-pointer list-none items-center gap-2 bg-slate-50 px-3 py-2 text-xs text-slate-700 transition hover:bg-slate-100">
+    <details className="group overflow-hidden rounded-lg border border-border">
+      <summary className="flex cursor-pointer list-none items-center gap-2 bg-bg-elev-2 px-3 py-2 text-xs text-fg transition hover:bg-bg-elev-2">
         <ChevronIcon />
         <ToolIcon kind="search" />
         <span className="font-medium">Search</span>
-        <code className="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">{pattern}</code>
+        <code className="rounded bg-bg-elev-2 px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">{pattern}</code>
         {matchCount !== undefined && (
-          <span className="ml-auto text-[11px] text-slate-400">{matchCount} match{matchCount !== 1 ? 'es' : ''}</span>
+          <span className="ml-auto text-[11px] text-fg-subtle">{matchCount} match{matchCount !== 1 ? 'es' : ''}</span>
         )}
         <StatusDot status={item.status} />
       </summary>
       {meta.path && (
-        <div className="border-b border-slate-200 bg-slate-50 px-3 py-1 font-mono text-[10px] text-slate-400">
+        <div className="border-b border-border bg-bg-elev-2 px-3 py-1 font-mono text-[10px] text-fg-subtle">
           {meta.path}
         </div>
       )}
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-slate-50 p-3 font-mono text-[11px] leading-5 text-slate-600">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-bg-elev-2 p-3 font-mono text-[11px] leading-5 text-fg-muted">
         {meta.content || item.body || 'No matches.'}
       </pre>
     </details>
@@ -300,22 +300,22 @@ function ReadToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
   const totalLines = meta.totalLines;
 
   return (
-    <details className="group overflow-hidden rounded-lg border border-slate-200">
-      <summary className="flex cursor-pointer list-none items-center gap-2 bg-slate-50 px-3 py-2 text-xs text-slate-700 transition hover:bg-slate-100">
+    <details className="group overflow-hidden rounded-lg border border-border">
+      <summary className="flex cursor-pointer list-none items-center gap-2 bg-bg-elev-2 px-3 py-2 text-xs text-fg transition hover:bg-bg-elev-2">
         <ChevronIcon />
         <ToolIcon kind="read" />
         <span className="font-mono font-medium">{fileName}</span>
         {totalLines !== undefined && (
-          <span className="ml-auto text-[11px] text-slate-400">{totalLines} lines</span>
+          <span className="ml-auto text-[11px] text-fg-subtle">{totalLines} lines</span>
         )}
         <StatusDot status={item.status} />
       </summary>
       {meta.path && (
-        <div className="border-b border-slate-200 bg-slate-50 px-3 py-1 font-mono text-[10px] text-slate-400">
+        <div className="border-b border-border bg-bg-elev-2 px-3 py-1 font-mono text-[10px] text-fg-subtle">
           {meta.path}
         </div>
       )}
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-white p-3 font-mono text-[11px] leading-5 text-slate-700">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-bg-elev-1 p-3 font-mono text-[11px] leading-5 text-fg">
         {meta.content ?? (item.body || 'Empty.')}
       </pre>
     </details>
@@ -325,9 +325,9 @@ function ReadToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
 function DiffView({ diff }: { diff: string }) {
   const lines = diff.split('\n');
   return (
-    <div className="max-h-80 overflow-auto bg-slate-950 font-mono text-[11px] leading-5">
+    <div className="max-h-80 overflow-auto bg-code-bg font-mono text-[11px] leading-5">
       {lines.map((line, i) => {
-        let cls = 'text-slate-400';
+        let cls = 'text-fg-subtle';
         let bg = '';
         if (line.startsWith('+') && !line.startsWith('+++')) {
           cls = 'text-emerald-300';
@@ -360,7 +360,7 @@ function MarkdownLite({ content }: { content: string }) {
     if (/^\s*```/.test(line)) {
       if (inCode) {
         elements.push(
-          <pre key={`code-${i}`} className="my-1 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-200">
+          <pre key={`code-${i}`} className="my-1 overflow-auto rounded-lg bg-code-bg p-3 font-mono text-[11px] leading-5 text-fg-subtle">
             {codeBuffer.join('\n')}
           </pre>
         );
@@ -374,25 +374,25 @@ function MarkdownLite({ content }: { content: string }) {
       continue;
     }
     if (line.startsWith('### ')) {
-      elements.push(<div key={i} className="pt-2 text-sm font-semibold text-slate-900">{line.slice(4)}</div>);
+      elements.push(<div key={i} className="pt-2 text-sm font-semibold text-fg">{line.slice(4)}</div>);
     } else if (line.startsWith('## ')) {
-      elements.push(<div key={i} className="pt-2 text-base font-semibold text-slate-900">{line.slice(3)}</div>);
+      elements.push(<div key={i} className="pt-2 text-base font-semibold text-fg">{line.slice(3)}</div>);
     } else if (line.startsWith('# ')) {
-      elements.push(<div key={i} className="pt-3 text-lg font-semibold text-slate-900">{line.slice(2)}</div>);
+      elements.push(<div key={i} className="pt-3 text-lg font-semibold text-fg">{line.slice(2)}</div>);
     } else if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-      elements.push(<div key={i} className="pl-4 text-sm leading-6 text-slate-700">• {line.trim().slice(2)}</div>);
+      elements.push(<div key={i} className="pl-4 text-sm leading-6 text-fg">• {line.trim().slice(2)}</div>);
     } else if (/^\d+\.\s/.test(line.trim())) {
-      elements.push(<div key={i} className="pl-4 text-sm leading-6 text-slate-700">{line.trim()}</div>);
+      elements.push(<div key={i} className="pl-4 text-sm leading-6 text-fg">{line.trim()}</div>);
     } else if (!line.trim()) {
       elements.push(<div key={i} className="h-1.5" />);
     } else {
-      elements.push(<p key={i} className="text-sm leading-6 text-slate-700">{renderInlineCode(line)}</p>);
+      elements.push(<p key={i} className="text-sm leading-6 text-fg">{renderInlineCode(line)}</p>);
     }
   }
 
   if (codeBuffer.length > 0) {
     elements.push(
-      <pre key="code-end" className="my-1 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-200">
+      <pre key="code-end" className="my-1 overflow-auto rounded-lg bg-code-bg p-3 font-mono text-[11px] leading-5 text-fg-subtle">
         {codeBuffer.join('\n')}
       </pre>
     );
@@ -406,7 +406,7 @@ function renderInlineCode(text: string) {
   return parts.map((part, i) => {
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={i} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[12px] text-indigo-600">
+        <code key={i} className="rounded bg-bg-elev-2 px-1 py-0.5 font-mono text-[12px] text-indigo-600">
           {part.slice(1, -1)}
         </code>
       );
@@ -417,11 +417,11 @@ function renderInlineCode(text: string) {
 
 function JSONLite({ data }: { data: Record<string, unknown> }) {
   return (
-    <div className="space-y-0.5 rounded-lg bg-slate-50 p-2 font-mono text-[11px] text-slate-700">
+    <div className="space-y-0.5 rounded-lg bg-bg-elev-2 p-2 font-mono text-[11px] text-fg">
       {Object.entries(data).slice(0, 12).map(([key, value]) => (
         <div key={key} className="flex gap-2 rounded px-2 py-0.5">
-          <span className="shrink-0 text-slate-400">{key}:</span>
-          <span className="break-words text-slate-700">{formatJSONValue(value)}</span>
+          <span className="shrink-0 text-fg-subtle">{key}:</span>
+          <span className="break-words text-fg">{formatJSONValue(value)}</span>
         </div>
       ))}
     </div>
@@ -430,7 +430,7 @@ function JSONLite({ data }: { data: Record<string, unknown> }) {
 
 function ChevronIcon() {
   return (
-    <svg className="h-3 w-3 shrink-0 text-slate-400 transition group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg className="h-3 w-3 shrink-0 text-fg-subtle transition group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
     </svg>
   );
@@ -444,7 +444,7 @@ function ToolIcon({ kind }: { kind: string }) {
     read: '📄',
     tool: '⚙',
   };
-  return <span className="text-xs text-slate-400">{icons[kind] ?? icons.tool}</span>;
+  return <span className="text-xs text-fg-subtle">{icons[kind] ?? icons.tool}</span>;
 }
 
 function StatusDot({ status }: { status?: string }) {

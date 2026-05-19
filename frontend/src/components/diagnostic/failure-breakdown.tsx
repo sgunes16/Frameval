@@ -76,7 +76,7 @@ export function FailureBreakdown({ series }: Props) {
   // explicit what's missing.
   if (codesShown.length === 0) {
     return (
-      <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-sm text-slate-500">
+      <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-border bg-bg-elev-2/50 text-sm text-fg-muted">
         No failure classifications available yet. The classifier may not have run on these runs.
       </div>
     );
@@ -102,7 +102,7 @@ export function FailureBreakdown({ series }: Props) {
 
 function EmptyState() {
   return (
-    <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-sm text-slate-500">
+    <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-border bg-bg-elev-2/50 text-sm text-fg-muted">
       No failure classifications available yet for the selected runs.
     </div>
   );

@@ -82,7 +82,7 @@ export function DiagnosticComparePage() {
           </Link>
         </div>
         {experimentID && (
-          <div className="mb-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <div className="mb-2 rounded-md bg-bg-elev-2 px-3 py-2 text-xs text-fg-muted">
             Auto-loading runs from experiment{' '}
             <code className="font-mono">{experimentID.slice(0, 8)}…</code> ({experimentRuns.length}{' '}
             so far). The list updates as queued runs finish.
@@ -91,14 +91,14 @@ export function DiagnosticComparePage() {
         <textarea
           value={draftInput}
           onChange={(event) => setDraftInput(event.target.value)}
-          className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm"
+          className="mt-3 w-full rounded-lg border border-border px-3 py-2 font-mono text-sm"
           rows={3}
           placeholder="run-id-1, run-id-2, run-id-3"
         />
         <div className="mt-2 flex justify-end gap-2">
           <button
             type="button"
-            className="rounded-md border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+            className="rounded-md border border-border px-3 py-1 text-xs text-fg-muted hover:bg-bg-elev-2"
             onClick={() => {
               setDraftInput('');
               setSearchParams({});
@@ -108,7 +108,7 @@ export function DiagnosticComparePage() {
           </button>
           <button
             type="button"
-            className="rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800"
+            className="rounded-md bg-fg px-3 py-1 text-xs font-medium text-white hover:bg-fg"
             onClick={() => setSearchParams({ runs: runIds.join(',') })}
           >
             Share link
@@ -125,7 +125,7 @@ export function DiagnosticComparePage() {
         </Card>
       ) : isLoading ? (
         <Card>
-          <div className="flex h-32 items-center justify-center text-sm text-slate-500">Loading diagnostics…</div>
+          <div className="flex h-32 items-center justify-center text-sm text-fg-muted">Loading diagnostics…</div>
         </Card>
       ) : isError ? (
         <Card>
