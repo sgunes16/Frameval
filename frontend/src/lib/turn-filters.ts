@@ -22,10 +22,23 @@ export type TurnFilter =
 
 const BLOCK_KINDS: BlockKind[] = ['thinking', 'tool_use', 'tool_result', 'text', 'system'];
 
+/**
+ * `errors_only` heuristic. A naive "content contains 'error'" check
+ * false-positives on lints / test runners that report `"0 errors
+ * found"`, `"Exit 0, no errors"`, etc. We only count a tool_result
+ * as an error when it:
+ *   - has `stage === 'error'` (set by adapters that know better), or
+ *   - begins with the literal `error:` / `Error:` prefix (a strong
+ *     convention across most CLI tools and stdlib loggers), or
+ *   - is multiline and contains a line starting with `Error:`.
+ * Anything looser ropes in benign output.
+ */
+const ERROR_PREFIX_LINE = /(^|\n)\s*error[:\s]/i;
+
 function isErrorTurn(turn: ParsedTurn): boolean {
   if (turn.stage === 'error') return true;
   if (turn.block_kind !== 'tool_result') return false;
-  return (turn.content ?? '').toLowerCase().includes('error');
+  return ERROR_PREFIX_LINE.test(turn.content ?? '');
 }
 
 export function applyTurnFilters(turns: ParsedTurn[], filters: TurnFilter[]): ParsedTurn[] {

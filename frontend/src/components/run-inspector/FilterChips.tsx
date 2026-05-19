@@ -64,12 +64,11 @@ export function FilterChips({ filters, onChange }: FilterChipsProps) {
     setPathDraft('');
   };
 
-  const removeFilter = (target: TurnFilter) => {
-    onChange(
-      filters.filter(
-        (f) => !(f.kind === target.kind && (f.kind !== 'path' || f.value === target.value)),
-      ),
-    );
+  // Path-chip remove handler. Block toggles and the errors-only
+  // toggle have their own dedicated handlers, so this only needs to
+  // delete the matching path entry by value.
+  const removePath = (value: string) => {
+    onChange(filters.filter((f) => !(f.kind === 'path' && f.value === value)));
   };
 
   return (
@@ -133,7 +132,7 @@ export function FilterChips({ filters, onChange }: FilterChipsProps) {
             <button
               type="button"
               aria-label={`Remove ${f.value} filter`}
-              onClick={() => removeFilter(f)}
+              onClick={() => removePath(f.value)}
               className="text-fg-subtle hover:text-fg"
             >
               ×

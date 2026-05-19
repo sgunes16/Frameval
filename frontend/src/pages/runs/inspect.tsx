@@ -105,15 +105,16 @@ export function RunInspectPage() {
 
   // If the URL's ?focus=N points at a turn that the current filter
   // set hides, drop the focus rather than render the right pane
-  // pointing at a turn that isn't in the list. (Don't reset on
-  // mount when groups are still loading — wait for at least one
-  // group to be available before judging.)
+  // pointing at a turn that isn't in the list. Skip while data is
+  // still loading/refetching — `groups.length === 0` during a
+  // background refresh would otherwise wipe a valid deep-link.
   useEffect(() => {
     if (focusedParentIndex === null) return;
+    if (turnsQuery.isLoading || turnsQuery.isFetching) return;
     if (groups.length === 0) return;
     const stillVisible = groups.some((g) => g.parentTurnIndex === focusedParentIndex);
     if (!stillVisible) setFocusedParentIndex(null);
-  }, [focusedParentIndex, groups, setFocusedParentIndex]);
+  }, [focusedParentIndex, groups, setFocusedParentIndex, turnsQuery.isLoading, turnsQuery.isFetching]);
 
   if (runQuery.isError || turnsQuery.isError) {
     return (

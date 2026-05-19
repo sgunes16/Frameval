@@ -64,6 +64,30 @@ describe('applyTurnFilters', () => {
     expect(result.map((r) => r.turn_index)).toEqual([1, 2]);
   });
 
+  it('errors_only does NOT false-positive on benign "no errors" output', () => {
+    // The earlier naive check matched any content with 'error' in
+    // it — catching lint runners that report "0 errors". The
+    // tightened heuristic requires a leading `Error:` prefix.
+    const turns = [
+      t('tool_result', { turn_index: 0, content: 'Exit 0, 0 errors found' }),
+      t('tool_result', { turn_index: 1, content: 'lint finished with no errors' }),
+      t('tool_result', { turn_index: 2, content: 'Error: connection refused' }),
+    ];
+    const result = applyTurnFilters(turns, [{ kind: 'errors_only', value: '' }]);
+    expect(result.map((r) => r.turn_index)).toEqual([2]);
+  });
+
+  it('errors_only matches a leading Error: line even mid-multiline output', () => {
+    const turns = [
+      t('tool_result', {
+        turn_index: 0,
+        content: 'stdout line\nError: unhandled exception\n',
+      }),
+    ];
+    const result = applyTurnFilters(turns, [{ kind: 'errors_only', value: '' }]);
+    expect(result).toHaveLength(1);
+  });
+
   it('AND-combines block-kind and path filters across dimensions', () => {
     const turns = [
       t('tool_use', { turn_index: 0, files_touched: ['src/main.go'] }),
