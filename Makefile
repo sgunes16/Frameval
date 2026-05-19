@@ -1,5 +1,6 @@
 .PHONY: test test-engine test-engine-integration test-grader test-frontend test-e2e help \
-        ci-local ci-engine ci-grader ci-frontend lint build
+        ci-local ci-engine ci-grader ci-frontend lint build \
+        dev-full dev-grader dev-engine dev-frontend
 
 help:
 	@echo "Frameval test + CI targets"
@@ -17,6 +18,11 @@ help:
 	@echo ""
 	@echo "  ci-local                  Run the full CI pull_request event locally via act"
 	@echo "  ci-engine | ci-grader | ci-frontend   Run a single CI job via act"
+	@echo ""
+	@echo "  dev-full                  Start grader + engine (no Air) + frontend together"
+	@echo "  dev-grader                Start the Python grader sidecar on :50051"
+	@echo "  dev-engine                Start the Go engine via go run (no Air)"
+	@echo "  dev-frontend              Start the Vite dev server"
 
 test: test-engine test-grader test-frontend
 
@@ -56,3 +62,15 @@ ci-grader:
 
 ci-frontend:
 	act pull_request --rm -j frontend
+
+dev-full:
+	./scripts/dev-full.sh
+
+dev-grader:
+	./scripts/dev-grader.sh
+
+dev-engine:
+	./scripts/dev-engine-no-air.sh
+
+dev-frontend:
+	./scripts/dev-frontend.sh
