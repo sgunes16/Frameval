@@ -5,6 +5,7 @@ import {
   FilterChips,
   groupTurns,
   InspectorSearch,
+  LiveCursor,
   TurnList,
 } from '../../components/run-inspector';
 import { ToolHistogram } from '../../components/run-inspector/ToolHistogram';
@@ -20,6 +21,7 @@ import {
   type TurnFilter,
 } from '../../lib/turn-filters';
 import { usePerTurnDiff } from '../../lib/use-per-turn-diff';
+import { useTurnStream } from '../../lib/use-turn-stream';
 
 /**
  * Run Inspector V2 — `/runs/:id/inspect`.
@@ -43,6 +45,10 @@ export function RunInspectPage() {
   const turnsQuery = useRunTurns(id);
   const transcriptQuery = useTranscript(id);
   const diagnosticQuery = useDiagnostic(id);
+  // Live-streams run.turn events for the focused run and invalidates
+  // the turns + transcript queries on each event. Re-connect on
+  // socket drop reconciles missed turns via the next REST refetch.
+  const stream = useTurnStream(id);
 
   const filters = useMemo<TurnFilter[]>(
     () => parseFilterTokens(searchParams.getAll('filter')),
@@ -155,6 +161,20 @@ export function RunInspectPage() {
           </div>
           <div className="flex items-center gap-3">
             <InspectorSearch turns={turns} onFocus={setFocusedParentIndex} />
+            {/*
+              LiveCursor only makes sense while the run is actively
+              producing turns. A 'completed' / 'failed' run still has
+              the WS connected and lastEventAt populated from the
+              final turn, but rendering "Live" for a finished run
+              would be misleading. Hide it once the run is terminal.
+            */}
+            {run?.status === 'running' && (
+              <LiveCursor
+                isConnected={stream.isConnected}
+                lastEventAt={stream.lastEventAt}
+                turnCount={stream.lastTurnCount}
+              />
+            )}
             {run && (
               <div className="text-xs text-fg-muted">
                 status: <span className="font-mono text-fg">{run.status}</span>
