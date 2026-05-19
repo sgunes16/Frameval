@@ -8,13 +8,14 @@ import { http, HttpResponse } from 'msw';
 import { RunInspectPage } from '../../src/pages/runs/inspect';
 import { server } from '../msw/server';
 
-function renderInspectAt(runId: string, ui?: ReactNode) {
+function renderInspectAt(runId: string, ui?: ReactNode, search = '') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const initialEntry = search ? `/runs/${runId}/inspect?${search}` : `/runs/${runId}/inspect`;
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[`/runs/${runId}/inspect`]}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Routes>
           <Route path="/runs/:id/inspect" element={ui ?? <RunInspectPage />} />
         </Routes>
@@ -238,5 +239,42 @@ describe('RunInspectPage', () => {
       Object.defineProperty(HTMLElement.prototype, 'offsetWidth', restoreWidth);
     }
     Element.prototype.getBoundingClientRect = origGetRect;
+  });
+
+  it('honours filter chips passed via URL search params', async () => {
+    server.use(
+      http.get('*/api/runs/run-url', () =>
+        HttpResponse.json({
+          id: 'run-url',
+          experiment_id: 'exp-1',
+          variant_id: 'var-1',
+          run_number: 0,
+          status: 'completed',
+        }),
+      ),
+      http.get('*/api/runs/run-url/turns', () =>
+        HttpResponse.json([
+          { role: 'assistant', content: 'thinking only', turn_index: 0, parent_turn_index: 0, block_kind: 'thinking' },
+          { role: 'assistant', content: 'tool call', turn_index: 1, parent_turn_index: 1, block_kind: 'tool_use', tool_name: 'Edit' },
+        ]),
+      ),
+      http.get('*/api/runs/run-url/transcript', () =>
+        HttpResponse.json({
+          id: 't1',
+          run_id: 'run-url',
+          raw_output: '',
+          patch: '',
+          total_turns: 2,
+          total_tokens: 0,
+        }),
+      ),
+    );
+
+    // ?filter=tool_use means the thinking block must be filtered out.
+    // The Tool use chip should be marked pressed on mount.
+    renderInspectAt('run-url', undefined, 'filter=tool_use');
+
+    const toolUseChip = await screen.findByRole('button', { name: /tool use/i });
+    expect(toolUseChip).toHaveAttribute('aria-pressed', 'true');
   });
 });
