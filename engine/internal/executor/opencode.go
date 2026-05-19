@@ -74,13 +74,19 @@ func (e *OpenCodeExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResu
 		//   it the build agent silently aborts tool calls in our
 		//   non-interactive `sh -c` sandbox and falls back to plain
 		//   text output, so the model never actually edits files.
+		// --thinking opts opencode into emitting `reasoning` events
+		//   on top of the usual text/tool_use stream. Our parser maps
+		//   these to BlockKindThinking and the Inspector renders them
+		//   as italic muted prose — without the flag the model's
+		//   internal monologue is dropped at the CLI boundary and the
+		//   timeline only shows actions.
 		// `stdbuf -oL` forces opencode's stdout into line-buffered
 		//   mode. Without it Node/Bun block-buffers when stdout is a
 		//   pipe (i.e. docker logs), holding events in 4-8 KiB chunks
 		//   and only flushing at process exit — that's what made the
 		//   Inspector "wait until the run finishes, then dump
 		//   everything at once" instead of streaming turn-by-turn.
-		command = `stdbuf -oL opencode run --format json --dangerously-skip-permissions --model "$OPENCODE_MODEL" "$FRAMEVAL_PROMPT"`
+		command = `stdbuf -oL opencode run --format json --dangerously-skip-permissions --thinking --model "$OPENCODE_MODEL" "$FRAMEVAL_PROMPT"`
 	}
 	env := mergeEnv(map[string]string{
 		"FRAMEVAL_PROMPT": prompt,
@@ -210,7 +216,7 @@ func opencodeEventToTurn(event opencodeEvent) *ParsedTurn {
 		return &ParsedTurn{Role: "assistant", Content: body, BlockKind: BlockKindText}
 
 	case "tool_use":
-		toolName, input, files := extractToolUse(event.Part)
+		toolName, input, files, output := extractToolUse(event.Part)
 		if toolName == "" && input == "" {
 			return nil
 		}
@@ -230,6 +236,7 @@ func opencodeEventToTurn(event opencodeEvent) *ParsedTurn {
 			BlockKind:    BlockKindToolUse,
 			ToolName:     toolName,
 			FilesTouched: files,
+			ToolOutput:   output,
 			Stage:        stage,
 		}
 
@@ -295,39 +302,59 @@ func extractPartText(raw json.RawMessage) (string, error) {
 }
 
 // extractToolUse reads the tool name + the tool input + any file
-// paths referenced in the input. opencode's tool_use part shape:
+// paths referenced in the input + the agent-visible output the
+// sandbox returned. opencode's tool_use part shape:
 //
-//	{ "tool": "Edit", "state": { "input": { "path": "src/main.go", ... } } }
+//	{ "tool": "Edit", "state": {
+//	    "input":  { "path": "src/main.go", ... },
+//	    "output": "<rendered text or stdout>",
+//	    "metadata": { "preview": "..." }
+//	}}
 //
 // We accept several legal-looking shapes since this is best-effort.
-func extractToolUse(raw json.RawMessage) (toolName, input string, files []string) {
+// Output prefers state.output (raw); falls back to state.metadata.preview
+// (which read/glob etc. use for a truncated rendition).
+func extractToolUse(raw json.RawMessage) (toolName, input string, files []string, output string) {
 	if len(raw) == 0 {
-		return "", "", nil
+		return "", "", nil, ""
 	}
 	var part struct {
 		Tool  string          `json:"tool"`
 		State json.RawMessage `json:"state"`
 	}
 	if err := json.Unmarshal(raw, &part); err != nil {
-		return "", "", nil
+		return "", "", nil, ""
 	}
 	toolName = part.Tool
 
 	var state struct {
-		Input map[string]any `json:"input"`
+		Input    map[string]any `json:"input"`
+		Output   string         `json:"output"`
+		Metadata map[string]any `json:"metadata"`
 	}
-	if err := json.Unmarshal(part.State, &state); err == nil && state.Input != nil {
-		if buf, err := json.MarshalIndent(state.Input, "", "  "); err == nil {
-			input = string(buf)
+	if err := json.Unmarshal(part.State, &state); err == nil {
+		if state.Input != nil {
+			if buf, err := json.MarshalIndent(state.Input, "", "  "); err == nil {
+				input = string(buf)
+			}
+			for _, key := range []string{"path", "file", "filePath", "file_path"} {
+				if v, ok := state.Input[key].(string); ok && v != "" {
+					files = append(files, v)
+					break
+				}
+			}
 		}
-		for _, key := range []string{"path", "file", "filePath", "file_path"} {
-			if v, ok := state.Input[key].(string); ok && v != "" {
-				files = append(files, v)
-				break
+		output = strings.TrimSpace(state.Output)
+		// read/glob tools sometimes leave output blank and only stash
+		// a human preview under metadata.preview. Use it as a fallback
+		// so the Inspector doesn't look like the call produced nothing.
+		if output == "" && state.Metadata != nil {
+			if v, ok := state.Metadata["preview"].(string); ok {
+				output = strings.TrimSpace(v)
 			}
 		}
 	}
-	return toolName, input, files
+	return toolName, input, files, output
 }
 
 func formatTimestamp(ms int64) string {

@@ -102,6 +102,13 @@ type ParsedTurn struct {
 	// only). Compare V2's anchor algorithm hashes on (tool_name, files).
 	FilesTouched []string `json:"files_touched,omitempty"`
 
+	// ToolOutput is the agent-visible stdout/stderr (or rendered
+	// preview) the sandbox returned for a tool call. Inspector
+	// surfaces a 1–2 line inline snippet plus a "+N lines" expander
+	// so reviewers see what the agent actually saw without leaving
+	// the timeline. Only meaningful for BlockKindToolUse.
+	ToolOutput string `json:"tool_output,omitempty"`
+
 	// DurationMs records how long this block took to produce, when the
 	// executor can measure it (streamed CLIs can).
 	DurationMs int `json:"duration_ms,omitempty"`

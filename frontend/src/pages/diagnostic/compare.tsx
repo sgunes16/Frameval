@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+
+import { cn } from '../../lib/utils';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { BehavioralRadar } from '../../components/diagnostic/behavioral-radar';
@@ -222,6 +224,14 @@ export function DiagnosticComparePage() {
             <GradeComparisonTable runIds={runIds} runs={experimentRuns} grades={grades ?? []} />
           </Card>
 
+          <Card>
+            <CardHeader
+              title="Test results"
+              description="Verification cases the grader ran inside the sandbox. Click a failing row to expand its output."
+            />
+            <TestResultsTable runIds={runIds} runs={experimentRuns} grades={grades ?? []} />
+          </Card>
+
           {/* Behavioral diagnostic charts. These need fingerprint /
               symptoms / recovery rows in the diagnostic table,
               which the diagnostic-extraction step writes after
@@ -385,26 +395,76 @@ interface GradeComparisonTableProps {
 
 /**
  * Side-by-side grade table for 2-5 selected runs. Each metric is one
- * row; each run is one column. ScoreBars on 0..1-scale metrics make
- * the deltas legible at a glance — operators can spot which variant
- * dominated which axis without reading numbers off a tooltip.
+ * row; each run is one column. Rows are grouped into four sections
+ * matching the grader pipeline's structure (engine/grader/proto):
  *
- * composite_score is the only metric on a 0..10 scale (see backend
- * `composite()`); we divide by 10 before feeding ScoreBar.
+ *   1. Code grading      — deterministic test/lint/type signals
+ *   2. Process metrics   — transcript-derived behavior counters
+ *   3. LLM-as-Judge      — cross-model rubric scores
+ *   4. Spec adherence    — instruction-compliance checks
+ *
+ * Numeric metrics on a 0..1 scale render with a ScoreBar so deltas
+ * read at a glance. composite_score is on 0..10 and gets a divide-by-
+ * ten before being fed to the bar. Counts, booleans, and currency
+ * render as plain mono-font cells. Missing data renders "—" rather
+ * than a 0 so the user can tell "not graded yet" from "scored zero".
  */
+// Plain-English definition for every metric row, surfaced as a
+// title= tooltip on hover. Keeps the table itself tight while still
+// making each axis self-explanatory; thesis readers no longer have
+// to leave the page to figure out what "self-validation rate" means.
+const METRIC_HELP: Record<string, string> = {
+  Composite:
+    'Weighted blend of code / judge / spec / process scores. 0..10. Weights come from the experiment\'s composite_weights (defaults 0.3 / 0.3 / 0.2 / 0.2).',
+  'Test pass rate':
+    'Fraction of the task\'s deterministic test_cases that exited 0. 0..1.',
+  'Tests passed': 'Pass count / total count from the grader\'s deterministic test_cases.',
+  'Lint score':
+    'Static-analysis score from the grader (ruff/flake8 for Python, golangci-lint for Go, etc.). 0..10, higher is cleaner.',
+  'Type check':
+    'Did the workspace pass the language-native type checker (mypy, tsc, go vet)? Boolean.',
+  'File state valid':
+    'Did the agent leave the workspace in a state the grader could ingest — at least one output file produced, no broken imports.',
+  Turns: 'Total ParsedTurn count emitted by the agent: thinking + tool_use + tool_result + text.',
+  Tokens: 'Total tokens the model consumed across all turns (input + output combined).',
+  'Cost (USD)':
+    'Sum of priced tokens × the model_config rate. Local-model runs report 0.00.',
+  'Token efficiency':
+    'Code-quality outcome per 1k tokens. Penalises runs that burned tokens without progress. 0..1.',
+  'Context utilization':
+    'How much of the model\'s context window was actually filled. 0..1; very low values can indicate the harness under-grounded the agent.',
+  'Tool call accuracy':
+    'Fraction of tool_use events whose tool_result reported success (no error string, expected schema). 0..1.',
+  'Self-validation rate':
+    'How often the agent ran tests / lint / type checks itself before declaring done. 0..1.',
+  Backtracks:
+    'Number of times the agent reverted its own edit (write→re-write of the same file with overlapping ranges).',
+  'Idle turns':
+    'Turns that produced neither a tool call nor net progress (pure restating, navel-gazing). High counts → SLOP signal.',
+  'Error recoveries':
+    'Times the agent hit an error and produced a working follow-up. Higher means more resilient.',
+  'Premature completion':
+    'Did the agent declare done while at least one deterministic test was still failing? Boolean — true is bad.',
+  Correctness: 'LLM-as-Judge: does the change correctly solve the stated problem? 0..1.',
+  Maintainability: 'LLM-as-Judge: clarity, naming, structure. 0..1.',
+  Completeness: 'LLM-as-Judge: did it cover the stated scope without leaving TODOs? 0..1.',
+  'Best practices': 'LLM-as-Judge: idiomatic patterns for the language/framework. 0..1.',
+  'Error handling': 'LLM-as-Judge: defensiveness, edge case coverage. 0..1.',
+  'Inter-rater α':
+    'Krippendorff\'s alpha across the judge\'s replicates. >0.67 = reliable; <0.5 = judge is wobbly, treat rubric numbers with caution.',
+  'Instruction compliance':
+    'Fraction of the task\'s explicit instructions the patch honored (e.g. "do not change signature"). 0..1.',
+  'Convention adherence':
+    'Code-style match against the repo\'s prevailing patterns (auto-detected from the codebase\'s anchor files).',
+  'Constraint violations':
+    'Number of explicit "don\'t" constraints the agent broke (touching forbidden files, changing public schema, etc.).',
+};
+
 function GradeComparisonTable({ runIds, runs, grades }: GradeComparisonTableProps) {
   if (runIds.length === 0) {
     return <div className="text-sm text-fg-muted">No runs selected.</div>;
   }
   const headers = runIds.map((id) => shortLabel(runs, id));
-  const metrics: Array<{ label: string; pick: (g: Grade) => number; scale?: number }> = [
-    { label: 'Composite', pick: (g) => g.composite_score, scale: 10 },
-    { label: 'Test pass rate', pick: (g) => g.test_pass_rate },
-    { label: 'Judge correctness', pick: (g) => g.judge_correctness },
-    { label: 'Spec compliance', pick: (g) => g.spec_instruction_compliance },
-    { label: 'Tool call accuracy', pick: (g) => g.tool_call_accuracy ?? 0 },
-    { label: 'Token efficiency', pick: (g) => g.token_efficiency },
-  ];
 
   return (
     <div className="overflow-x-auto">
@@ -418,49 +478,209 @@ function GradeComparisonTable({ runIds, runs, grades }: GradeComparisonTableProp
           </tr>
         </thead>
         <tbody>
-          {metrics.map((m) => (
-            <tr key={m.label} className="border-b border-border last:border-b-0">
-              <td className="py-2 pr-3 text-fg-muted">{m.label}</td>
-              {grades.map((g, i) => {
-                if (!g) {
-                  return <td key={i} className="py-2 pr-3 text-xs text-fg-subtle">—</td>;
-                }
-                const raw = m.pick(g);
-                const normalized = m.scale ? raw / m.scale : raw;
-                return (
-                  <td key={i} className="py-2 pr-3">
-                    <div className="flex items-center gap-2">
-                      <ScoreBar value={normalized} label={`${m.label} ${headers[i]}`} />
-                      <span className="font-mono text-xs text-fg">{raw.toFixed(2)}</span>
-                    </div>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-          <tr className="border-b border-border last:border-b-0">
-            <td className="py-2 pr-3 text-fg-muted">Premature completion</td>
-            {grades.map((g, i) => (
-              <td key={i} className="py-2 pr-3 font-mono text-xs">
-                {!g ? '—' : g.premature_completion ? (
-                  <span className="text-warning-fg">yes</span>
-                ) : (
-                  <span className="text-success-fg">no</span>
-                )}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="py-2 pr-3 text-fg-muted">Tests passed</td>
-            {grades.map((g, i) => (
-              <td key={i} className="py-2 pr-3 font-mono text-xs text-fg">
-                {!g ? '—' : `${g.test_pass_count ?? 0} / ${(g.test_pass_count ?? 0) + (g.test_fail_count ?? 0)}`}
-              </td>
-            ))}
-          </tr>
+          <HeadlineRow label="Composite" headers={headers} grades={grades} pick={(g) => g.composite_score} scale={10} />
+
+          <SectionHeader colSpan={headers.length + 1} label="Code grading (deterministic)" />
+          <BarRow label="Test pass rate" headers={headers} grades={grades} pick={(g) => g.test_pass_rate} />
+          <NumericRow label="Tests passed" headers={headers} grades={grades} format={(g) => `${g.test_pass_count ?? 0} / ${(g.test_pass_count ?? 0) + (g.test_fail_count ?? 0)}`} />
+          <BarRow label="Lint score" headers={headers} grades={grades} pick={(g) => g.lint_score} scale={10} />
+          <BoolRow label="Type check" headers={headers} grades={grades} pick={(g) => g.type_check_pass} positive="pass" negative="fail" />
+          <BoolRow label="File state valid" headers={headers} grades={grades} pick={(g) => g.file_state_valid} positive="ok" negative="broken" />
+
+          <SectionHeader colSpan={headers.length + 1} label="Process metrics" />
+          <NumericRow label="Turns" headers={headers} grades={grades} format={(g) => `${g.turn_count ?? '—'}`} />
+          <NumericRow label="Tokens" headers={headers} grades={grades} format={(g) => g.total_tokens ? g.total_tokens.toLocaleString() : '—'} />
+          <NumericRow label="Cost (USD)" headers={headers} grades={grades} format={(g) => g.cost_usd != null ? `$${g.cost_usd.toFixed(4)}` : '—'} />
+          <BarRow label="Token efficiency" headers={headers} grades={grades} pick={(g) => g.token_efficiency} />
+          <BarRow label="Context utilization" headers={headers} grades={grades} pick={(g) => g.context_utilization} />
+          <BarRow label="Tool call accuracy" headers={headers} grades={grades} pick={(g) => g.tool_call_accuracy ?? 0} />
+          <BarRow label="Self-validation rate" headers={headers} grades={grades} pick={(g) => g.self_validation_rate ?? 0} />
+          <NumericRow label="Backtracks" headers={headers} grades={grades} format={(g) => `${g.backtrack_count ?? 0}`} />
+          <NumericRow label="Idle turns" headers={headers} grades={grades} format={(g) => `${g.idle_turns ?? 0}`} />
+          <NumericRow label="Error recoveries" headers={headers} grades={grades} format={(g) => `${g.error_recovery_count ?? 0}`} />
+          <BoolRow label="Premature completion" headers={headers} grades={grades} pick={(g) => g.premature_completion} positive="yes" negative="no" tone="warn-positive" />
+
+          <SectionHeader colSpan={headers.length + 1} label="LLM-as-Judge rubric" />
+          <BarRow label="Correctness" headers={headers} grades={grades} pick={(g) => g.judge_correctness} />
+          <BarRow label="Maintainability" headers={headers} grades={grades} pick={(g) => g.judge_maintainability ?? 0} />
+          <BarRow label="Completeness" headers={headers} grades={grades} pick={(g) => g.judge_completeness ?? 0} />
+          <BarRow label="Best practices" headers={headers} grades={grades} pick={(g) => g.judge_best_practices ?? 0} />
+          <BarRow label="Error handling" headers={headers} grades={grades} pick={(g) => g.judge_error_handling ?? 0} />
+          <NumericRow label="Inter-rater α" headers={headers} grades={grades} format={(g) => g.judge_irr_alpha != null ? g.judge_irr_alpha.toFixed(2) : '—'} />
+
+          <SectionHeader colSpan={headers.length + 1} label="Spec adherence" />
+          <BarRow label="Instruction compliance" headers={headers} grades={grades} pick={(g) => g.spec_instruction_compliance} />
+          <BarRow label="Convention adherence" headers={headers} grades={grades} pick={(g) => g.spec_convention_adherence ?? 0} />
+          <NumericRow label="Constraint violations" headers={headers} grades={grades} format={(g) => `${g.spec_constraint_violations ?? 0}`} />
         </tbody>
       </table>
     </div>
+  );
+}
+
+// --- Row primitives ---------------------------------------------------
+
+function SectionHeader({ label, colSpan }: { label: string; colSpan: number }) {
+  return (
+    <tr>
+      <td
+        colSpan={colSpan}
+        className="border-b border-border bg-bg-elev-2/40 py-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-muted"
+      >
+        {label}
+      </td>
+    </tr>
+  );
+}
+
+function HeadlineRow({
+  label,
+  headers,
+  grades,
+  pick,
+  scale,
+}: {
+  label: string;
+  headers: string[];
+  grades: Array<Grade | null>;
+  pick: (g: Grade) => number;
+  scale?: number;
+}) {
+  return (
+    <tr className="border-b border-border">
+      <td
+        className="cursor-help py-2 pr-3 font-medium text-fg decoration-dotted underline-offset-2 hover:underline"
+        title={METRIC_HELP[label]}
+      >
+        {label}
+      </td>
+      {grades.map((g, i) => {
+        if (!g) return <td key={i} className="py-2 pr-3 text-xs text-fg-subtle">—</td>;
+        const raw = pick(g);
+        const normalized = scale ? raw / scale : raw;
+        return (
+          <td key={i} className="py-2 pr-3">
+            <div className="flex items-center gap-2">
+              <ScoreBar value={normalized} label={`${label} ${headers[i]}`} />
+              <span className="font-mono text-sm font-medium text-fg">{raw.toFixed(2)}</span>
+            </div>
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
+function BarRow({
+  label,
+  headers,
+  grades,
+  pick,
+  scale,
+}: {
+  label: string;
+  headers: string[];
+  grades: Array<Grade | null>;
+  pick: (g: Grade) => number;
+  scale?: number;
+}) {
+  return (
+    <tr className="border-b border-border/60 last:border-b-0">
+      <td
+        className="cursor-help py-1.5 pr-3 text-fg-muted decoration-dotted underline-offset-2 hover:underline"
+        title={METRIC_HELP[label]}
+      >
+        {label}
+      </td>
+      {grades.map((g, i) => {
+        if (!g) return <td key={i} className="py-1.5 pr-3 text-xs text-fg-subtle">—</td>;
+        const raw = pick(g);
+        const normalized = scale ? raw / scale : raw;
+        return (
+          <td key={i} className="py-1.5 pr-3">
+            <div className="flex items-center gap-2">
+              <ScoreBar value={normalized} label={`${label} ${headers[i]}`} />
+              <span className="font-mono text-xs text-fg">{raw.toFixed(2)}</span>
+            </div>
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
+function NumericRow({
+  label,
+  headers: _,
+  grades,
+  format,
+}: {
+  label: string;
+  headers: string[];
+  grades: Array<Grade | null>;
+  format: (g: Grade) => string;
+}) {
+  return (
+    <tr className="border-b border-border/60 last:border-b-0">
+      <td
+        className="cursor-help py-1.5 pr-3 text-fg-muted decoration-dotted underline-offset-2 hover:underline"
+        title={METRIC_HELP[label]}
+      >
+        {label}
+      </td>
+      {grades.map((g, i) => (
+        <td key={i} className="py-1.5 pr-3 font-mono text-xs text-fg">
+          {g ? format(g) : '—'}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+function BoolRow({
+  label,
+  grades,
+  pick,
+  positive,
+  negative,
+  tone = 'good-positive',
+}: {
+  label: string;
+  headers: string[];
+  grades: Array<Grade | null>;
+  pick: (g: Grade) => boolean | undefined;
+  positive: string;
+  negative: string;
+  // good-positive: true is the desirable outcome (type check passes → green)
+  // warn-positive: true is the bad outcome (premature_completion → amber)
+  tone?: 'good-positive' | 'warn-positive';
+}) {
+  return (
+    <tr className="border-b border-border/60 last:border-b-0">
+      <td
+        className="cursor-help py-1.5 pr-3 text-fg-muted decoration-dotted underline-offset-2 hover:underline"
+        title={METRIC_HELP[label]}
+      >
+        {label}
+      </td>
+      {grades.map((g, i) => {
+        if (!g) return <td key={i} className="py-1.5 pr-3 font-mono text-xs text-fg-subtle">—</td>;
+        const v = pick(g);
+        if (v == null) return <td key={i} className="py-1.5 pr-3 font-mono text-xs text-fg-subtle">—</td>;
+        const goodSide = tone === 'good-positive' ? v : !v;
+        return (
+          <td
+            key={i}
+            className={
+              'py-1.5 pr-3 font-mono text-xs ' +
+              (goodSide ? 'text-success-fg' : 'text-warning-fg')
+            }
+          >
+            {v ? positive : negative}
+          </td>
+        );
+      })}
+    </tr>
   );
 }
 
@@ -485,4 +705,124 @@ function isValidDiagnostic(diag: Diagnostic | null | undefined): diag is Diagnos
   if (typeof diag.symptoms !== 'object' || diag.symptoms === null) return false;
   if (typeof diag.recovery !== 'object' || diag.recovery === null) return false;
   return true;
+}
+
+// --- Test results table ---------------------------------------------
+
+/**
+ * Side-by-side test verdicts. Rows are the unique test names across
+ * the selected runs (union, not intersection — a run that never had a
+ * test name renders "—" for that row); columns are the runs in pick
+ * order. Pass/fail badge clicks toggle an inline output panel so a
+ * failing case's traceback is one click away without leaving Compare.
+ */
+function TestResultsTable({ runIds, runs, grades }: {
+  runIds: string[];
+  runs: Array<{ id: string; run_number: number; status: string }>;
+  grades: Array<Grade | null>;
+}) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  if (runIds.length === 0) return <div className="text-sm text-fg-muted">No runs selected.</div>;
+
+  const headers = runIds.map((id) => shortLabel(runs, id));
+  // Build the union of test names while keeping a stable order: first
+  // seen wins. Tests rarely change between runs but a re-grade can
+  // introduce new ones; the union avoids losing them.
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const g of grades) {
+    if (!g?.test_results) continue;
+    for (const t of g.test_results) {
+      if (!seen.has(t.name)) {
+        seen.add(t.name);
+        names.push(t.name);
+      }
+    }
+  }
+  if (names.length === 0) {
+    return (
+      <div className="text-sm text-fg-muted">
+        No test cases recorded yet. The grader runs each task's verification
+        scripts inside the sandbox; results land here once a run finishes
+        the grading stage.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs text-fg-muted">
+            <th className="py-2 pr-3 font-medium">Test case</th>
+            {headers.map((label, i) => (
+              <th key={i} className="py-2 pr-3 font-medium">{label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {names.map((name) => {
+            const cellEntries = grades.map((g) => g?.test_results?.find((t) => t.name === name) ?? null);
+            const expanded = expandedKey === name;
+            const anyFailedOutput = cellEntries.some((t) => t && !t.passed && t.output);
+            return (
+              <Fragment key={name}>
+                <tr
+                  className={cn(
+                    'border-b border-border/60 last:border-b-0',
+                    anyFailedOutput && 'cursor-pointer hover:bg-bg-elev-1/40',
+                  )}
+                  onClick={() => anyFailedOutput && setExpandedKey(expanded ? null : name)}
+                >
+                  <td className="py-1.5 pr-3 font-mono text-xs text-fg">
+                    {anyFailedOutput && (
+                      <span className="mr-1.5 select-none text-fg-subtle">
+                        {expanded ? '▾' : '▸'}
+                      </span>
+                    )}
+                    {name}
+                  </td>
+                  {cellEntries.map((t, i) => (
+                    <td key={i} className="py-1.5 pr-3 font-mono text-xs">
+                      {t == null ? (
+                        <span className="text-fg-subtle">—</span>
+                      ) : t.passed ? (
+                        <span className="text-success-fg">✓ pass</span>
+                      ) : (
+                        <span className="text-danger-fg">✗ fail</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                {expanded && (
+                  <tr>
+                    <td colSpan={headers.length + 1} className="bg-bg-elev-2/40 px-3 py-2">
+                      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${headers.length}, minmax(0, 1fr))` }}>
+                        {cellEntries.map((t, i) => (
+                          <div key={i} className="min-w-0">
+                            <div className="mb-1 text-[10px] uppercase tracking-wider text-fg-muted">
+                              {headers[i]}
+                            </div>
+                            {t == null ? (
+                              <div className="text-xs text-fg-subtle">no result</div>
+                            ) : t.passed ? (
+                              <div className="text-xs text-success-fg">passed — no output</div>
+                            ) : (
+                              <pre className="max-h-48 overflow-auto whitespace-pre-wrap bg-code-bg/60 px-2 py-1.5 font-mono text-[11px] leading-[1.5] text-fg-muted">
+                                {t.output || '(no output captured)'}
+                              </pre>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }

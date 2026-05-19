@@ -302,14 +302,27 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	// Run the task's verification commands inside the sandbox (which has the
 	// compilers/interpreters), not in the grader container.
 	testResults, passed, failed := o.runTaskVerifications(ctx, *experiment, *run, workspace, *task)
+	slog.Info("grader.verifications", "run_id", run.ID, "experiment_id", experiment.ID, "passed", passed, "failed", failed)
 	_ = o.store.UpdateRunStatus(ctx, run.ID, "grading", "")
 	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "grading", "variant_id": run.VariantID})
 	o.broadcast("grading.progress", map[string]any{"run_id": run.ID, "grader": "composite", "status": "running"})
+	gradeStart := time.Now()
+	slog.Info("grader.start", "run_id", run.ID, "experiment_id", experiment.ID, "judge_model", experiment.JudgeModel)
 	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript, experiment.JudgeModel)
 	if gradeErr != nil {
+		slog.Error("grader.failed", "run_id", run.ID, "experiment_id", experiment.ID, "err", gradeErr, "duration_ms", time.Since(gradeStart).Milliseconds())
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", gradeErr.Error())
 		return gradeErr
 	}
+	slog.Info("grader.done",
+		"run_id", run.ID,
+		"experiment_id", experiment.ID,
+		"duration_ms", time.Since(gradeStart).Milliseconds(),
+		"composite", grade.CompositeScore,
+		"judge_correctness", grade.JudgeCorrectness,
+		"spec_compliance", grade.SpecInstructionCompliance,
+		"source", grade.Source,
+	)
 	total := passed + failed
 	if total > 0 {
 		grade.TestResults = testResults
@@ -644,6 +657,14 @@ func (o *Orchestrator) broadcast(eventType string, payload any) {
 func (o *Orchestrator) runTaskVerifications(ctx context.Context, experiment models.Experiment, run models.Run, workspace string, task models.Task) ([]models.TestResult, int, int) {
 	if err := materializeHiddenFiles(workspace, task.Metadata); err != nil {
 		return []models.TestResult{{Name: "hidden test setup", Passed: false, Output: err.Error()}}, 0, 1
+	}
+	// Drop the truth-set into the workspace right before verification
+	// fires. Doing it here (not in PrepareWorkspace) keeps the test
+	// files off the agent's filesystem during its turn — the agent
+	// can't `cat tests/test_race_fixed.py` to peek at the expected
+	// outcomes and reverse-engineer a pass.
+	if err := o.sandbox.MaterializeTaskTests(workspace, task); err != nil {
+		slog.Warn("verification.materialize_tests_failed", "run_id", run.ID, "task_id", task.ID, "err", err)
 	}
 	results := make([]models.TestResult, 0, len(task.TestCases))
 	passed, failed := 0, 0

@@ -6,8 +6,11 @@
 # tracked file is a SCOPE_DRIFT signal.
 set -euo pipefail
 
+# Frameval's sandbox flattens the host's task_root/{workspace,tests}
+# into a single /workspace tree (app/ next to tests/). So the
+# workspace IS this script's parent dir, not a sibling.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WORKSPACE="$SCRIPT_DIR/../workspace"
+WORKSPACE="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [[ ! -d "$WORKSPACE/.git" ]]; then
     echo "scope check: workspace is not a git repo; setup.sh must run first" >&2

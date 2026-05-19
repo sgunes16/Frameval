@@ -169,6 +169,7 @@ export type ParsedTurn = {
   parent_turn_index?: number;
   tool_name?: string;
   files_touched?: string[];
+  tool_output?: string;
   duration_ms?: number;
   tokens_in?: number;
   tokens_out?: number;
@@ -187,20 +188,46 @@ export type Transcript = {
 };
 
 export type Grade = {
+  // composite — weighted blend driven by `composite_weights` in the
+  // experiment config (defaults: code 0.3 / judge 0.3 / process 0.2 /
+  // spec 0.2). Range 0..10 since each child axis tops at 10.
   composite_score: number;
+
+  // --- Code grading (deterministic) ---
   test_pass_rate: number;
   test_pass_count?: number;
   test_fail_count?: number;
   lint_score: number;
-  token_efficiency: number;
-  context_utilization: number;
+  type_check_pass?: boolean;
+  file_state_valid?: boolean;
+
+  // --- Process metrics (transcript-derived) ---
   turn_count?: number;
   total_tokens?: number;
-  judge_correctness: number;
-  spec_instruction_compliance: number;
-  premature_completion?: boolean;
-  tool_call_accuracy?: number;
   cost_usd?: number;
+  token_efficiency: number;
+  backtrack_count?: number;
+  self_validation_rate?: number;
+  premature_completion?: boolean;
+  idle_turns?: number;
+  error_recovery_count?: number;
+  tool_call_accuracy?: number;
+  context_utilization: number;
+
+  // --- LLM-as-Judge rubric (cross-model) ---
+  judge_correctness: number;
+  judge_maintainability?: number;
+  judge_completeness?: number;
+  judge_best_practices?: number;
+  judge_error_handling?: number;
+  judge_irr_alpha?: number;
+
+  // --- Spec / instruction adherence ---
+  spec_instruction_compliance: number;
+  spec_constraint_violations?: number;
+  spec_convention_adherence?: number;
+
+  graded_at?: string;
   test_results?: Array<{ name: string; passed: boolean; output: string }>;
 };
 

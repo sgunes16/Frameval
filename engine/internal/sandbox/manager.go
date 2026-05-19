@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -121,6 +122,10 @@ func (m *Manager) PrepareWorkspace(ctx context.Context, experiment models.Experi
 				if err := copyDir(task.CodebasePath, workspace); err != nil {
 					return "", nil, fmt.Errorf("copy task codebase: %w", err)
 				}
+				// NOTE: sibling tests/ folder (truth set) is materialized
+				// AFTER the agent stage finishes — see MaterializeTaskTests.
+				// Copying it here would leak the test file paths to the
+				// agent and let it cheat by reading the expected results.
 			}
 		}
 	}
@@ -142,10 +147,13 @@ func (m *Manager) PrepareWorkspace(ctx context.Context, experiment models.Experi
 		}
 	}
 	if strings.TrimSpace(task.SetupScript) != "" {
+		slog.Info("workspace.setup.start", "task_id", task.ID, "script_len", len(task.SetupScript))
 		output, err := m.RunShell(ctx, workspace, nil, task.SetupScript)
 		if err != nil {
+			slog.Error("workspace.setup.failed", "task_id", task.ID, "err", err, "output", strings.TrimSpace(output))
 			return "", nil, fmt.Errorf("run setup script: %w (%s)", err, strings.TrimSpace(output))
 		}
+		slog.Info("workspace.setup.done", "task_id", task.ID, "output_tail", tailLines(output, 8))
 	}
 	if err := ensureWorkspaceGitBaseline(ctx, workspace); err != nil {
 		return "", nil, fmt.Errorf("prepare workspace git baseline: %w", err)
@@ -155,6 +163,45 @@ func (m *Manager) PrepareWorkspace(ctx context.Context, experiment models.Experi
 		return "", nil, err
 	}
 	return workspace, snapshot, nil
+}
+
+// tailLines returns the last n lines of s, joined by '\n'. Used to
+// keep slog records bounded — a 4 MiB `pip install` log otherwise
+// drowns the journal but the meaningful errors are always at the
+// bottom.
+func tailLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) <= n {
+		return strings.Join(lines, "\n")
+	}
+	return strings.Join(lines[len(lines)-n:], "\n")
+}
+
+// MaterializeTaskTests copies a task's sibling tests/ folder into the
+// workspace's tests/ subdirectory. Intended to be called by the
+// orchestrator AFTER the agent executor finishes and BEFORE
+// runTaskVerifications runs — so the truth set is on disk when
+// `pytest tests/test_*.py` fires but the agent never had a chance to
+// peek at it during its turn. No-op when the task doesn't ship a
+// sibling tests/ directory (newer tasks encode verification inline in
+// test_command).
+func (m *Manager) MaterializeTaskTests(workspace string, task models.Task) error {
+	if task.CodebasePath == "" {
+		return nil
+	}
+	root := filepath.Dir(task.CodebasePath)
+	if root == "" || root == task.CodebasePath {
+		return nil
+	}
+	testsSrc := filepath.Join(root, "tests")
+	info, err := os.Stat(testsSrc)
+	if err != nil || !info.IsDir() {
+		return nil
+	}
+	if err := copyDir(testsSrc, filepath.Join(workspace, "tests")); err != nil {
+		return fmt.Errorf("materialize task tests: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) RunShell(ctx context.Context, workspace string, env map[string]string, script string) (string, error) {
@@ -277,7 +324,12 @@ func (m *Manager) runInDocker(ctx context.Context, workspace string, env map[str
 		&container.Config{
 			Image:      m.sandboxImage,
 			WorkingDir: "/workspace",
-			Cmd:        []string{"sh", "-c", script},
+			// `bash`, not `sh`. Ubuntu's /bin/sh is dash, which doesn't
+			// support `set -o pipefail`, here-strings, `[[ ]]`, arrays,
+			// or several other constructs that real task setup scripts
+			// reach for. Tasks would have to be written to the dash
+			// subset otherwise — and ours aren't.
+			Cmd:        []string{"bash", "-c", script},
 			Env:        buildSandboxEnv(env),
 		},
 		&container.HostConfig{},

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -66,9 +67,236 @@ export function ToolUseBlock({ block }: { block: ParsedTurn }) {
         )}
       </div>
       {body && <div className="ml-0.5 border-l border-border pl-3">{body}</div>}
+      {block.tool_output && <ToolOutputSnippet output={block.tool_output} toolName={tool} />}
     </div>
   );
 }
+
+/** ToolOutputSnippet shows what the agent actually saw after a tool
+ * call. Walks the output as a sequence of XML-tagged segments + raw
+ * text and renders each piece in its proper visual style:
+ *
+ *   <path>...</path>           → metadata chip
+ *   <type>...</type>           → joined with <path> into one chip
+ *   <content>1: …(End of file…) → code block, numbered, with line-count summary
+ *   <entries>… (N entries)…</entries>  → entry list with count summary
+ *   <shell_metadata>…</shell_metadata> → small amber notice
+ *   <error>…</error>           → small red notice
+ *   anything else              → unwrap, render body as plain text
+ *   raw text between/outside   → stdout, expandable
+ *
+ * Unknown tags don't disappear — they're stripped of their wrapping
+ * but the inner body still renders, so we never silently swallow
+ * agent-visible output. */
+function ToolOutputSnippet({ output, toolName }: { output: string; toolName: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const segments = parseToolOutput(output);
+
+  // Walk the segments and pre-compute the path/type header chip; we
+  // collapse <path> + <type> into a single chip rather than rendering
+  // them as two separate boxes, since opencode always emits them
+  // together.
+  let headerChip: string | null = null;
+  const pathSeg = segments.find((s) => s.tag === 'path');
+  const typeSeg = segments.find((s) => s.tag === 'type');
+  if (pathSeg) headerChip = pathSeg.body;
+  if (pathSeg && typeSeg) headerChip = `${typeSeg.body} · ${pathSeg.body}`;
+  else if (typeSeg) headerChip = typeSeg.body;
+
+  // The expand-vs-collapse rule applies per snippet, not per segment;
+  // we measure the textual mass of segments that render as
+  // long-form bodies (content, entries, raw stdout) and gate the
+  // collapse behaviour off that.
+  const longBodies = segments.filter(
+    (s) =>
+      s.tag === 'content' ||
+      s.tag === 'entries' ||
+      (!s.tag && s.body.trim().length > 0),
+  );
+  const totalLines = longBodies.reduce(
+    (n, s) => n + s.body.split('\n').length,
+    0,
+  );
+  const INLINE_LIMIT = toolName.toLowerCase() === 'read' ? 6 : 4;
+  const overflowing = totalLines > INLINE_LIMIT;
+  // When we have <content> / <entries> tags the limit applies to the
+  // structured body. For loose stdout we just clip the raw text.
+  // Either way, expanded === true shows everything.
+
+  // Segments we actively want to suppress when not expanded (e.g.
+  // very long content). Tracking which lines we've already "spent"
+  // lets us clip across segments consistently.
+  let remaining = expanded ? Infinity : INLINE_LIMIT;
+  function takeLines(body: string): { visible: string; hiddenLines: number } {
+    if (remaining === Infinity) return { visible: body, hiddenLines: 0 };
+    const lines = body.split('\n');
+    if (lines.length <= remaining) {
+      const out = { visible: lines.join('\n'), hiddenLines: 0 };
+      remaining -= lines.length;
+      return out;
+    }
+    const visible = lines.slice(0, remaining).join('\n');
+    const hidden = lines.length - remaining;
+    remaining = 0;
+    return { visible, hiddenLines: hidden };
+  }
+
+  return (
+    <div
+      className="ml-0.5 space-y-1 border-l border-success/40 pl-3"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {headerChip && (
+        <div className="px-2 pt-1 text-[10.5px] uppercase tracking-wider text-fg-subtle">
+          {headerChip}
+        </div>
+      )}
+      {segments.map((seg, i) => {
+        if (seg.tag === 'path' || seg.tag === 'type') return null;
+        if (seg.tag === 'shell_metadata') {
+          return (
+            <div
+              key={i}
+              className="rounded-sm border border-warning/40 bg-warning/10 px-2 py-1 text-[11.5px] leading-[1.55] text-warning-fg"
+            >
+              {seg.body}
+            </div>
+          );
+        }
+        if (seg.tag === 'error') {
+          return (
+            <div
+              key={i}
+              className="rounded-sm border border-danger/40 bg-danger/10 px-2 py-1 font-mono text-[11.5px] leading-[1.55] text-danger-fg"
+            >
+              {seg.body}
+            </div>
+          );
+        }
+        if (seg.tag === 'content' || seg.tag === 'entries') {
+          const { body, footer } = splitTrailingCount(seg.body);
+          const { visible } = takeLines(body);
+          return (
+            <div key={i}>
+              {footer && (
+                <div className="px-2 text-[10.5px] uppercase tracking-wider text-fg-subtle">
+                  {footer}
+                </div>
+              )}
+              <pre className="overflow-auto whitespace-pre-wrap bg-success/5 px-2 py-1 font-mono text-[11.5px] leading-[1.55] text-fg">
+                {visible}
+              </pre>
+            </div>
+          );
+        }
+        // Untagged stdout / unknown tag. Body is still rendered
+        // (never silently dropped); when the tag is unrecognized
+        // we surface a small "unhandled tag" pill so future-us
+        // notices it and adds a bespoke renderer to
+        // KNOWN_TOOL_OUTPUT_TAGS + this switch.
+        const { visible } = takeLines(seg.body);
+        if (!visible.trim() && !seg.tag) return null;
+        const isUnknownTag = !!seg.tag && !KNOWN_TOOL_OUTPUT_TAGS.has(seg.tag);
+        return (
+          <div key={i} className="space-y-0.5">
+            {isUnknownTag && (
+              <span
+                title={`Opencode emitted <${seg.tag}> but the Inspector has no bespoke renderer for it yet. Body is shown below verbatim; add a case in blocks.tsx ToolOutputSnippet to style it.`}
+                className="inline-flex items-center gap-1 rounded-sm border border-warning/40 bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] text-warning-fg"
+              >
+                <span aria-hidden>⚠</span>
+                <span>unhandled tag: &lt;{seg.tag}&gt;</span>
+              </span>
+            )}
+            {visible.trim() && (
+              <pre className="overflow-auto whitespace-pre-wrap bg-success/5 px-2 py-1 font-mono text-[11.5px] leading-[1.55] text-fg-muted">
+                {visible}
+              </pre>
+            )}
+          </div>
+        );
+      })}
+      {overflowing && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          className="px-2 text-[11px] font-medium text-fg-subtle underline-offset-2 hover:text-accent hover:underline"
+        >
+          {expanded
+            ? '− collapse'
+            : `+ ${totalLines - INLINE_LIMIT} more line${totalLines - INLINE_LIMIT === 1 ? '' : 's'}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** parseToolOutput walks opencode's tool output as a sequence of
+ * tagged blocks + interleaved raw text. Tag names are matched as
+ * `[A-Za-z_]\w*` so both single-word (`<path>`) and snake_case
+ * (`<shell_metadata>`) shapes work. Nested same-name tags are
+ * non-greedy so the closing match is the nearest one. */
+function parseToolOutput(raw: string): Array<{ tag?: string; body: string }> {
+  const out: Array<{ tag?: string; body: string }> = [];
+  const re = /<([A-Za-z_]\w*)>([\s\S]*?)<\/\1>/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    if (m.index > last) {
+      out.push({ body: raw.slice(last, m.index) });
+    }
+    out.push({ tag: m[1], body: m[2] });
+    last = m.index + m[0].length;
+  }
+  if (last < raw.length) out.push({ body: raw.slice(last) });
+  return out
+    .map((s) => ({ tag: s.tag, body: stripOuterNewlines(s.body) }))
+    .filter((s) => s.tag || s.body.trim().length > 0);
+}
+
+function stripOuterNewlines(s: string): string {
+  return s.replace(/^\n+/, '').replace(/\n+$/, '');
+}
+
+/** Pulls out opencode's trailing count line — "(End of file - total
+ * 37 lines)" or "(4 entries)" — and returns the body without it
+ * plus a normalized summary chip. Both forms appear naturally inside
+ * <content> and <entries> segments. */
+function splitTrailingCount(body: string): { body: string; footer?: string } {
+  const fileFooter = body.match(/\n*\(End of file\s*[—–-]\s*total (\d+) lines\)\s*$/);
+  if (fileFooter) {
+    return {
+      body: body.slice(0, fileFooter.index).replace(/\n+$/, ''),
+      footer: `${fileFooter[1]} lines`,
+    };
+  }
+  const dirFooter = body.match(/\n*\((\d+) entries\)\s*$/);
+  if (dirFooter) {
+    return {
+      body: body.slice(0, dirFooter.index).replace(/\n+$/, ''),
+      footer: `${dirFooter[1]} entries`,
+    };
+  }
+  return { body };
+}
+
+// KNOWN_TOOL_OUTPUT_TAGS is the set of opencode tool-output XML tags
+// we render with bespoke styling. Anything OUTSIDE this set still
+// renders (body isn't dropped), but it's surfaced with an
+// "⚠ unhandled tag" pill so we notice it and add a renderer.
+// Add new tag names here AND a matching branch in ToolOutputSnippet
+// — the pill is a forcing function so we never silently drop info.
+const KNOWN_TOOL_OUTPUT_TAGS = new Set([
+  'path',
+  'type',
+  'content',
+  'entries',
+  'shell_metadata',
+  'error',
+]);
 
 // Compact inline summary for the tool-card header so a single-line
 // agentic feed reads at a glance: "● read app/user_service.py",

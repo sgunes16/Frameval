@@ -207,6 +207,21 @@ func (s *Store) upsertManifests(ctx context.Context, manifests []taskManifest) e
 			}
 		}
 
+		// Setup script precedence: an inline `setup_script:` field in
+		// task.yaml wins; otherwise fall back to a sibling `setup.sh`
+		// file (older brownfield tasks store their setup that way).
+		// Returning the file contents — not a `bash setup.sh` shim —
+		// because PrepareWorkspace pipes SetupScript straight to
+		// `sh -c`, and setup.sh isn't on the sandbox container's
+		// filesystem during that stage.
+		setupScript := manifest.SetupScript
+		if strings.TrimSpace(setupScript) == "" && manifest.TaskRootPath != "" {
+			candidate := filepath.Join(manifest.TaskRootPath, "setup.sh")
+			if data, err := os.ReadFile(candidate); err == nil {
+				setupScript = string(data)
+			}
+		}
+
 		task := models.Task{
 			ID:              manifest.ID,
 			Name:            manifest.Name,
@@ -224,7 +239,7 @@ func (s *Store) upsertManifests(ctx context.Context, manifests []taskManifest) e
 			CodebaseType:    manifest.CodebaseType,
 			TaskPrompt:      manifest.promptText(),
 			TechnicalDetail: manifest.TechnicalDetail,
-			SetupScript:     manifest.SetupScript,
+			SetupScript:     setupScript,
 			CodebasePath:    manifest.CodebasePath,
 			TaskRootPath:    manifest.TaskRootPath,
 			IsBuiltin:       true,
