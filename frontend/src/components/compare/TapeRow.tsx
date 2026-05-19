@@ -46,12 +46,28 @@ function AnchoredRowView({
       </div>
       {runIds.map((runId) => {
         const parent = row.columns.get(runId);
+        // Only render as <button> when there's actually a click handler.
+        // An unconditional <button> appears in the tab order and AT
+        // announces it as a no-op control even when the parent didn't
+        // pass onCellClick. Mirrors the conditional DriftRowView does.
+        if (parent === undefined || !onCellClick) {
+          return (
+            <div
+              role="gridcell"
+              key={runId}
+              className="border-r border-border px-3 py-2 text-xs text-fg last:border-r-0"
+            >
+              <span className="font-mono text-fg-muted">Turn </span>
+              <span className="font-mono text-fg">{parent ?? ''}</span>
+            </div>
+          );
+        }
         return (
           <button
             type="button"
             role="gridcell"
             key={runId}
-            onClick={() => parent !== undefined && onCellClick?.(runId, parent)}
+            onClick={() => onCellClick(runId, parent)}
             className="border-r border-border px-3 py-2 text-left text-xs text-fg hover:bg-bg-elev-2 last:border-r-0"
           >
             <span className="font-mono text-fg-muted">Turn </span>
@@ -93,12 +109,24 @@ function DriftRowView({
             />
           );
         }
+        if (!onCellClick) {
+          return (
+            <div
+              key={runId}
+              role="gridcell"
+              className="border-r border-border bg-warning/5 px-3 py-2 text-xs text-fg last:border-r-0"
+            >
+              <span className="font-mono text-fg-muted">Turn </span>
+              <span className="font-mono text-fg">{parent}</span>
+            </div>
+          );
+        }
         return (
           <button
             type="button"
             role="gridcell"
             key={runId}
-            onClick={() => onCellClick?.(runId, parent)}
+            onClick={() => onCellClick(runId, parent)}
             className="border-r border-border bg-warning/5 px-3 py-2 text-left text-xs text-fg hover:bg-warning/10 last:border-r-0"
           >
             <span className="font-mono text-fg-muted">Turn </span>

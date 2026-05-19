@@ -87,21 +87,36 @@ describe('alignAnchors', () => {
     }
   });
 
-  it('three runs: r1 r2 share, r3 diverges → anchored cells for r1+r2, null for r3', () => {
+  it('three runs: r1 r2 share, r3 diverges — produces exactly r1, r2, r3 drift rows in order', () => {
     const shared = [a('Edit|x', 0)];
     const r3only = [a('Bash|z', 0)];
     const rows = alignAnchors([run('r1', shared), run('r2', shared), run('r3', r3only)]);
-    // r3's anchor comes earlier or equal in turn_index (both 0). With
-    // the same turn_index, drift fires: each run contributes its
-    // current anchor as a cell, but since r1+r2 keys match r1 and r2's
-    // key differs from r3's, no anchored row is possible without all
-    // sharing.
-    expect(rows.length).toBeGreaterThan(0);
-    // At least one drift row should distinguish r3.
+    // No row can be 'anchored' because the active set never agrees
+    // (r3's key differs from r1+r2). Lookahead identifies all three
+    // as advancers (no other run's future contains the current key),
+    // so we get one drift row per advancer in run order.
+    expect(rowKinds(rows)).toEqual(['drift', 'drift', 'drift']);
     const r3DriftRows = rows.filter(
       (r) => r.kind === 'drift' && r.columns.get('r3') !== null,
     );
-    expect(r3DriftRows.length).toBeGreaterThanOrEqual(1);
+    expect(r3DriftRows).toHaveLength(1);
+  });
+
+  it('deadlock fallback fires when every run waits on every other, then alignment recovers', () => {
+    // r1=[A, B], r2=[B, A]. Both runs see the other's current key in
+    // their own future, so lookahead classifies them as waiters and
+    // returns an empty advancer set. Without the fallback the
+    // algorithm would infinite-loop. The fallback picks the run with
+    // smallest turn_index (tie → first in run order = r1), advances
+    // its pointer, and from that step the two runs realign:
+    //   step 1: drift (r1 advances, r2 waits)
+    //   step 2: anchored on B (both runs at B)
+    //   step 3: drift (r2 has A trailing, r1 exhausted)
+    const r1 = [a('A', 0), a('B', 1)];
+    const r2 = [a('B', 0), a('A', 1)];
+    const rows = alignAnchors([run('r1', r1), run('r2', r2)]);
+    expect(rowKinds(rows)).toEqual(['drift', 'anchored', 'drift']);
+    expect(rows.length).toBeLessThanOrEqual(4); // proves termination
   });
 
   it('Bash-without-files keys (content-hash form) anchor correctly', () => {
