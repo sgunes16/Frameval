@@ -154,6 +154,9 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      - name: Design-token sweep
+        run: npm run check:tokens
+
       - name: Build
         run: npm run build
 
