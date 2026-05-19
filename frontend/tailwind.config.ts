@@ -46,6 +46,14 @@ export default {
         // Legacy shadcn aliases — kept so existing components keep working
         // through the migration in #74. Each delegates to a new token so
         // theme switching still applies.
+        //
+        // Semantic shift: `primary` previously resolved to a near-black
+        // brand color (hsl(222.2 47.4% 11.2%)); it now resolves to
+        // --accent (cyan). No component currently uses Tailwind's
+        // `primary` token directly — the custom Button uses bg-slate-900
+        // explicitly — so the change is invisible today, but anyone
+        // adding a `bg-primary` button later should expect cyan, not
+        // dark.
         border: 'hsl(var(--border) / <alpha-value>)',
         input: 'hsl(var(--border) / <alpha-value>)',
         ring: 'hsl(var(--border-strong) / <alpha-value>)',

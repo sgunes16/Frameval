@@ -86,6 +86,8 @@ describe('design tokens', () => {
 
   it('declares dark mode in class-based form', () => {
     // class-based dark mode is required by Story #71 (theme toggle).
-    expect(tailwindConfig).toMatch(/darkMode\s*:\s*\[\s*['"]class['"]/);
+    // Accepts either `darkMode: 'class'` (string) or `darkMode: ['class']`
+    // (array) — Tailwind 3.x docs document both as equivalent.
+    expect(tailwindConfig).toMatch(/darkMode\s*:\s*(?:\[\s*)?['"]class['"]/);
   });
 });

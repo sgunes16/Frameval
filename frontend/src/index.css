@@ -1,12 +1,17 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /**
  * Design tokens live in their own file so consumers (and tests) can
  * audit the surface without scrolling past Tailwind directives.
+ *
+ * @import must precede every other at-rule per the CSS spec; PostCSS
+ * and Vite tolerate a misplaced import today but a future tooling
+ * upgrade could silently drop it and leave every hsl(var(--*))
+ * reference resolving to transparent.
  */
 @import './styles/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   /* Legacy RGB-tuple variables kept temporarily so any in-tree component
