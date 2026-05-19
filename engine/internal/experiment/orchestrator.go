@@ -265,6 +265,17 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", err.Error())
 		return err
 	}
+	// Inspector V2: announce the structured turns once the transcript is
+	// persisted so the frontend can populate the turn-list without a
+	// follow-up REST call. Live per-block streaming (event-per-turn while
+	// the agent is mid-flight) is a separate story — requires executor
+	// changes — and lands in #62 / #64. For now the WS payload is the
+	// full ParsedTurns slice.
+	o.broadcast("run.turn", map[string]any{
+		"experiment_id": experiment.ID,
+		"run_id":        run.ID,
+		"turns":         result.ParsedTurns,
+	})
 	// Run the task's verification commands inside the sandbox (which has the
 	// compilers/interpreters), not in the grader container.
 	testResults, passed, failed := o.runTaskVerifications(ctx, *experiment, *run, workspace, *task)

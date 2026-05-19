@@ -14,6 +14,7 @@ import type {
   LaunchDiagnosticRequest,
   LaunchDiagnosticResponse,
   ModelConfig,
+  ParsedTurn,
   QueueStatus,
   Run,
   Task,
@@ -39,6 +40,35 @@ export function useRun(runId?: string) {
 
 export function useTranscript(runId?: string) {
   return useQuery({ queryKey: ['transcript', runId], enabled: Boolean(runId), queryFn: () => api.get<Transcript>(`/runs/${runId}/transcript`) });
+}
+
+/**
+ * Inspector V2 data hook: fetch ONLY the structured ParsedTurns for a
+ * run. Cheaper than the full transcript when the consumer (turn-list
+ * UI, tool histogram) doesn't need raw_output / filesystem_diff.
+ *
+ * Returns an empty array when the run has no transcript yet — safe to
+ * call during a live run.
+ */
+export function useRunTurns(runId?: string) {
+  return useQuery({
+    queryKey: ['run-turns', runId],
+    enabled: Boolean(runId),
+    queryFn: () => api.get<ParsedTurn[]>(`/runs/${runId}/turns`),
+  });
+}
+
+/**
+ * Compare V2 bulk fetch: turns grouped by run_id for every run in an
+ * experiment, served in a single round-trip via the engine's JOIN
+ * implementation (no N+1).
+ */
+export function useExperimentTurns(experimentId?: string) {
+  return useQuery({
+    queryKey: ['experiment-turns', experimentId],
+    enabled: Boolean(experimentId),
+    queryFn: () => api.get<Record<string, ParsedTurn[]>>(`/experiments/${experimentId}/turns`),
+  });
 }
 
 export function useTranscripts(runIds: string[]) {
