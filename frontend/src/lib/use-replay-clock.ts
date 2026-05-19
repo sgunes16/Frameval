@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
  * useReplayClock — drives the Replay tab transport in Compare V2
@@ -42,10 +42,6 @@ export function useReplayClock({
 }: UseReplayClockArgs): ReplayClockState {
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
-  // Latest step in a ref so the interval callback (created once)
-  // reads the current value instead of capturing 0 forever.
-  const stepRef = useRef(step);
-  stepRef.current = step;
 
   const clamp = useCallback(
     (v: number) => Math.max(0, Math.min(totalSteps - 1, v)),
@@ -73,7 +69,12 @@ export function useReplayClock({
   const advanceManual = useCallback(() => setStep((prev) => clamp(prev + 1)), [clamp]);
   const stepBack = useCallback(() => setStep((prev) => clamp(prev - 1)), [clamp]);
   const jumpTo = useCallback((target: number) => setStep(clamp(target)), [clamp]);
-  const play = useCallback(() => setPlaying(true), []);
+  // Re-arm: if the user clicks play after autoplay finished, rewind
+  // to the start instead of looking like the button did nothing.
+  const play = useCallback(() => {
+    setStep((prev) => (prev >= totalSteps - 1 ? 0 : prev));
+    setPlaying(true);
+  }, [totalSteps]);
   const pause = useCallback(() => setPlaying(false), []);
 
   return {

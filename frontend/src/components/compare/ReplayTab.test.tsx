@@ -37,7 +37,7 @@ describe('ReplayTab', () => {
     expect(screen.getByText(/^1\/3$/)).toBeInTheDocument();
   });
 
-  it('Cmd/Ctrl-K does not hijack the space-key handler when an unrelated input has focus', async () => {
+  it('space key does not hijack play/pause when an input element has focus', async () => {
     // Focus a foreign input and press space — the clock should NOT
     // start because the keydown handler bails on input focus.
     const user = userEvent.setup();

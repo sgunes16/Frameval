@@ -61,6 +61,18 @@ describe('useReplayClock', () => {
     expect(result.current.step).toBe(2);
   });
 
+  it('play() called at the final step rewinds to 0 first so the button always advances', () => {
+    // Without the rewind, pressing play after autoplay finished
+    // would fire one interval tick at totalSteps-1, see the end
+    // condition, and immediately pause — the user sees a no-op.
+    const { result } = renderHook(() => useReplayClock({ totalSteps: 3, intervalMs: 100 }));
+    act(() => result.current.jumpTo(2));
+    expect(result.current.step).toBe(2);
+    act(() => result.current.play());
+    expect(result.current.step).toBe(0);
+    expect(result.current.playing).toBe(true);
+  });
+
   it('jumpTo() clamps to [0, totalSteps-1]', () => {
     const { result } = renderHook(() => useReplayClock({ totalSteps: 5 }));
     act(() => result.current.jumpTo(99));

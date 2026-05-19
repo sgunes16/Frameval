@@ -77,12 +77,16 @@ export function TransportBar({
       <span className="font-mono text-xs text-fg-muted">
         {step + 1}/{totalSteps}
       </span>
+      {/*
+        The wrapping <label> alone provides the accessible name via
+        its visible sr-only text — adding aria-label="Replay speed"
+        would double-announce the name on NVDA+Chrome. Pick one.
+      */}
       <label className="flex items-center gap-1 text-xs text-fg-muted">
         <span className="sr-only">Replay speed</span>
         <select
           value={speed}
           onChange={(e) => onSpeedChange(Number(e.target.value))}
-          aria-label="Replay speed"
           className="rounded-sm border border-border bg-bg-elev-1 px-2 py-0.5 text-xs text-fg"
         >
           {SPEEDS.map((s) => (
