@@ -17,9 +17,12 @@ import type { ParsedTurn } from './types';
  * weak topical similarity match; higher values demand near-verbatim
  * quotes.
  *
- * Memoisation: the trigram index is rebuilt only when `turns`
- * identity changes (typical TanStack-Query caching makes that
- * rare), and the match query reruns when the paragraph changes.
+ * Caller contract: the `turns` array MUST have stable identity
+ * across renders. Pass either a memoised value (e.g. `useMemo(() =>
+ * query.data ?? [], [query.data])`) or the TanStack Query result
+ * directly. Passing an inline `.map()` will cause the trigram
+ * index to rebuild on every render — for a 200-turn run that's
+ * ~60 ms of avoidable work per keystroke or hover.
  */
 
 interface UseArtifactTapeLinkArgs {

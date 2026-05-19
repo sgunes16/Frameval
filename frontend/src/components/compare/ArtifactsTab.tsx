@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 
 import { useArtifacts } from '../../lib/hooks';
-import type { ArtifactVersion } from '../../lib/types';
 import { ArtifactDiff } from './ArtifactDiff';
 
 /**
@@ -125,8 +124,8 @@ function ArtifactPairDiff({
         return (
           <ArtifactDiff
             key={type}
-            left={l satisfies ArtifactVersion}
-            right={r satisfies ArtifactVersion}
+            left={l}
+            right={r}
             onParagraphHover={onParagraphHover}
           />
         );

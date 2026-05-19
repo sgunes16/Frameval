@@ -82,13 +82,20 @@ function ArtifactPane({
       </header>
       <div className="space-y-2 p-3 text-sm text-fg">
         {paragraphs.map((p, i) => (
+          // Paragraphs are focusable so keyboard / AT users get the
+          // same cross-highlight as mouse users. Focus mirrors hover,
+          // blur mirrors mouse-leave. The visible bg change still
+          // signals which paragraph drives the Tape highlight.
           <p
             key={i}
             data-paragraph-index={i}
+            tabIndex={0}
             onMouseEnter={() => onParagraphHover?.(p)}
             onMouseLeave={() => onParagraphHover?.(null)}
+            onFocus={() => onParagraphHover?.(p)}
+            onBlur={() => onParagraphHover?.(null)}
             className={
-              'rounded-sm px-2 py-1 transition ' +
+              'rounded-sm px-2 py-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ' +
               (active === i ? 'bg-accent/15 border-l-2 border-accent' : 'hover:bg-bg-elev-2')
             }
           >
