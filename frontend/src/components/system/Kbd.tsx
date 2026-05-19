@@ -16,7 +16,7 @@ export function Kbd({ children, className }: PropsWithChildren<{ className?: str
   return (
     <kbd
       className={cn(
-        'inline-flex items-center justify-center rounded-sm border border-border bg-bg-elev-2 px-1.5 py-0.5 font-mono text-[11px] font-medium text-fg-muted',
+        'inline-flex items-center justify-center rounded-sm border border-border bg-bg-elev-2 px-1.5 py-0.5 font-mono text-xs font-medium text-fg-muted',
         className,
       )}
     >

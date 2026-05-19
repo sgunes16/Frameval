@@ -34,11 +34,16 @@ interface StatusDotProps {
   className?: string;
 }
 
-export function StatusDot({ variant = 'neutral', pulse, className, ...rest }: StatusDotProps) {
+export function StatusDot({
+  variant = 'neutral',
+  pulse,
+  className,
+  'aria-label': ariaLabel,
+}: StatusDotProps) {
   return (
     <span
       role="status"
-      aria-label={rest['aria-label']}
+      aria-label={ariaLabel}
       className={cn(
         'inline-block h-2 w-2 rounded-full',
         variantClass[variant],

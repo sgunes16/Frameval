@@ -34,12 +34,18 @@ export function FilePath({ path, maxChars = 48, className }: FilePathProps) {
 /**
  * truncateMiddle keeps as many head + tail characters as possible while
  * staying under maxChars total (including the ellipsis). When maxChars
- * is too small to fit even one head + one tail char + ellipsis we fall
- * back to plain end-truncation so the function never returns a longer
- * string than the input.
+ * is too small to fit head + ellipsis + tail we fall back to plain
+ * end-truncation so the function never returns a longer string than the
+ * input (or longer than maxChars).
  */
 function truncateMiddle(s: string, maxChars: number): string {
   if (s.length <= maxChars) return s;
+  // Need at least 3 characters to fit one head char, ellipsis, one tail
+  // char. Below that, fall back to end-truncation with an ellipsis,
+  // which is the only way to honor the maxChars contract.
+  if (maxChars < 3) {
+    return s.slice(0, Math.max(0, maxChars - 1)) + ELLIPSIS;
+  }
   const headLen = Math.max(1, Math.floor((maxChars - 1) / 2));
   const tailLen = Math.max(1, maxChars - 1 - headLen);
   return s.slice(0, headLen) + ELLIPSIS + s.slice(s.length - tailLen);

@@ -26,7 +26,7 @@ export function ErrorState({ title, description, onRetry, className }: ErrorStat
         className,
       )}
     >
-      <div className="text-md font-semibold text-danger">{title}</div>
+      <div className="text-base font-semibold text-danger">{title}</div>
       {description && <div className="max-w-md text-sm text-fg-muted">{description}</div>}
       {onRetry && (
         <button
