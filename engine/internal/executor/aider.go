@@ -57,7 +57,19 @@ func (e *AiderExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult,
 	prompt := promptWithDefaultCLILanguage(cfg.Prompt)
 	command := envOrOSGetenv(cfg.Environment, "FRAMEVAL_AIDER_COMMAND")
 	if command == "" {
-		command = `aider --model "$AIDER_MODEL" --openai-api-base "$OPENAI_API_BASE" --openai-api-key "$OPENAI_API_KEY" --no-stream --yes-always --no-pretty --message "$FRAMEVAL_PROMPT"`
+		// --no-git: aider runs internal git commands (commit after
+		// each edit, diff --cached for patch capture) inside the
+		// sandbox workspace. We bind-mount the workspace from the
+		// host, and Frameval already manages the git baseline +
+		// patch capture itself via sandbox.Manager.CapturePatch.
+		// Aider's git ops fail inside the container with
+		// "Cmd('git') failed exit 129" (UID mismatch / safe.directory)
+		// and dump a giant `usage: git diff --no-index` wall at the
+		// end of every transcript. Disabling aider's git integration
+		// outright eliminates the noise and the false-error.
+		// --no-show-model-warnings silences the per-run banner for
+		// Ollama models aider doesn't have cost data for.
+		command = `aider --model "$AIDER_MODEL" --openai-api-base "$OPENAI_API_BASE" --openai-api-key "$OPENAI_API_KEY" --no-stream --yes-always --no-pretty --no-git --no-show-model-warnings --message "$FRAMEVAL_PROMPT"`
 	}
 	// Defaults first, caller's cfg.Environment overrides last (caller wins).
 	env := mergeEnv(map[string]string{
