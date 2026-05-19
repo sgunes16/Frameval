@@ -101,6 +101,50 @@ func TestAssignTurnGrouping_NewGroupStartsOnFreshThinking(t *testing.T) {
 	}
 }
 
+func TestAssignTurnGrouping_TwoConsecutiveTextsDoNotMerge(t *testing.T) {
+	// After a tool decision wraps up, two trailing text blocks should
+	// land in distinct groups: the first joins the tool's parent (per
+	// the rule), the second is a fresh group of its own. Without this
+	// boundary, narrative wrap-up after a tool would silently fold into
+	// the next turn's parent.
+	turns := []executor.ParsedTurn{
+		{BlockKind: "tool_use", ToolUseID: "a"},
+		{BlockKind: "tool_result", ToolUseID: "a"},
+		{BlockKind: "text"},
+		{BlockKind: "text"},
+	}
+	out := executor.AssignTurnGrouping(turns)
+
+	if out[2].ParentTurnIndex != out[0].ParentTurnIndex {
+		t.Errorf("first text after tool_result should join the tool group; got parent=%d vs tool=%d",
+			out[2].ParentTurnIndex, out[0].ParentTurnIndex)
+	}
+	if out[3].ParentTurnIndex == out[2].ParentTurnIndex {
+		t.Errorf("second consecutive text should open a new group; got parent=%d == %d",
+			out[3].ParentTurnIndex, out[2].ParentTurnIndex)
+	}
+}
+
+func TestAssignTurnGrouping_TwoConsecutiveToolResultsThenTextJoinsLastTool(t *testing.T) {
+	// tool_use(a) → tool_result(a) → tool_use(b) → tool_result(b) → text
+	// The trailing text must join the b-group (the most recent tool
+	// decision), not the a-group. Without this, narrative after a
+	// chained tool call would attach to the wrong decision in Inspector.
+	turns := []executor.ParsedTurn{
+		{BlockKind: "tool_use", ToolUseID: "a"},
+		{BlockKind: "tool_result", ToolUseID: "a"},
+		{BlockKind: "tool_use", ToolUseID: "b"},
+		{BlockKind: "tool_result", ToolUseID: "b"},
+		{BlockKind: "text"},
+	}
+	out := executor.AssignTurnGrouping(turns)
+
+	if out[4].ParentTurnIndex != out[2].ParentTurnIndex {
+		t.Errorf("text after second tool_result should join b-group; got parent=%d, b-group=%d",
+			out[4].ParentTurnIndex, out[2].ParentTurnIndex)
+	}
+}
+
 func TestAssignTurnGrouping_OrphanedToolResultGetsOwnGroup(t *testing.T) {
 	// tool_result without a matching tool_use should not be silently
 	// merged into whatever came before — it gets its own parent.

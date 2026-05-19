@@ -105,17 +105,17 @@ func (e *AiderExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 			current.Timestamp = now
 		}
 		// Inspector V2: map Aider's role-based output to the structured
-		// BlockKind taxonomy so the UI can group turns uniformly. Aider
-		// doesn't expose ToolUseID pairing in its plain-text history;
-		// every tool emission is its own atomic "tool_use+result combined"
-		// block, modeled as tool_use here so the histogram still counts it.
+		// BlockKind taxonomy. Aider's plain-text history exposes a `tool:`
+		// prefix that is *already a combined tool_use+result emission* —
+		// the agent has both invoked the tool and seen the result by the
+		// time the line is flushed. Modeling it as tool_use would make
+		// every Aider turn appear as an orphaned tool call to the Inspector
+		// (because there's no matching tool_result), spamming the warning
+		// glyph. Map it to text instead; downstream code that wants the
+		// "this turn used a tool" signal reads Role == "tool".
 		switch current.Role {
-		case "tool":
-			current.BlockKind = BlockKindToolUse
 		case "system":
 			current.BlockKind = BlockKindSystem
-		case "user":
-			current.BlockKind = BlockKindText
 		default:
 			current.BlockKind = BlockKindText
 		}

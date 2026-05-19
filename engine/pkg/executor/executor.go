@@ -72,8 +72,12 @@ type ParsedTurn struct {
 	Stage     string `json:"stage,omitempty"`
 
 	// TurnIndex is a 0-based monotonic counter across the run's transcript.
-	// Assigned by AssignTurnGrouping; executors can leave it as zero.
-	TurnIndex int `json:"turn_index,omitempty"`
+	// Assigned by AssignTurnGrouping. NOT `omitempty` because the first
+	// turn legitimately has index 0 and omitting it would make a stamped
+	// first turn indistinguishable from a legacy unstamped block on
+	// re-marshal. Consumers check BlockKind != "" to know whether the
+	// turn was stamped.
+	TurnIndex int `json:"turn_index"`
 
 	// BlockKind classifies the payload: thinking, text, tool_use,
 	// tool_result, system. Empty == legacy "we didn't classify this".
@@ -85,8 +89,10 @@ type ParsedTurn struct {
 
 	// ParentTurnIndex is the TurnIndex of the first block in this
 	// "decision" (e.g., thinking → tool_use → tool_result all share the
-	// thinking's TurnIndex). The Inspector groups by parent index.
-	ParentTurnIndex int `json:"parent_turn_index,omitempty"`
+	// thinking's TurnIndex). NOT `omitempty` for the same reason as
+	// TurnIndex — a block that is its own parent legitimately has
+	// ParentTurnIndex == 0.
+	ParentTurnIndex int `json:"parent_turn_index"`
 
 	// ToolName is set on tool_use blocks ("Edit", "Bash", "Read"). The
 	// Tool Histogram sidebar groups on this.

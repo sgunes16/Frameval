@@ -34,11 +34,13 @@ const (
 	BlockKindSystem     = pkgexec.BlockKindSystem
 )
 
-// AssignTurnGrouping is the internal-package alias for the public helper
-// in pkg/executor. Built-in parsers call it before returning their
-// ParsedTurns slice so consumers get TurnIndex / ParentTurnIndex stamps
-// without each parser re-implementing the logic.
-var AssignTurnGrouping = pkgexec.AssignTurnGrouping
+// AssignTurnGrouping wraps the public helper in pkg/executor so
+// internal callers don't need a separate import. Declared as a
+// function (not a var alias) so the symbol cannot be reassigned at
+// runtime — a footgun for concurrent code.
+func AssignTurnGrouping(in []ParsedTurn) []ParsedTurn {
+	return pkgexec.AssignTurnGrouping(in)
+}
 
 // defaultCLILanguageInstruction is an internal helper used by built-in CLI
 // executors to nudge agents toward English output for reproducible grading.
