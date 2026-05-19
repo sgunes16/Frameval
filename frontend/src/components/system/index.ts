@@ -14,6 +14,7 @@ export { FilePath } from './FilePath';
 export { Kbd } from './Kbd';
 export { LoadingSkeleton } from './LoadingSkeleton';
 export { ErrorState } from './ErrorState';
+export { ErrorBoundary } from './ErrorBoundary';
 
 // Distinctive (composite) components — Inspector V2 + Compare V2.
 export { DiffBadge } from './composite/DiffBadge';
