@@ -17,16 +17,21 @@ fi
 export GRADER_PORT="${GRADER_PORT:-50051}"
 export FRAMEVAL_DB_PATH="${FRAMEVAL_DB_PATH:-$ROOT_DIR/frameval.db}"
 
-cd "$ROOT_DIR/grader"
+# server.py uses absolute imports (`from grader.code_grader import …`)
+# so `grader/` must be importable as a top-level package. Putting
+# CWD inside `grader/` makes Python interpret those as circular
+# relative imports — ModuleNotFoundError: No module named 'grader'.
+# Run from the repo root and add it to PYTHONPATH so absolute
+# imports resolve.
+export PYTHONPATH="$ROOT_DIR:${PYTHONPATH:-}"
+cd "$ROOT_DIR"
 
-# Prefer uv (pyproject.toml has its lockfile); fall back to plain
-# python so this script also works on systems without uv.
 if command -v uv >/dev/null 2>&1; then
-  exec uv run python server.py
+  exec uv run --project grader python grader/server.py
 fi
 
-if [[ ! -d .venv ]]; then
-  python3 -m venv .venv
-  ./.venv/bin/pip install -q -e .
+if [[ ! -d grader/.venv ]]; then
+  python3 -m venv grader/.venv
+  grader/.venv/bin/pip install -q -e grader
 fi
-exec ./.venv/bin/python server.py
+exec grader/.venv/bin/python grader/server.py
