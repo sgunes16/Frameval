@@ -36,14 +36,22 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const SRC = resolve(ROOT, 'src');
 
+// Color literals: numeric-scale palette families AND `white`/`black`.
+// Both bypass the semantic token system equally.
 const FORBIDDEN_COLOR = new RegExp(
-  '(bg|text|border)-(emerald|amber|red|green|yellow|orange|blue|' +
+  '(bg|text|border)-(' +
+    '(?:emerald|amber|red|green|yellow|orange|blue|' +
     'purple|pink|indigo|cyan|teal|rose|sky|fuchsia|violet|lime|' +
-    'stone|zinc|neutral|gray|slate)-\\d+',
+    'stone|zinc|neutral|gray|slate)-\\d+' +
+    '|white|black' +
+    ')',
   'g',
 );
 
-const FORBIDDEN_PX = /text-\[1[01]px\]/g;
+// All arbitrary pixel font sizes — not just 10px/11px. The semantic
+// scale (text-xs / text-sm / text-base / text-lg / etc.) is the
+// supported surface.
+const FORBIDDEN_PX = /text-\[\d+px\]/g;
 
 const IS_CI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
@@ -61,22 +69,42 @@ function tsxFiles(dir) {
 }
 
 function stripCommentsInPlace(lines) {
-  // Single-line comments → blank out the comment portion of each line.
-  // Block comments span multiple lines; track open/close across the array.
+  // Strip // and /* */ comments while honouring string boundaries —
+  // `//` inside a URL string ("https://...") or `/*` inside a
+  // template literal must NOT count as a comment, or we'd silently
+  // skip real offenders. Tracks single-quote, double-quote, and
+  // backtick string state and only acts on comment markers when not
+  // currently inside a string.
   let inBlock = false;
   return lines.map((line) => {
     let result = '';
     let i = 0;
+    /** @type {'' | "'" | '"' | '`'} */
+    let inString = '';
     while (i < line.length) {
+      const ch = line[i];
       if (inBlock) {
         const end = line.indexOf('*/', i);
-        if (end === -1) {
-          return result;
-        }
+        if (end === -1) return result;
         i = end + 2;
         inBlock = false;
         continue;
       }
+      if (inString) {
+        if (ch === '\\') {
+          // Preserve escape + next char untouched.
+          result += line.slice(i, i + 2);
+          i += 2;
+          continue;
+        }
+        if (ch === inString) {
+          inString = '';
+        }
+        result += ch;
+        i += 1;
+        continue;
+      }
+      // Not in a string and not in a block — comment markers count.
       if (line.startsWith('/*', i)) {
         const end = line.indexOf('*/', i + 2);
         if (end === -1) {
@@ -87,10 +115,12 @@ function stripCommentsInPlace(lines) {
         continue;
       }
       if (line.startsWith('//', i)) {
-        // Skip the rest of this line.
         return result;
       }
-      result += line[i];
+      if (ch === "'" || ch === '"' || ch === '`') {
+        inString = /** @type {"'" | '"' | '`'} */ (ch);
+      }
+      result += ch;
       i += 1;
     }
     return result;

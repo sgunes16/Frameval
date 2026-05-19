@@ -107,8 +107,8 @@ describe('design tokens', () => {
  */
 
 const FORBIDDEN_COLOR_PATTERN =
-  /(bg|text|border)-(emerald|amber|red|green|yellow|orange|blue|purple|pink|indigo|cyan|teal|rose|sky|fuchsia|violet|lime|stone|zinc|neutral|gray|slate)-\d+/;
-const FORBIDDEN_PX_PATTERN = /text-\[1[01]px\]/;
+  /(bg|text|border)-((?:emerald|amber|red|green|yellow|orange|blue|purple|pink|indigo|cyan|teal|rose|sky|fuchsia|violet|lime|stone|zinc|neutral|gray|slate)-\d+|white|black)/;
+const FORBIDDEN_PX_PATTERN = /text-\[\d+px\]/;
 
 function tsxFiles(dir: string): string[] {
   const out: string[] = [];

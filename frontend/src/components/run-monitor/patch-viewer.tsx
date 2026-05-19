@@ -57,7 +57,7 @@ export function PatchViewer({ transcript, runLabel }: { transcript?: Transcript;
               key={section.file}
               onClick={() => setSelectedFile(section.file)}
               className={`mb-1 block w-full rounded-md px-3 py-2 text-left font-mono text-xs transition ${
-                selectedSection?.file === section.file ? 'bg-fg text-white' : 'text-fg-muted hover:bg-bg-elev-2'
+                selectedSection?.file === section.file ? 'bg-fg text-bg' : 'text-fg-muted hover:bg-bg-elev-2'
               }`}
             >
               {section.file}

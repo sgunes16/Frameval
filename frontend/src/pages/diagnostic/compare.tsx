@@ -108,7 +108,7 @@ export function DiagnosticComparePage() {
           </button>
           <button
             type="button"
-            className="rounded-md bg-fg px-3 py-1 text-xs font-medium text-white hover:bg-fg"
+            className="rounded-md bg-fg px-3 py-1 text-xs font-medium text-bg hover:bg-fg"
             onClick={() => setSearchParams({ runs: runIds.join(',') })}
           >
             Share link
