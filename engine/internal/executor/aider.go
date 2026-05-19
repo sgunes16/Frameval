@@ -79,14 +79,26 @@ func (e *AiderExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult,
 // role marker. The previous version emitted ONE TURN PER LINE which made the
 // Agent Timeline render 50 tiny cards for a single assistant response.
 //
-// If the raw output has no role markers at all (e.g. raw stdout from a tool
-// invocation), the whole blob is rendered as a single assistant turn.
+// When the raw output has no role markers at all (the real-world case for
+// `aider --no-stream` output piped from the CLI), the parser falls into a
+// structural mode that splits by paragraph and stamps BlockKind via Aider-
+// specific heuristics (SEARCH/REPLACE blocks → tool_use, header lines →
+// system, file mentions → tool_result). Without this fallback the Inspector
+// V2 view shows a single 'Turn 0 · Assistant' blob with the entire run
+// crammed in — which is what the user sees when nothing else stamps blocks.
 func (e *AiderExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 	text := strings.TrimSpace(string(raw))
 	if text == "" {
 		return nil, nil
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
+	// Real Aider CLI output has no role prefixes at all. Detect that case
+	// up front and route to the structural parser; the old role-based path
+	// only fires when the transcript came from a wrapper that did stamp
+	// `user:` / `assistant:` markers (tests + a few legacy integrations).
+	if !hasAiderRoleMarkers(text) {
+		return AssignTurnGrouping(parseAiderStructural(text, now)), nil
+	}
 	lines := strings.Split(text, "\n")
 
 	turns := make([]ParsedTurn, 0)
@@ -143,6 +155,147 @@ func (e *AiderExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 }
 
 var aiderRolePrefix = regexp.MustCompile(`(?i)^(user|assistant|tool|system)\s*:\s*`)
+
+// hasAiderRoleMarkers detects whether the transcript carries the
+// `user:` / `assistant:` / `tool:` / `system:` line prefixes the old
+// role-based parser expects. Real `aider --no-stream` output has none
+// of these — the wrapper-based test fixtures do.
+func hasAiderRoleMarkers(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		if aiderRolePrefix.MatchString(strings.ToLower(strings.TrimSpace(line))) {
+			return true
+		}
+	}
+	return false
+}
+
+// aiderHeaderLine matches the well-known Aider banner lines emitted at
+// the top of every CLI run. These belong to BlockKindSystem.
+var aiderHeaderLine = regexp.MustCompile(
+	`(?i)^(Aider v|Model:|Git repo:|Repo-map:|Warning(?: for [^:]+)?:|Update git \w+ with:|You can skip this check|Tokens: |Cost: |Added [^ ]+ to the chat)`,
+)
+
+// aiderFilePath matches a bare file path on its own — Aider prints
+// these when listing files in/added to the chat. The list is
+// conservative; only extensions that show up in real Aider output
+// are recognised so we don't false-positive on prose.
+var aiderFilePath = regexp.MustCompile(
+	`^[A-Za-z0-9._/\-]+\.(go|py|ts|tsx|js|jsx|md|json|yaml|yml|toml|sql|sh|rs|java|cpp|c|h|hpp|rb|html|css|cfg|env|txt)$`,
+)
+
+// aiderSearchReplaceStart marks the opening of an Aider edit block —
+// the agent's actual code change. The matching block_kind is tool_use
+// with tool_name=Edit.
+var aiderSearchReplaceStart = regexp.MustCompile(`(?m)^<{5,}\s*SEARCH\b`)
+
+// fileMentionInLine extracts any file paths referenced inside a
+// paragraph (e.g. "I'll edit src/main.go and tests/foo.py"). Used to
+// populate FilesTouched on tool_use blocks.
+var fileMentionInLine = regexp.MustCompile(
+	`[A-Za-z0-9_./-]+\.(?:go|py|ts|tsx|js|jsx|md|json|yaml|yml|toml|sql|sh|rs|java|cpp|c|h|hpp|rb|html|css)`,
+)
+
+// parseAiderStructural splits prefix-less Aider output into turns by
+// paragraph (`\n\n+` boundaries) and stamps each turn with a best-
+// guess block_kind, tool_name and files_touched. Heuristic — not a
+// full Aider grammar — but enough that the Inspector V2 filters
+// (Thinking / Tool use / Tool result / Errors) become meaningful and
+// the Tool Histogram shows non-zero counts.
+func parseAiderStructural(text, now string) []ParsedTurn {
+	paragraphs := splitParagraphs(text)
+	turns := make([]ParsedTurn, 0, len(paragraphs))
+	for _, p := range paragraphs {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+		turn := ParsedTurn{
+			Role:      "assistant",
+			Content:   p,
+			Timestamp: now,
+			BlockKind: classifyAiderParagraph(p),
+		}
+		switch turn.BlockKind {
+		case BlockKindToolUse:
+			turn.ToolName = "Edit"
+			turn.FilesTouched = extractFileMentions(p)
+		case BlockKindToolResult:
+			// File mention paragraphs name exactly one file most of the
+			// time; use the first match as the touched path so the
+			// histogram has something to group on.
+			turn.ToolName = "Read"
+			turn.FilesTouched = extractFileMentions(p)
+		}
+		turns = append(turns, turn)
+	}
+	return turns
+}
+
+func splitParagraphs(text string) []string {
+	// Collapse runs of 2+ newlines into the split delimiter. Aider
+	// prints blank lines between logical sections.
+	out := []string{}
+	current := strings.Builder{}
+	prevBlank := false
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "" {
+			if prevBlank {
+				continue
+			}
+			prevBlank = true
+			if current.Len() > 0 {
+				out = append(out, strings.TrimRight(current.String(), "\n"))
+				current.Reset()
+			}
+			continue
+		}
+		prevBlank = false
+		current.WriteString(line)
+		current.WriteByte('\n')
+	}
+	if current.Len() > 0 {
+		out = append(out, strings.TrimRight(current.String(), "\n"))
+	}
+	return out
+}
+
+func classifyAiderParagraph(p string) string {
+	trimmed := strings.TrimSpace(p)
+	if trimmed == "" {
+		return BlockKindText
+	}
+	// SEARCH/REPLACE blocks are unambiguous edits.
+	if aiderSearchReplaceStart.MatchString(trimmed) {
+		return BlockKindToolUse
+	}
+	firstLine := trimmed
+	if idx := strings.IndexByte(trimmed, '\n'); idx >= 0 {
+		firstLine = trimmed[:idx]
+	}
+	if aiderHeaderLine.MatchString(firstLine) {
+		return BlockKindSystem
+	}
+	if aiderFilePath.MatchString(firstLine) {
+		return BlockKindToolResult
+	}
+	return BlockKindText
+}
+
+func extractFileMentions(p string) []string {
+	matches := fileMentionInLine.FindAllString(p, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, m := range matches {
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		out = append(out, m)
+	}
+	return out
+}
 
 // detectAiderRoleStrict returns the role IFF the line opens with a role
 // prefix; an empty string otherwise. Unlike the previous detectAiderRole,

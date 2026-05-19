@@ -85,7 +85,13 @@ export function DiagnosticLaunchPage() {
         runs_per_variant: runsPerVariant,
         name: name.trim() || undefined,
       });
-      navigate(`/diagnostic/compare?experiment=${response.experiment_id}`);
+      // Send the user to the Monitor page where they can watch the
+      // experiment progress in real-time. Going straight to Compare
+      // is misleading — the runs haven't produced any data yet, so
+      // the diagnostic charts have nothing to render. The Monitor
+      // page has a 'Compare runs' button that becomes useful once
+      // at least two runs finish.
+      navigate(`/experiments/${response.experiment_id}/monitor`);
     } catch {
       // mutation error renders inline below
     }

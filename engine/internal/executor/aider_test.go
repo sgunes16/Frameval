@@ -6,6 +6,117 @@ import (
 	"testing"
 )
 
+// TestAiderStructuralParseRealWorldOutput exercises the structural
+// fallback that fires when aider's stdout has no role markers — the
+// real-world case for `aider --no-stream` output. The Inspector V2
+// filters / histogram / diff panel are useless on a one-blob turn,
+// so the structural parser needs to split the output into multiple
+// turns with stamped BlockKind / ToolName / FilesTouched fields.
+func TestAiderStructuralParseRealWorldOutput(t *testing.T) {
+	raw := []byte(`Aider v0.86.2
+Model: openai/llama3.1:8b with whole edit format
+Git repo: .git with 6 files
+Repo-map: using 1024 tokens, auto refresh
+
+https://aider.chat/HISTORY.html#release-notes
+
+app/user_service.py
+
+To fix the race condition, I will introduce an asyncio.Lock.
+
+<<<<<<< SEARCH
+def create_user(name):
+    return User(name)
+=======
+async def create_user(name):
+    async with lock:
+        return User(name)
+>>>>>>> REPLACE
+`)
+	e := &AiderExecutor{}
+	turns, err := e.ParseTranscript(raw)
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	// Expect at least 4 turns: header (system), URL/prose (text),
+	// file mention (tool_result), prose (text), edit block (tool_use).
+	if len(turns) < 4 {
+		t.Fatalf("expected at least 4 structural turns, got %d: %+v", len(turns), turns)
+	}
+	var sawSystem, sawToolUse, sawToolResult bool
+	for _, turn := range turns {
+		switch turn.BlockKind {
+		case BlockKindSystem:
+			sawSystem = true
+		case BlockKindToolUse:
+			sawToolUse = true
+			if turn.ToolName != "Edit" {
+				t.Errorf("tool_use turn should be Edit, got %q", turn.ToolName)
+			}
+		case BlockKindToolResult:
+			sawToolResult = true
+		}
+	}
+	if !sawSystem {
+		t.Error("expected at least one BlockKindSystem turn (Aider header)")
+	}
+	if !sawToolUse {
+		t.Error("expected at least one BlockKindToolUse turn (SEARCH/REPLACE block)")
+	}
+	if !sawToolResult {
+		t.Error("expected at least one BlockKindToolResult turn (file mention)")
+	}
+}
+
+func TestAiderStructuralExtractsFileMentions(t *testing.T) {
+	raw := []byte(`I'll edit src/main.go and tests/main_test.go in this turn.
+
+<<<<<<< SEARCH
+package main
+=======
+package main // updated
+>>>>>>> REPLACE
+`)
+	e := &AiderExecutor{}
+	turns, err := e.ParseTranscript(raw)
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	var editTurn *ParsedTurn
+	for i := range turns {
+		if turns[i].BlockKind == BlockKindToolUse {
+			editTurn = &turns[i]
+			break
+		}
+	}
+	if editTurn == nil {
+		t.Fatalf("no tool_use turn produced from SEARCH/REPLACE block")
+	}
+	// The SEARCH/REPLACE block itself has no file path inside it; the
+	// previous paragraph mentions the files. We don't currently stitch
+	// across paragraphs, so files_touched will be empty here unless
+	// the SEARCH block carries the file mention. Just assert tool_name.
+	if editTurn.ToolName != "Edit" {
+		t.Errorf("expected tool_name=Edit, got %q", editTurn.ToolName)
+	}
+
+	// The prose paragraph itself should remain text-kind.
+	if turns[0].BlockKind != BlockKindText {
+		t.Errorf("first paragraph (prose) should be text, got %q", turns[0].BlockKind)
+	}
+}
+
+func TestAiderStructuralEmptyInput(t *testing.T) {
+	e := &AiderExecutor{}
+	turns, err := e.ParseTranscript([]byte(""))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	if len(turns) != 0 {
+		t.Errorf("expected 0 turns for empty input, got %d", len(turns))
+	}
+}
+
 func TestAiderParseTranscriptGroupsByRole(t *testing.T) {
 	e := &AiderExecutor{}
 	raw := []byte(strings.Join([]string{
