@@ -146,6 +146,34 @@ export type Run = {
   grade?: Grade;
 };
 
+/**
+ * BlockKind classifies what a ParsedTurn's payload represents. Used by
+ * Inspector V2 to colour the turn card's left bar and by Compare V2 when
+ * computing anchors.
+ *
+ * The empty string ("") is reserved for legacy data — transcripts written
+ * before the schema extension don't have this stamped and UIs must treat
+ * the absence as "we don't know" rather than "definitely text".
+ */
+export type BlockKind = 'thinking' | 'text' | 'tool_use' | 'tool_result' | 'system' | '';
+
+export type ParsedTurn = {
+  role: string;
+  content: string;
+  timestamp?: string;
+  stage?: string;
+  // Inspector V2 fields — zero / undefined on legacy transcripts.
+  turn_index?: number;
+  block_kind?: BlockKind;
+  tool_use_id?: string;
+  parent_turn_index?: number;
+  tool_name?: string;
+  files_touched?: string[];
+  duration_ms?: number;
+  tokens_in?: number;
+  tokens_out?: number;
+};
+
 export type Transcript = {
   id: string;
   run_id: string;
@@ -155,6 +183,7 @@ export type Transcript = {
   total_turns: number;
   total_tokens: number;
   output_files?: Array<{ path: string; content: string }>;
+  parsed_turns?: ParsedTurn[];
 };
 
 export type Grade = {

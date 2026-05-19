@@ -104,6 +104,21 @@ func (e *AiderExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 		if current.Timestamp == "" {
 			current.Timestamp = now
 		}
+		// Inspector V2: map Aider's role-based output to the structured
+		// BlockKind taxonomy so the UI can group turns uniformly. Aider
+		// doesn't expose ToolUseID pairing in its plain-text history;
+		// every tool emission is its own atomic "tool_use+result combined"
+		// block, modeled as tool_use here so the histogram still counts it.
+		switch current.Role {
+		case "tool":
+			current.BlockKind = BlockKindToolUse
+		case "system":
+			current.BlockKind = BlockKindSystem
+		case "user":
+			current.BlockKind = BlockKindText
+		default:
+			current.BlockKind = BlockKindText
+		}
 		turns = append(turns, current)
 		current = ParsedTurn{}
 		buf.Reset()
@@ -124,7 +139,7 @@ func (e *AiderExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 		buf.WriteString("\n")
 	}
 	flush()
-	return turns, nil
+	return AssignTurnGrouping(turns), nil
 }
 
 var aiderRolePrefix = regexp.MustCompile(`(?i)^(user|assistant|tool|system)\s*:\s*`)
