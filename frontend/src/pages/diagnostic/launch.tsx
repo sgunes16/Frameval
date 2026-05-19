@@ -103,7 +103,7 @@ export function DiagnosticLaunchPage() {
       <Card>
         <CardHeader title="1. Task" description="The agent receives this task's prompt." />
         {tasks.length === 0 ? (
-          <div className="text-sm text-slate-500">
+          <div className="text-sm text-fg-muted">
             No tasks available. Add a task directory under <code className="font-mono">tasks/</code>
             then restart the engine.
           </div>
@@ -116,16 +116,16 @@ export function DiagnosticLaunchPage() {
                 onClick={() => setTaskID(task.id)}
                 className={
                   taskID === task.id
-                    ? 'rounded-lg border-2 border-slate-900 bg-slate-50 p-3 text-left'
-                    : 'rounded-lg border border-slate-200 p-3 text-left hover:border-slate-300'
+                    ? 'rounded-lg border-2 border-fg bg-bg-elev-2 p-3 text-left'
+                    : 'rounded-lg border border-border p-3 text-left hover:border-border-strong'
                 }
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-medium text-slate-900">{task.name}</div>
-                    <div className="mt-0.5 line-clamp-1 text-xs text-slate-500">{task.description}</div>
+                    <div className="font-medium text-fg">{task.name}</div>
+                    <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{task.description}</div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2 text-[11px] uppercase tracking-wider text-slate-500">
+                  <div className="flex shrink-0 items-center gap-2 text-[11px] uppercase tracking-wider text-fg-muted">
                     <Badge tone="neutral">{task.category}</Badge>
                     <span>{task.codebase_type}</span>
                   </div>
@@ -142,7 +142,7 @@ export function DiagnosticLaunchPage() {
           description="Each picked harness becomes one variant. Bare is the baseline; comparing >1 makes the diagnostic profile interesting."
         />
         {harnesses.length === 0 ? (
-          <div className="text-sm text-slate-500">Loading harnesses…</div>
+          <div className="text-sm text-fg-muted">Loading harnesses…</div>
         ) : (
           <div className="grid gap-2 md:grid-cols-2">
             {harnesses.map((h) => (
@@ -150,8 +150,8 @@ export function DiagnosticLaunchPage() {
                 key={h.id}
                 className={
                   selectedHarnesses.includes(h.id)
-                    ? 'flex cursor-pointer items-start gap-3 rounded-lg border-2 border-slate-900 bg-slate-50 p-3'
-                    : 'flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 hover:border-slate-300'
+                    ? 'flex cursor-pointer items-start gap-3 rounded-lg border-2 border-fg bg-bg-elev-2 p-3'
+                    : 'flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:border-border-strong'
                 }
               >
                 <input
@@ -161,14 +161,14 @@ export function DiagnosticLaunchPage() {
                   className="mt-0.5"
                 />
                 <div>
-                  <div className="font-medium text-slate-900">{h.name}</div>
-                  <div className="mt-0.5 text-xs text-slate-500">{h.description}</div>
+                  <div className="font-medium text-fg">{h.name}</div>
+                  <div className="mt-0.5 text-xs text-fg-muted">{h.description}</div>
                 </div>
               </label>
             ))}
           </div>
         )}
-        <div className="mt-2 text-xs text-slate-500">
+        <div className="mt-2 text-xs text-fg-muted">
           {selectedHarnesses.length} harness(es) selected · this will create{' '}
           {selectedHarnesses.length} variant(s) × {runsPerVariant} runs ={' '}
           <strong>{selectedHarnesses.length * runsPerVariant}</strong> total runs.
@@ -182,7 +182,7 @@ export function DiagnosticLaunchPage() {
         />
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <div className="mb-1 text-[11px] uppercase tracking-wider text-slate-500">Executor</div>
+            <div className="mb-1 text-[11px] uppercase tracking-wider text-fg-muted">Executor</div>
             <div className="flex flex-wrap gap-2">
               {executors.map((e) => (
                 <button
@@ -191,8 +191,8 @@ export function DiagnosticLaunchPage() {
                   onClick={() => setExecutorID(e.id)}
                   className={
                     executorID === e.id
-                      ? 'rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white'
-                      : 'rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:border-slate-300'
+                      ? 'rounded-md bg-fg px-3 py-1.5 text-sm font-medium text-white'
+                      : 'rounded-md border border-border bg-bg-elev-1 px-3 py-1.5 text-sm font-medium text-fg-muted hover:border-border-strong'
                   }
                 >
                   {e.id}
@@ -201,11 +201,11 @@ export function DiagnosticLaunchPage() {
             </div>
           </div>
           <div>
-            <div className="mb-1 text-[11px] uppercase tracking-wider text-slate-500">Model</div>
+            <div className="mb-1 text-[11px] uppercase tracking-wider text-fg-muted">Model</div>
             <select
               value={modelID}
               onChange={(event) => setModelID(event.target.value)}
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm"
+              className="w-full rounded-md border border-border bg-bg-elev-1 px-3 py-1.5 text-sm"
             >
               {filteredModels.map((m) => (
                 <option key={m.id} value={m.model_id}>
@@ -213,7 +213,7 @@ export function DiagnosticLaunchPage() {
                 </option>
               ))}
             </select>
-            <div className="mt-1 text-[11px] text-slate-500">
+            <div className="mt-1 text-[11px] text-fg-muted">
               Showing models compatible with {executorID || 'the selected executor'}. Aider runs
               local Ollama models; Cursor uses its own cloud.
             </div>
@@ -235,10 +235,10 @@ export function DiagnosticLaunchPage() {
             onChange={(event) => setRunsPerVariant(Number(event.target.value))}
             className="w-56"
           />
-          <span className="text-sm font-medium text-slate-900">{runsPerVariant} runs per variant</span>
+          <span className="text-sm font-medium text-fg">{runsPerVariant} runs per variant</span>
         </div>
         <div className="mt-3">
-          <div className="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
+          <div className="mb-1 text-[11px] uppercase tracking-wider text-fg-muted">
             Name (optional)
           </div>
           <Input
@@ -252,7 +252,7 @@ export function DiagnosticLaunchPage() {
       </Card>
 
       <div className="flex items-center justify-between gap-3">
-        <Link to="/" className="text-sm text-slate-500 hover:text-slate-700">
+        <Link to="/" className="text-sm text-fg-muted hover:text-fg">
           ← back
         </Link>
         <div className="flex items-center gap-3">

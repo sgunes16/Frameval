@@ -83,12 +83,12 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   return (
-    <aside className="flex w-56 flex-col gap-1 border-r border-slate-200/70 bg-white/80 px-3 py-5 backdrop-blur">
+    <aside className="flex w-56 flex-col gap-1 border-r border-border bg-bg-elev-1/80 px-3 py-5 backdrop-blur">
       <div className="mb-5 flex items-center gap-2 px-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">F</div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-fg text-sm font-bold text-bg">F</div>
         <div>
-          <div className="text-sm font-semibold leading-4 text-slate-900">Frameval</div>
-          <div className="text-[10px] uppercase tracking-wider text-slate-500">Context eval</div>
+          <div className="text-sm font-semibold leading-4 text-fg">Frameval</div>
+          <div className="text-xs uppercase tracking-wider text-fg-muted">Context eval</div>
         </div>
       </div>
       <nav className="flex flex-col gap-0.5">
@@ -96,14 +96,14 @@ export function Sidebar() {
           item.disabled ? (
             <div
               key={item.to}
-              className="flex cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 text-sm text-slate-400"
+              className="flex cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 text-sm text-fg-subtle"
             >
               <div className="flex items-center gap-2.5">
-                <span className="text-slate-300">{item.icon}</span>
+                <span className="text-fg-subtle">{item.icon}</span>
                 <span>{item.label}</span>
               </div>
               {item.hint && (
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-slate-400">
+                <span className="rounded-full border border-border bg-bg-elev-2 px-1.5 py-0.5 text-xs font-medium uppercase tracking-wider text-fg-subtle">
                   {item.hint}
                 </span>
               )}
@@ -117,24 +117,24 @@ export function Sidebar() {
                 cn(
                   'flex items-center justify-between rounded-lg px-3 py-2 text-sm transition',
                   isActive
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                    ? 'bg-fg text-bg shadow-sm'
+                    : 'text-fg-muted hover:bg-bg-elev-2 hover:text-fg',
                 )
               }
             >
               {({ isActive }) => (
                 <>
                   <div className="flex items-center gap-2.5">
-                    <span className={isActive ? 'text-white' : 'text-slate-400'}>{item.icon}</span>
+                    <span className={isActive ? 'text-bg' : 'text-fg-subtle'}>{item.icon}</span>
                     <span>{item.label}</span>
                   </div>
                   {item.hint && (
                     <span
                       className={cn(
-                        'rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider',
+                        'rounded-full border px-1.5 py-0.5 text-xs font-medium uppercase tracking-wider',
                         isActive
-                          ? 'border-white/20 bg-white/10 text-white/80'
-                          : 'border-slate-200 bg-slate-50 text-slate-500',
+                          ? 'border-bg/20 bg-bg/10 text-bg/80'
+                          : 'border-border bg-bg-elev-2 text-fg-muted',
                       )}
                     >
                       {item.hint}
@@ -146,8 +146,8 @@ export function Sidebar() {
           ),
         )}
       </nav>
-      <div className="mt-auto rounded-lg border border-slate-200/70 bg-slate-50/80 p-3 text-[11px] leading-4 text-slate-500">
-        <div className="mb-1 font-semibold text-slate-700">Local-first · v0.1</div>
+      <div className="mt-auto rounded-lg border border-border bg-bg-elev-2/80 p-3 text-xs leading-4 text-fg-muted">
+        <div className="mb-1 font-semibold text-fg">Local-first · v0.1</div>
         SQLite, Docker sandboxes, deterministic grading by default.
       </div>
     </aside>

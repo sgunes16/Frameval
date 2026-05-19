@@ -62,10 +62,10 @@ export function CostQualityScatter({ series }: Props) {
             cursor={{ strokeDasharray: '3 3' }}
             content={({ active, payload }) =>
               active && payload && payload.length > 0 ? (
-                <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs shadow">
-                  <div className="font-medium text-slate-900">{(payload[0].payload as { label: string }).label}</div>
-                  <div className="text-slate-600">pass: {(payload[0].payload as { y: number }).y}%</div>
-                  <div className="text-slate-600">wall: {(payload[0].payload as { x: number }).x}s</div>
+                <div className="rounded border border-border bg-bg-elev-1 px-3 py-2 text-xs shadow">
+                  <div className="font-medium text-fg">{(payload[0].payload as { label: string }).label}</div>
+                  <div className="text-fg-muted">pass: {(payload[0].payload as { y: number }).y}%</div>
+                  <div className="text-fg-muted">wall: {(payload[0].payload as { x: number }).x}s</div>
                 </div>
               ) : null
             }
@@ -79,7 +79,7 @@ export function CostQualityScatter({ series }: Props) {
 
 function EmptyState() {
   return (
-    <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-sm text-slate-500">
+    <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-border bg-bg-elev-2/50 text-sm text-fg-muted">
       No timing / pass-rate data yet for the selected runs.
     </div>
   );

@@ -47,13 +47,13 @@ export function NewTaskPage() {
         <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="brownfield, greenfield, bugfix..." />
       </div>
       <textarea
-        className="min-h-24 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+        className="min-h-24 w-full rounded-lg border border-border-strong bg-bg-elev-1 p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
         value={description}
         onChange={(event) => setDescription(event.target.value)}
         placeholder="Short description shown on task cards"
       />
       <textarea
-        className="min-h-40 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)] font-mono"
+        className="min-h-40 w-full rounded-lg border border-border-strong bg-bg-elev-1 p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)] font-mono"
         value={prompt}
         onChange={(event) => setPrompt(event.target.value)}
         placeholder="Full instruction prompt handed to the agent"

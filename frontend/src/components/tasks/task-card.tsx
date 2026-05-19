@@ -10,8 +10,8 @@ export function TaskCard({ task }: { task: Task }) {
       <Card hoverable className="h-full space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <div className="text-sm font-semibold text-slate-900">{task.name}</div>
-            <div className="mt-0.5 text-[11px] uppercase tracking-wider text-slate-500">
+            <div className="text-sm font-semibold text-fg">{task.name}</div>
+            <div className="mt-0.5 text-[11px] uppercase tracking-wider text-fg-muted">
               {task.category} · {task.codebase_type}
             </div>
           </div>
@@ -19,14 +19,14 @@ export function TaskCard({ task }: { task: Task }) {
             {task.workspace_mode ?? 'empty'}
           </Badge>
         </div>
-        <p className="line-clamp-3 text-xs leading-5 text-slate-500">{task.description || task.task_prompt}</p>
+        <p className="line-clamp-3 text-xs leading-5 text-fg-muted">{task.description || task.task_prompt}</p>
         {task.workspace_git_url && (
-          <div className="truncate rounded-md bg-slate-50 px-2 py-1 font-mono text-[10px] text-slate-500">
+          <div className="truncate rounded-md bg-bg-elev-2 px-2 py-1 font-mono text-[10px] text-fg-muted">
             git: {task.workspace_git_url}
             {task.workspace_git_ref ? `@${task.workspace_git_ref}` : ''}
           </div>
         )}
-        <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] text-slate-500">
+        <div className="flex items-center justify-between border-t border-border pt-3 text-[11px] text-fg-muted">
           <span>{task.test_cases?.length ?? 0} checks</span>
           <span>Complexity {complexity}/10</span>
         </div>

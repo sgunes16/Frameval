@@ -18,14 +18,14 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="flex flex-col gap-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white sm:flex-row sm:items-center sm:justify-between">
+      <Card className="flex flex-col gap-4 bg-fg text-bg sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-300">Context engineering evaluator</div>
+          <div className="text-xs uppercase tracking-wider text-bg/60">Context engineering evaluator</div>
           <div className="mt-1 text-xl font-semibold">Benchmark agent context, deterministically.</div>
-          <div className="mt-1 text-sm text-slate-300">Spin up sandboxed runs and compare variants with reproducible metrics.</div>
+          <div className="mt-1 text-sm text-bg/70">Spin up sandboxed runs and compare variants with reproducible metrics.</div>
         </div>
         <Link to="/experiments">
-          <Button variant="secondary" size="lg" className="bg-white text-slate-900 hover:bg-slate-100">
+          <Button variant="secondary" size="lg" className="bg-bg text-fg hover:bg-bg-elev-2">
             View experiments
           </Button>
         </Link>
@@ -60,9 +60,9 @@ export function DashboardPage() {
             }
           />
         ) : (
-          <div className="overflow-hidden rounded-lg border border-slate-200">
+          <div className="overflow-hidden rounded-lg border border-border">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+              <thead className="bg-bg-elev-2 text-[11px] uppercase tracking-wider text-fg-muted">
                 <tr>
                   <th className="px-4 py-2 text-left font-medium">Name</th>
                   <th className="px-4 py-2 text-left font-medium">Status</th>
@@ -74,16 +74,16 @@ export function DashboardPage() {
               </thead>
               <tbody>
                 {recent.map((experiment) => (
-                  <tr key={experiment.id} className="border-t border-slate-100 bg-white hover:bg-slate-50/60">
-                    <td className="px-4 py-2 font-medium text-slate-900">{experiment.name}</td>
+                  <tr key={experiment.id} className="border-t border-border bg-bg-elev-1 hover:bg-bg-elev-2/60">
+                    <td className="px-4 py-2 font-medium text-fg">{experiment.name}</td>
                     <td className="px-4 py-2">
                       <Badge tone={statusTone(experiment.status)}>{statusLabel(experiment.status)}</Badge>
                     </td>
-                    <td className="px-4 py-2 text-slate-600">
+                    <td className="px-4 py-2 text-fg-muted">
                       {experiment.agent_cli} · {experiment.model}
                     </td>
-                    <td className="px-4 py-2 text-slate-600">{experiment.variants?.length ?? 0}</td>
-                    <td className="px-4 py-2 text-slate-500">{formatTimeAgo(experiment.created_at)}</td>
+                    <td className="px-4 py-2 text-fg-muted">{experiment.variants?.length ?? 0}</td>
+                    <td className="px-4 py-2 text-fg-muted">{formatTimeAgo(experiment.created_at)}</td>
                     <td className="px-4 py-2 text-right">
                       <Link to={`/experiments/${experiment.id}/monitor`}>
                         <Button variant="ghost" size="sm">
@@ -124,9 +124,9 @@ export function DashboardPage() {
 function StatCard({ label, value, hint, muted }: { label: string; value: number; hint?: string; muted?: boolean }) {
   return (
     <Card className={muted ? 'opacity-70' : ''}>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</div>
-      {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
+      <div className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">{label}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight text-fg">{value}</div>
+      {hint && <div className="mt-1 text-xs text-fg-muted">{hint}</div>}
     </Card>
   );
 }
@@ -135,23 +135,23 @@ function QuickLink({ to, title, description }: { to: string; title: string; desc
   return (
     <Link
       to={to}
-      className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm transition hover:border-slate-300 hover:bg-slate-50"
+      className="flex items-center justify-between rounded-lg border border-border bg-bg-elev-1 px-4 py-3 text-sm transition hover:border-border-strong hover:bg-bg-elev-2"
     >
       <div>
-        <div className="font-medium text-slate-900">{title}</div>
-        <div className="text-xs text-slate-500">{description}</div>
+        <div className="font-medium text-fg">{title}</div>
+        <div className="text-xs text-fg-muted">{description}</div>
       </div>
-      <span className="text-slate-400">&rarr;</span>
+      <span className="text-fg-subtle">&rarr;</span>
     </Link>
   );
 }
 
 function ComingSoon({ title, description }: { title: string; description: string }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-500">
+    <div className="flex items-center justify-between rounded-lg border border-dashed border-border bg-bg-elev-2/60 px-4 py-3 text-sm text-fg-muted">
       <div>
-        <div className="font-medium text-slate-600">{title}</div>
-        <div className="text-xs text-slate-500">{description}</div>
+        <div className="font-medium text-fg-muted">{title}</div>
+        <div className="text-xs text-fg-muted">{description}</div>
       </div>
       <Badge tone="muted">Soon</Badge>
     </div>

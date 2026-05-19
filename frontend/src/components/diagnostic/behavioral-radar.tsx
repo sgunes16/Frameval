@@ -81,7 +81,7 @@ export function BehavioralRadar({ series }: Props) {
 
 function EmptyState() {
   return (
-    <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-sm text-slate-500">
+    <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-border bg-bg-elev-2/50 text-sm text-fg-muted">
       Select 2+ runs to overlay their behavioral fingerprints.
     </div>
   );

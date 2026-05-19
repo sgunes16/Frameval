@@ -10,16 +10,16 @@ export function AgentsPanel({ agents }: { agents: AgentInfo[] }) {
         {agents.map((agent) => (
           <div
             key={agent.name}
-            className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="flex items-center justify-between rounded-lg border border-border bg-bg-elev-1 px-3 py-2 text-sm"
           >
             <div>
-              <div className="font-medium text-slate-900">{agent.name}</div>
-              <div className="text-[11px] text-slate-500">{agent.modes.join(' · ')}</div>
+              <div className="font-medium text-fg">{agent.name}</div>
+              <div className="text-[11px] text-fg-muted">{agent.modes.join(' · ')}</div>
             </div>
             <Badge tone={agent.available ? 'success' : 'muted'}>{agent.available ? 'Available' : 'Not configured'}</Badge>
           </div>
         ))}
-        {agents.length === 0 && <div className="text-xs text-slate-500">No agents discovered yet.</div>}
+        {agents.length === 0 && <div className="text-xs text-fg-muted">No agents discovered yet.</div>}
       </div>
     </Card>
   );

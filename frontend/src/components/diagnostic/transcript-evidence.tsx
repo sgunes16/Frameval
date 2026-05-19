@@ -39,23 +39,23 @@ export function TranscriptEvidence({ series }: Props) {
   }
 
   return (
-    <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+    <div className="space-y-4 rounded-lg border border-border bg-bg-elev-1 p-4">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">
         Per-failure evidence ({items.length} span{items.length === 1 ? '' : 's'})
       </div>
       {Array.from(groups.entries()).map(([code, spans]) => (
         <div key={code} className="space-y-1">
-          <div className="text-xs font-semibold text-slate-800">{code}</div>
+          <div className="text-xs font-semibold text-fg">{code}</div>
           {spans.map(({ runLabel, span }, i) => (
             <div
               key={`${runLabel}-${span.turn_index}-${i}`}
-              className="rounded border border-slate-100 bg-slate-50/70 p-2 text-xs leading-snug"
+              className="rounded border border-border bg-bg-elev-2/70 p-2 text-xs leading-snug"
             >
-              <div className="mb-1 flex items-center gap-2 text-[10px] text-slate-500">
-                <span className="font-medium text-slate-700">{runLabel}</span>
+              <div className="mb-1 flex items-center gap-2 text-[10px] text-fg-muted">
+                <span className="font-medium text-fg">{runLabel}</span>
                 <span>· turn {span.turn_index}</span>
               </div>
-              <div className="font-mono text-slate-700">{span.quote}</div>
+              <div className="font-mono text-fg">{span.quote}</div>
             </div>
           ))}
         </div>
@@ -66,7 +66,7 @@ export function TranscriptEvidence({ series }: Props) {
 
 function EmptyState() {
   return (
-    <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-sm text-slate-500">
+    <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-border bg-bg-elev-2/50 text-sm text-fg-muted">
       No failure evidence yet. Evidence appears once the classifier runs on a completed run.
     </div>
   );
