@@ -1,6 +1,6 @@
 .PHONY: test test-engine test-engine-integration test-grader test-frontend test-e2e help \
         ci-local ci-engine ci-grader ci-frontend lint build \
-        dev-full dev-grader dev-engine dev-frontend
+        dev-full dev-grader dev-engine dev-frontend stop
 
 help:
 	@echo "Frameval test + CI targets"
@@ -23,6 +23,7 @@ help:
 	@echo "  dev-grader                Start the Python grader sidecar on :50051"
 	@echo "  dev-engine                Start the Go engine via go run (no Air)"
 	@echo "  dev-frontend              Start the Vite dev server"
+	@echo "  stop                      Kill anything bound to :5173 / :8080 / :50051"
 
 test: test-engine test-grader test-frontend
 
@@ -74,3 +75,6 @@ dev-engine:
 
 dev-frontend:
 	./scripts/dev-frontend.sh
+
+stop:
+	./scripts/dev-stop.sh

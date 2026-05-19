@@ -45,6 +45,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# Preflight: kill anything already bound to our three ports. A
+# previous Air-restart or interrupted dev-full run often leaves a
+# stranded engine on :8080 — the new engine then fails to bind
+# "address already in use" and the whole stack tears down before
+# the user sees anything useful. Running stop first is cheap
+# (no-op if everything's clear) and makes `make dev-full` idempotent.
+"$ROOT_DIR/scripts/dev-stop.sh" > /dev/null 2>&1 || true
+
 echo "[dev-full] starting grader → engine → frontend"
 
 # 1) Grader. Start first because the engine dials it on every run.
