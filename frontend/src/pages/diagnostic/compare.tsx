@@ -1,73 +1,98 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+
 import { BehavioralRadar } from '../../components/diagnostic/behavioral-radar';
+import { CostQualityScatter } from '../../components/diagnostic/cost-quality-scatter';
 import { FailureBreakdown } from '../../components/diagnostic/failure-breakdown';
 import { RecoveryTimeline } from '../../components/diagnostic/recovery-timeline';
-import { CostQualityScatter } from '../../components/diagnostic/cost-quality-scatter';
 import { TranscriptEvidence } from '../../components/diagnostic/transcript-evidence';
+import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardHeader } from '../../components/ui/card';
 import { EmptyState } from '../../components/ui/empty-state';
-import { useCompareDiagnostics, useRuns } from '../../lib/hooks';
+import { useCompareDiagnostics, useExperiments, useRuns } from '../../lib/hooks';
+import { formatTimeAgo, statusLabel, statusTone } from '../../lib/utils';
 
 /**
- * Diagnostic Compare page — the centerpiece of the AgentDx demo.
+ * Diagnostic Compare page.
  *
- * Accepts a comma-separated list of run IDs via the `runs` query param,
- * fetches each run's Diagnostic Profile, and renders the 5 comparison
- * sub-views side-by-side. Run IDs are sourced from the Monitor page's
- * "Compare diagnostics" link (wired in a follow-up); for now operators
- * can paste run IDs directly into the input below.
+ * The user flow is:
+ *   1. Pick an experiment from the dropdown.
+ *   2. Tick 2–5 runs from that experiment's run list (checkboxes,
+ *      pre-checked for completed runs by default).
+ *   3. The five comparison charts render below.
+ *
+ * The selection is mirrored to URL search params (`?experiment=…&runs=…`)
+ * so a share-link button copies a deep link. Pasting a manual list of run
+ * IDs is still possible via the URL but no longer the primary UI — the
+ * earlier "paste a CSV" textarea was a terrible first-run experience.
  */
 export function DiagnosticComparePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const experimentID = searchParams.get('experiment') ?? '';
+
+  // URL → selection. selectedRuns drives both the checkboxes and the
+  // compare-diagnostics fetch. Empty when no experiment is picked.
   const initialRunIds = useMemo(() => {
     const raw = searchParams.get('runs') ?? '';
     return raw.split(',').map((id) => id.trim()).filter(Boolean);
   }, [searchParams]);
-  const [draftInput, setDraftInput] = useState(initialRunIds.join('\n'));
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialRunIds));
 
-  // When the URL carries ?experiment=<id>, auto-populate the run list from
-  // that experiment's runs — ONCE. Subsequent poll ticks add newly-completed
-  // runs to the list but never clobber edits the user has typed into the
-  // textarea. Tracking via a ref so re-renders don't re-fire the effect.
-  const { data: experimentRuns = [] } = useRuns(experimentID || undefined);
-  const seenRunIds = useRef<Set<string>>(new Set());
+  // Re-sync local state when the URL changes from outside (back/forward,
+  // share-link paste). We deliberately avoid pushing local state changes
+  // back into the URL on every checkbox click — that would re-trigger
+  // this effect in a loop. URL state is only pushed via the explicit
+  // Share-link / Clear buttons or when the experiment is picked.
   useEffect(() => {
-    if (!experimentID || experimentRuns.length === 0) return;
-    const fresh: string[] = [];
-    for (const r of experimentRuns) {
-      if (!seenRunIds.current.has(r.id)) {
-        seenRunIds.current.add(r.id);
-        fresh.push(r.id);
-      }
-    }
-    if (fresh.length === 0) return;
-    setDraftInput((prev) => {
-      const lines = prev.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-      const merged = [...lines];
-      for (const id of fresh) {
-        if (!lines.includes(id)) merged.push(id);
-      }
-      return merged.join('\n');
+    setSelected(new Set(initialRunIds));
+  }, [initialRunIds]);
+
+  const { data: experiments = [], isLoading: experimentsLoading } = useExperiments();
+  const { data: experimentRuns = [], isLoading: runsLoading } = useRuns(experimentID || undefined);
+
+  const setExperiment = (next: string) => {
+    // Switching experiments clears the run selection — the old ids would
+    // never be valid against the new experiment's runs anyway.
+    setSelected(new Set());
+    setSearchParams(next ? { experiment: next } : {});
+  };
+
+  const toggleRun = (runId: string) => {
+    setSelected((prev) => {
+      const out = new Set(prev);
+      if (out.has(runId)) out.delete(runId);
+      else out.add(runId);
+      return out;
     });
-  }, [experimentID, experimentRuns]);
+  };
 
-  const runIds = useMemo(
-    () => draftInput.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean),
-    [draftInput],
+  const selectAllCompleted = () => {
+    setSelected(new Set(experimentRuns.filter((r) => r.status === 'completed').map((r) => r.id)));
+  };
+  const clearSelection = () => setSelected(new Set());
+
+  const runIds = useMemo(() => Array.from(selected), [selected]);
+  const overLimit = runIds.length > 5;
+
+  const { data: diagnostics, isLoading: diagLoading, isError, error } = useCompareDiagnostics(
+    overLimit ? [] : runIds,
   );
-
-  const { data: diagnostics, isLoading, isError, error } = useCompareDiagnostics(runIds);
 
   const series = useMemo(() => {
     if (!diagnostics) return [];
     return diagnostics.map((diag, i) => ({
-      label: shortLabel(runIds[i] ?? `run-${i + 1}`),
+      label: shortLabel(experimentRuns, runIds[i] ?? `run-${i + 1}`),
       diagnostic: diag,
     }));
-  }, [diagnostics, runIds]);
+  }, [diagnostics, runIds, experimentRuns]);
+
+  const shareLink = () => {
+    const params: Record<string, string> = {};
+    if (experimentID) params.experiment = experimentID;
+    if (runIds.length > 0) params.runs = runIds.join(',');
+    setSearchParams(params);
+  };
 
   return (
     <div className="space-y-6">
@@ -75,55 +100,96 @@ export function DiagnosticComparePage() {
         <div className="flex items-start justify-between gap-3">
           <CardHeader
             title="Diagnostic Compare"
-            description="Side-by-side AgentDx profile across 2–5 runs. Pass ?experiment=<id> to auto-load every run from an experiment, or paste run IDs manually."
+            description="Pick an experiment, then choose 2–5 runs to compare their AgentDx profiles side-by-side."
           />
           <Link to="/diagnostic/launch">
             <Button size="sm">New diagnostic run</Button>
           </Link>
         </div>
-        {experimentID && (
-          <div className="mb-2 rounded-md bg-bg-elev-2 px-3 py-2 text-xs text-fg-muted">
-            Auto-loading runs from experiment{' '}
-            <code className="font-mono">{experimentID.slice(0, 8)}…</code> ({experimentRuns.length}{' '}
-            so far). The list updates as queued runs finish.
+
+        <div className="mt-3 grid gap-3 md:grid-cols-[280px_1fr]">
+          <label className="flex flex-col gap-1 text-xs text-fg-muted">
+            Experiment
+            <select
+              value={experimentID}
+              onChange={(e) => setExperiment(e.target.value)}
+              className="rounded-md border border-border bg-bg-elev-1 px-2 py-1.5 text-sm text-fg"
+              disabled={experimentsLoading}
+            >
+              <option value="">{experimentsLoading ? 'Loading…' : '— Select experiment —'}</option>
+              {experiments.map((exp) => (
+                <option key={exp.id} value={exp.id}>
+                  {exp.name} · {exp.agent_cli} ({exp.runs_per_variant * (exp.variants?.length ?? 0)} runs)
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex flex-col gap-1 text-xs text-fg-muted">
+            <div className="flex items-baseline justify-between">
+              <span>Runs ({runIds.length} selected{overLimit ? ' — too many' : ''})</span>
+              {experimentID && experimentRuns.length > 0 && (
+                <span className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllCompleted}
+                    className="rounded-sm border border-border bg-bg-elev-2 px-2 py-0.5 text-xs text-fg-muted hover:bg-bg-elev-1"
+                  >
+                    Select all completed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="rounded-sm border border-border bg-bg-elev-2 px-2 py-0.5 text-xs text-fg-muted hover:bg-bg-elev-1"
+                  >
+                    Clear
+                  </button>
+                </span>
+              )}
+            </div>
+            <RunPicker
+              experimentId={experimentID}
+              runs={experimentRuns}
+              isLoading={runsLoading}
+              selected={selected}
+              onToggle={toggleRun}
+            />
           </div>
-        )}
-        <textarea
-          value={draftInput}
-          onChange={(event) => setDraftInput(event.target.value)}
-          className="mt-3 w-full rounded-lg border border-border px-3 py-2 font-mono text-sm"
-          rows={3}
-          placeholder="run-id-1, run-id-2, run-id-3"
-        />
-        <div className="mt-2 flex justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-md border border-border px-3 py-1 text-xs text-fg-muted hover:bg-bg-elev-2"
-            onClick={() => {
-              setDraftInput('');
-              setSearchParams({});
-            }}
-          >
-            Clear
-          </button>
-          <button
-            type="button"
-            className="rounded-md bg-fg px-3 py-1 text-xs font-medium text-bg hover:bg-fg"
-            onClick={() => setSearchParams({ runs: runIds.join(',') })}
-          >
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="text-xs text-fg-muted">
+            {overLimit
+              ? 'Pick at most 5 runs. The five charts get noisy beyond that.'
+              : runIds.length < 2 && runIds.length > 0
+              ? 'Pick at least one more run to compare.'
+              : ''}
+          </span>
+          <Button size="sm" variant="secondary" onClick={shareLink} disabled={runIds.length === 0}>
             Share link
-          </button>
+          </Button>
         </div>
       </Card>
 
-      {runIds.length === 0 ? (
+      {!experimentID ? (
         <Card>
           <EmptyState
-            title="Select runs to compare"
-            description="Diagnostic profiles appear once you paste 2 or more run IDs above. The future Run Monitor page will provide a direct link here."
+            title="Pick an experiment to start"
+            description="Diagnostic profiles compare runs against each other. Choose an experiment above, then tick at least two of its runs."
           />
         </Card>
-      ) : isLoading ? (
+      ) : runIds.length === 0 ? (
+        <Card>
+          <EmptyState
+            title="Pick runs to compare"
+            description="Tick at least two completed runs from the list above. Use 'Select all completed' for the common case."
+          />
+        </Card>
+      ) : overLimit ? (
+        <Card>
+          <div className="text-sm text-warning-fg">Too many runs selected. The compare view tops out at 5.</div>
+        </Card>
+      ) : diagLoading ? (
         <Card>
           <div className="flex h-32 items-center justify-center text-sm text-fg-muted">Loading diagnostics…</div>
         </Card>
@@ -181,8 +247,81 @@ export function DiagnosticComparePage() {
   );
 }
 
-function shortLabel(runID: string): string {
-  // Run IDs are UUIDs — take a stable prefix so the chart legend stays
-  // readable. 8 chars is enough to disambiguate across the 2–5-run set.
-  return runID.length > 12 ? runID.slice(0, 8) + '…' : runID;
+interface RunPickerProps {
+  experimentId: string;
+  runs: Array<{ id: string; run_number: number; status: string; variant_id: string; created_at?: string }>;
+  isLoading: boolean;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+}
+
+function RunPicker({ experimentId, runs, isLoading, selected, onToggle }: RunPickerProps) {
+  if (!experimentId) {
+    return (
+      <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-4 text-center text-xs text-fg-subtle">
+        Pick an experiment to list its runs.
+      </div>
+    );
+  }
+  if (isLoading) {
+    return (
+      <div className="rounded-md border border-border bg-bg-elev-1 px-3 py-4 text-center text-xs text-fg-muted">
+        Loading runs…
+      </div>
+    );
+  }
+  if (runs.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-4 text-center text-xs text-fg-muted">
+        This experiment has no runs yet.
+      </div>
+    );
+  }
+  return (
+    <ul
+      role="listbox"
+      aria-label="Runs to compare"
+      aria-multiselectable="true"
+      className="max-h-64 overflow-y-auto rounded-md border border-border bg-bg-elev-1"
+    >
+      {runs.map((run) => {
+        const isSelected = selected.has(run.id);
+        return (
+          <li
+            key={run.id}
+            role="option"
+            aria-selected={isSelected}
+            className="border-b border-border last:border-b-0"
+          >
+            <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm text-fg hover:bg-bg-elev-2">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggle(run.id)}
+                className="h-4 w-4 accent-accent"
+                aria-label={`Compare run ${run.run_number}`}
+              />
+              <span className="flex flex-1 items-center gap-2">
+                <span className="font-mono text-fg-muted">#{run.run_number}</span>
+                <Badge tone={statusTone(run.status)}>{statusLabel(run.status)}</Badge>
+                <span className="font-mono text-xs text-fg-subtle">{run.id.slice(0, 8)}…</span>
+              </span>
+              {run.created_at && (
+                <span className="text-xs text-fg-subtle">{formatTimeAgo(run.created_at)}</span>
+              )}
+            </label>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function shortLabel(runs: Array<{ id: string; run_number: number }>, runId: string): string {
+  // Prefer the human-readable run_number ("Run 3") when we can find it
+  // in the loaded experiment's run list. Falls back to the UUID prefix
+  // for share-link round-trips where the run list hasn't loaded yet.
+  const found = runs.find((r) => r.id === runId);
+  if (found) return `Run ${found.run_number}`;
+  return runId.length > 12 ? runId.slice(0, 8) + '…' : runId;
 }
