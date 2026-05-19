@@ -14,3 +14,9 @@ export { FilePath } from './FilePath';
 export { Kbd } from './Kbd';
 export { LoadingSkeleton } from './LoadingSkeleton';
 export { ErrorState } from './ErrorState';
+
+// Distinctive (composite) components — Inspector V2 + Compare V2.
+export { DiffBadge } from './composite/DiffBadge';
+export { ScoreBar } from './composite/ScoreBar';
+export { SymptomGlyph, type FailureCode } from './composite/SymptomGlyph';
+export { TurnCard, type BlockKind } from './composite/TurnCard';
