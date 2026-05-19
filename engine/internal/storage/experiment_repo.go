@@ -164,6 +164,32 @@ func (s *Store) SetExperimentEstimate(ctx context.Context, experimentID string, 
 	return nil
 }
 
+// GetExperimentAnchors returns the cached anchor bundle as a raw JSON
+// string. Empty / never-computed experiments return the canonical "{}"
+// placeholder so callers don't have to distinguish missing-row from
+// empty-bundle (handler renders both as an empty AnchorBundle).
+func (s *Store) GetExperimentAnchors(ctx context.Context, experimentID string) (string, error) {
+	var raw sql.NullString
+	err := s.DB.QueryRowContext(ctx, `SELECT anchors_json FROM experiments WHERE id = ?`, experimentID).Scan(&raw)
+	if err != nil {
+		return "", fmt.Errorf("get experiment anchors: %w", err)
+	}
+	if !raw.Valid || raw.String == "" {
+		return "{}", nil
+	}
+	return raw.String, nil
+}
+
+// SetExperimentAnchors persists a freshly built anchor bundle. The
+// orchestrator calls this on run finalize, so it must be fast — a
+// single UPDATE keyed by primary key, no triggers.
+func (s *Store) SetExperimentAnchors(ctx context.Context, experimentID string, payload string) error {
+	if _, err := s.DB.ExecContext(ctx, `UPDATE experiments SET anchors_json = ? WHERE id = ?`, payload, experimentID); err != nil {
+		return fmt.Errorf("set experiment anchors: %w", err)
+	}
+	return nil
+}
+
 func scanExperiment(scanner interface{ Scan(dest ...any) error }) (models.Experiment, error) {
 	var experiment models.Experiment
 	var description, judgeModel, startedAt, completedAt, localPath, gitURL, gitRef sql.NullString

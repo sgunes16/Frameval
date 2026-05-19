@@ -311,6 +311,10 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	// in any stage degrade gracefully rather than fail the run: a missing
 	// diagnostic row is better than throwing away a successful grading pass.
 	o.persistDiagnostic(ctx, *experiment, *run, *task, *variant, transcript, grade, passed, failed)
+	// Compare V2: refresh the cached anchor bundle so the Tape tab has
+	// fresh alignment data for this experiment. Best-effort — failure
+	// here only stales the cache by one run; never blocks completion.
+	o.refreshExperimentAnchors(ctx, experiment.ID)
 	status := "completed"
 	errorMessage := ""
 	if execErr != nil {
@@ -416,6 +420,36 @@ func instructionFilesForHarness(harnessID string) []string {
 		// No instruction file injected; the dimension scores ~zero for these,
 		// which is the correct behavior (no context to reference).
 		return nil
+	}
+}
+
+// refreshExperimentAnchors rebuilds the cached AnchorBundle for an
+// experiment and persists it to experiments.anchors_json. Called
+// best-effort after each run finalize. Errors are logged via the
+// existing log layer but never propagated — a stale anchor cache
+// is fine; a wedged orchestrator is not.
+func (o *Orchestrator) refreshExperimentAnchors(ctx context.Context, experimentID string) {
+	perRun, err := o.store.ListTurnsByExperiment(ctx, experimentID)
+	if err != nil {
+		fmt.Printf("anchors: list turns: %v\n", err)
+		return
+	}
+	// ListTurnsByExperiment returns models.ParsedTurn keyed by run ID.
+	// The diagnostic builder operates on pkgexec.ParsedTurn — same shape,
+	// converted via a JSON round-trip avoidance: the executor type IS
+	// the models type for this field, so we can pass it through.
+	pkgPerRun := make(map[string][]pkgexec.ParsedTurn, len(perRun))
+	for runID, turns := range perRun {
+		pkgPerRun[runID] = turns
+	}
+	bundle := diagnostic.BuildAnchors(pkgPerRun)
+	payload, err := json.Marshal(bundle)
+	if err != nil {
+		fmt.Printf("anchors: marshal: %v\n", err)
+		return
+	}
+	if err := o.store.SetExperimentAnchors(ctx, experimentID, string(payload)); err != nil {
+		fmt.Printf("anchors: persist: %v\n", err)
 	}
 }
 

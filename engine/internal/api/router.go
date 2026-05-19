@@ -63,6 +63,7 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 			r.Get("/{id}/export/{format}", service.ExportExperiment)
 			r.Get("/{id}/runs", service.ListExperimentRuns)
 			r.Get("/{id}/turns", service.GetExperimentTurns)
+			r.Get("/{id}/anchors", service.GetExperimentAnchors)
 			r.Route("/{id}/variants", func(r chi.Router) {
 				r.Get("/", service.ListVariants)
 				r.Post("/", service.CreateVariant)

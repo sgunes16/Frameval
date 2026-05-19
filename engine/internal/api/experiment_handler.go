@@ -93,6 +93,23 @@ func (s *Service) CancelExperiment(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, map[string]bool{"cancelled": true})
 }
 
+// GetExperimentAnchors serves the cached AnchorBundle for an
+// experiment as raw JSON. Empty / never-computed experiments return
+// the canonical empty-bundle shape (`{"runs": null}`) with status
+// 200 — the frontend renders that as "no anchors yet" without
+// distinguishing missing-row from empty-bundle. This is the data
+// layer for Compare V2's Tape tab (story #66).
+func (s *Service) GetExperimentAnchors(w http.ResponseWriter, r *http.Request) {
+	raw, err := s.store.GetExperimentAnchors(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		renderError(w, r.Context(), http.StatusNotFound, ErrCodeNotFound, "experiment not found", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(raw))
+}
+
 func (s *Service) ExportExperiment(w http.ResponseWriter, r *http.Request) {
 	experimentID := chi.URLParam(r, "id")
 	format := chi.URLParam(r, "format")
