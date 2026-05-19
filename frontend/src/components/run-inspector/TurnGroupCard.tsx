@@ -56,20 +56,36 @@ export function TurnGroupCard({
   // Collect evidence entries for any block in this group. A single
   // turn group can have multiple evidence findings — render the
   // glyphs in turn_index order so the visual ordering matches the
-  // transcript timeline.
-  const glyphs = evidenceByTurn
-    ? group.blocks
-        .map((b) => ({ idx: b.turn_index ?? -1, entry: evidenceByTurn.get(b.turn_index ?? -1) }))
-        .filter((x): x is { idx: number; entry: EvidenceForTurn } => x.entry !== undefined)
-        .flatMap(({ idx, entry }) =>
-          entry.spans.map((span) => ({
-            key: `${idx}-${span.code}`,
-            code: span.code,
-            confidence: entry.confidence,
-            rationale: entry.rationale,
-          })),
-        )
-    : [];
+  // transcript timeline. Deduplicate by turn_index because two
+  // blocks in the same group commonly share an index (tool_use and
+  // its matching tool_result), and we'd otherwise render duplicate
+  // glyphs with duplicate React keys.
+  const glyphs = (() => {
+    if (!evidenceByTurn) return [];
+    const seen = new Set<number>();
+    const out: Array<{
+      key: string;
+      code: EvidenceForTurn['spans'][number]['code'];
+      confidence: number;
+      rationale?: string;
+    }> = [];
+    for (const block of group.blocks) {
+      const idx = block.turn_index;
+      if (idx === undefined || seen.has(idx)) continue;
+      const entry = evidenceByTurn.get(idx);
+      if (!entry) continue;
+      seen.add(idx);
+      for (const span of entry.spans) {
+        out.push({
+          key: `${idx}-${span.code}`,
+          code: span.code,
+          confidence: entry.confidence,
+          rationale: entry.rationale,
+        });
+      }
+    }
+    return out;
+  })();
 
   return (
     <div
@@ -94,7 +110,14 @@ export function TurnGroupCard({
           glyphs.length === 0
             ? undefined
             : (
-                <span className="flex flex-wrap gap-1">
+                // role=group with an aria-label so screen-reader users
+                // hear "3 symptom findings" before stepping through each
+                // glyph individually.
+                <span
+                  role="group"
+                  aria-label={`${glyphs.length} symptom ${glyphs.length === 1 ? 'finding' : 'findings'}`}
+                  className="flex flex-wrap gap-1"
+                >
                   {glyphs.map((g) => (
                     <SymptomGlyph
                       key={g.key}
