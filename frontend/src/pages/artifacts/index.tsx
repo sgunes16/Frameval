@@ -12,11 +12,11 @@ export function ArtifactsPage() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-amber-200 bg-amber-50">
+      <Card className="border-warning/30 bg-warning/10">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-amber-900">Preview surface</div>
-            <div className="mt-1 text-xs text-amber-800">
+            <div className="text-sm font-semibold text-warning-fg">Preview surface</div>
+            <div className="mt-1 text-xs text-warning-fg">
               Artifact management will graduate into a dedicated editor. For now you can inspect existing variants
               below; editing is read-only and routed through the experiment wizard.
             </div>

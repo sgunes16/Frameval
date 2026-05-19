@@ -25,7 +25,7 @@ export function PatchViewer({ transcript, runLabel }: { transcript?: Transcript;
   if (!transcript) {
     return (
       <div className="rounded-lg border border-dashed border-border p-4 text-sm text-fg-muted">
-        Patch gormek icin tamamlanmis bir run sec.
+        Select a completed run to view its patch.
       </div>
     );
   }
@@ -34,10 +34,10 @@ export function PatchViewer({ transcript, runLabel }: { transcript?: Transcript;
     return (
       <div className="space-y-3">
         <div className="rounded-lg border border-dashed border-border p-4 text-sm text-fg-muted">
-          {runLabel} icin kaydedilmis patch yok.
+          No patch recorded for {runLabel}.
         </div>
         {transcript.filesystem_diff && (
-          <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-code-bg p-4 font-mono text-[11px] leading-5 text-fg-subtle">
+          <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-code-bg p-4 font-mono text-xs leading-5 text-fg-subtle">
             {transcript.filesystem_diff}
           </pre>
         )}
@@ -56,7 +56,7 @@ export function PatchViewer({ transcript, runLabel }: { transcript?: Transcript;
             <button
               key={section.file}
               onClick={() => setSelectedFile(section.file)}
-              className={`mb-1 block w-full rounded-md px-3 py-2 text-left font-mono text-[11px] transition ${
+              className={`mb-1 block w-full rounded-md px-3 py-2 text-left font-mono text-xs transition ${
                 selectedSection?.file === section.file ? 'bg-fg text-white' : 'text-fg-muted hover:bg-bg-elev-2'
               }`}
             >
@@ -65,7 +65,7 @@ export function PatchViewer({ transcript, runLabel }: { transcript?: Transcript;
           ))}
         </div>
       </div>
-      <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-code-bg p-4 font-mono text-[11px] leading-5 text-fg-subtle">
+      <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-code-bg p-4 font-mono text-xs leading-5 text-fg-subtle">
         {selectedSection?.diff ?? ''}
       </pre>
     </div>

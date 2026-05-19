@@ -62,7 +62,7 @@ export function DashboardPage() {
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="min-w-full text-sm">
-              <thead className="bg-bg-elev-2 text-[11px] uppercase tracking-wider text-fg-muted">
+              <thead className="bg-bg-elev-2 text-xs uppercase tracking-wider text-fg-muted">
                 <tr>
                   <th className="px-4 py-2 text-left font-medium">Name</th>
                   <th className="px-4 py-2 text-left font-medium">Status</th>
@@ -124,7 +124,7 @@ export function DashboardPage() {
 function StatCard({ label, value, hint, muted }: { label: string; value: number; hint?: string; muted?: boolean }) {
   return (
     <Card className={muted ? 'opacity-70' : ''}>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">{label}</div>
+      <div className="text-xs font-medium uppercase tracking-wider text-fg-muted">{label}</div>
       <div className="mt-2 text-2xl font-semibold tracking-tight text-fg">{value}</div>
       {hint && <div className="mt-1 text-xs text-fg-muted">{hint}</div>}
     </Card>

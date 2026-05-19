@@ -14,7 +14,7 @@ export function AgentsPanel({ agents }: { agents: AgentInfo[] }) {
           >
             <div>
               <div className="font-medium text-fg">{agent.name}</div>
-              <div className="text-[11px] text-fg-muted">{agent.modes.join(' · ')}</div>
+              <div className="text-xs text-fg-muted">{agent.modes.join(' · ')}</div>
             </div>
             <Badge tone={agent.available ? 'success' : 'muted'}>{agent.available ? 'Available' : 'Not configured'}</Badge>
           </div>
