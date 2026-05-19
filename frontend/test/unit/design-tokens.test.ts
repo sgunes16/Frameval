@@ -31,12 +31,17 @@ const requiredColorTokens = [
   // hairlines + focus
   '--border',
   '--border-strong',
-  // semantic
+  // semantic (fills)
   '--accent',
   '--success',
   '--warning',
   '--danger',
   '--info',
+  // semantic foreground variants (WCAG-safe for body copy on tinted bg)
+  '--success-fg',
+  '--warning-fg',
+  '--danger-fg',
+  '--info-fg',
   // monospace + diff
   '--code-bg',
   '--diff-add',
@@ -118,13 +123,25 @@ function tsxFiles(dir: string): string[] {
   return out;
 }
 
+/**
+ * Strip single-line `//` and block `/* * /` comments so the sweep
+ * doesn't false-positive on tokens mentioned in prose (e.g. "// was
+ * bg-red-600 before migration"). We deliberately keep this dumb —
+ * a real parser would be overkill for a regression guard.
+ */
+function stripComments(text: string): string {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, '') // block comments
+    .replace(/^\s*\/\/.*$/gm, '');     // single-line comments
+}
+
 describe('design-token source sweep', () => {
   const files = tsxFiles(resolve(__dirname, '../../src'));
 
   it('has no hardcoded Tailwind color-scale literals in component source', () => {
     const offenders: string[] = [];
     for (const file of files) {
-      const text = readFileSync(file, 'utf8');
+      const text = stripComments(readFileSync(file, 'utf8'));
       if (FORBIDDEN_COLOR_PATTERN.test(text)) offenders.push(file);
     }
     expect(offenders).toEqual([]);
@@ -133,7 +150,7 @@ describe('design-token source sweep', () => {
   it('has no text-[10px] / text-[11px] arbitrary pixel sizes', () => {
     const offenders: string[] = [];
     for (const file of files) {
-      const text = readFileSync(file, 'utf8');
+      const text = stripComments(readFileSync(file, 'utf8'));
       if (FORBIDDEN_PX_PATTERN.test(text)) offenders.push(file);
     }
     expect(offenders).toEqual([]);

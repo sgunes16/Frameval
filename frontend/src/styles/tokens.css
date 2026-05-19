@@ -41,6 +41,21 @@
   --danger: 0 84% 50%;
   --info: 217 91% 55%;
 
+  /*
+   * Semantic foreground variants calibrated for body copy on top of a
+   * tinted background (e.g. `bg-danger/10`). The full-saturation
+   * `--danger` at 50% L only hits ~3:1 against `--danger/10` over
+   * white — below WCAG AA. The `-fg` variants drop the lightness to
+   * the 28-35% band where contrast against a 10-15% tinted wash on
+   * white reaches AA. Use these for the *text* in tone badges /
+   * banners; keep the bare `--success` etc. for full-saturation fills
+   * (dots, bars, glyph borders).
+   */
+  --success-fg: 142 71% 26%;
+  --warning-fg: 38 92% 30%;
+  --danger-fg: 0 84% 36%;
+  --info-fg: 217 91% 38%;
+
   /* monospace blocks */
   --code-bg: 222 14% 96%;
 
@@ -82,6 +97,17 @@
   --warning: 38 92% 55%;
   --danger: 0 84% 60%;
   --info: 217 91% 60%;
+
+  /*
+   * `-fg` variants on dark mode: bumped further up so they remain
+   * readable on a dark tinted bg (e.g. `bg-danger/15`). The contrast
+   * goal mirrors light mode — body-copy text on a tinted wash that
+   * stays AA-compliant.
+   */
+  --success-fg: 142 71% 70%;
+  --warning-fg: 38 92% 70%;
+  --danger-fg: 0 84% 75%;
+  --info-fg: 217 91% 75%;
 
   /* monospace blocks */
   --code-bg: 222 14% 6%;

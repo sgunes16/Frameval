@@ -149,7 +149,7 @@ function AssistantCard({ item }: { item: TimelineItem }) {
 function ResultCard({ item }: { item: TimelineItem }) {
   const isError = item.status === 'failed';
   return (
-    <div className={`rounded-lg border px-3 py-2 text-xs ${isError ? 'border-danger/30 bg-danger/10 text-danger' : 'border-success/30 bg-success/10 text-success'}`}>
+    <div className={`rounded-lg border px-3 py-2 text-xs ${isError ? 'border-danger/30 bg-danger/10 text-danger-fg' : 'border-success/30 bg-success/10 text-success-fg'}`}>
       <span className="font-medium">{isError ? 'Error' : 'Result'}</span>
       {item.body && (
         <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-xs leading-5 opacity-80">{truncate(item.body, 2000)}</pre>

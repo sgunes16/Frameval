@@ -129,7 +129,7 @@ export function DiagnosticComparePage() {
         </Card>
       ) : isError ? (
         <Card>
-          <div className="text-sm text-danger">
+          <div className="text-sm text-danger-fg">
             Failed to load diagnostics. One or more runs may not have a diagnostic profile yet.
             {error instanceof Error ? ` (${error.message})` : ''}
           </div>

@@ -257,7 +257,7 @@ export function DiagnosticLaunchPage() {
         </Link>
         <div className="flex items-center gap-3">
           {launch.isError && (
-            <div className="text-sm text-danger">
+            <div className="text-sm text-danger-fg">
               {launch.error instanceof Error ? launch.error.message : 'Launch failed'}
             </div>
           )}
