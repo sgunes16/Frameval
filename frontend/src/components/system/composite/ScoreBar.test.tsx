@@ -32,4 +32,15 @@ describe('ScoreBar', () => {
     const meter = screen.getByRole('meter', { name: /judge correctness/i });
     expect(meter.getAttribute('aria-valuenow')).toBe('0.73');
   });
+
+  it('reports the raw (unclamped) value via aria-valuenow so out-of-range bugs surface', () => {
+    // The visual fill clamps but the meter contract MUST surface the
+    // upstream value as-is — otherwise a calculator that produces 1.8
+    // looks identical in audits to one that produces 1.0.
+    const { rerender } = render(<ScoreBar value={1.8} label="x" />);
+    expect(screen.getByRole('meter').getAttribute('aria-valuenow')).toBe('1.8');
+
+    rerender(<ScoreBar value={-0.2} label="x" />);
+    expect(screen.getByRole('meter').getAttribute('aria-valuenow')).toBe('-0.2');
+  });
 });

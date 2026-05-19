@@ -35,7 +35,11 @@ export function ScoreBar({ value, label, segments = 10, className }: ScoreBarPro
       aria-label={label}
       aria-valuemin={0}
       aria-valuemax={1}
-      aria-valuenow={Math.max(0, Math.min(1, value))}
+      // Report the raw value (not the clamped one) so an upstream
+      // bug producing an out-of-range score surfaces in automated
+      // a11y audits and screen-reader output. The visual fill still
+      // clamps to [0,1] so the bar doesn't overflow.
+      aria-valuenow={value}
       title={label}
       className={cn('flex items-center gap-0.5', className)}
     >
