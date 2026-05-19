@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/csv"
 	"errors"
 	"net/http"
@@ -91,6 +92,28 @@ func (s *Service) CancelExperiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	JSON(w, http.StatusOK, map[string]bool{"cancelled": true})
+}
+
+// GetExperimentAnchors serves the cached AnchorBundle for an
+// experiment as raw JSON. Empty / never-computed experiments return
+// the canonical empty-bundle shape (`{}`) with status 200 — the
+// frontend renders that as "no anchors yet" without distinguishing
+// missing-default from explicit-empty. A missing experiment row
+// returns 404; any other store error returns 500. Data layer for
+// Compare V2's Tape tab (story #66).
+func (s *Service) GetExperimentAnchors(w http.ResponseWriter, r *http.Request) {
+	raw, err := s.store.GetExperimentAnchors(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			renderError(w, r.Context(), http.StatusNotFound, ErrCodeNotFound, "experiment not found", err)
+			return
+		}
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(raw))
 }
 
 func (s *Service) ExportExperiment(w http.ResponseWriter, r *http.Request) {
