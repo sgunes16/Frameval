@@ -32,6 +32,55 @@ func (s *Store) SaveTranscript(ctx context.Context, transcript models.Transcript
 	return nil
 }
 
+// ListTurns returns the ParsedTurns for a single run. Returns an empty
+// slice (not an error) when the run has no transcript yet — callers can
+// poll this endpoint while a run is still streaming.
+func (s *Store) ListTurns(ctx context.Context, runID string) ([]models.ParsedTurn, error) {
+	var parsedTurns sql.NullString
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT parsed_turns_json FROM transcripts WHERE run_id = ?`, runID,
+	).Scan(&parsedTurns)
+	if err == sql.ErrNoRows {
+		return []models.ParsedTurn{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list turns: %w", err)
+	}
+	return unmarshalJSON(parsedTurns.String, []models.ParsedTurn{}), nil
+}
+
+// ListTurnsByExperiment returns turns grouped by run ID for every run
+// in the experiment. Empty map for experiments with no transcripts yet.
+//
+// Single DB round-trip via a JOIN — N+1 anti-pattern avoided since
+// Compare V2 calls this for every page load.
+func (s *Store) ListTurnsByExperiment(ctx context.Context, experimentID string) (map[string][]models.ParsedTurn, error) {
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT t.run_id, t.parsed_turns_json
+		FROM transcripts t
+		JOIN runs r ON r.id = t.run_id
+		WHERE r.experiment_id = ?
+	`, experimentID)
+	if err != nil {
+		return nil, fmt.Errorf("list turns by experiment: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string][]models.ParsedTurn)
+	for rows.Next() {
+		var runID string
+		var parsedTurns sql.NullString
+		if err := rows.Scan(&runID, &parsedTurns); err != nil {
+			return nil, fmt.Errorf("list turns by experiment scan: %w", err)
+		}
+		out[runID] = unmarshalJSON(parsedTurns.String, []models.ParsedTurn{})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list turns by experiment iter: %w", err)
+	}
+	return out, nil
+}
+
 func (s *Store) GetTranscriptByRun(ctx context.Context, runID string) (*models.Transcript, error) {
 	row := s.DB.QueryRowContext(ctx, `
 		SELECT id, run_id, raw_output, parsed_turns_json, filesystem_diff, patch, total_turns, total_tokens, cost_usd, output_files_path

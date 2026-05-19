@@ -62,6 +62,7 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 			r.Post("/{id}/cancel", service.CancelExperiment)
 			r.Get("/{id}/export/{format}", service.ExportExperiment)
 			r.Get("/{id}/runs", service.ListExperimentRuns)
+			r.Get("/{id}/turns", service.GetExperimentTurns)
 			r.Route("/{id}/variants", func(r chi.Router) {
 				r.Get("/", service.ListVariants)
 				r.Post("/", service.CreateVariant)
@@ -76,6 +77,7 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 		r.Get("/artifacts/diff", service.DiffArtifacts)
 		r.Get("/runs/{id}", service.GetRun)
 		r.Get("/runs/{id}/transcript", service.GetTranscript)
+		r.Get("/runs/{id}/turns", service.GetRunTurns)
 		r.Get("/runs/{id}/grade", service.GetRunGrade)
 		r.Get("/runs/{id}/diagnostic", service.GetRunDiagnostic)
 		r.Post("/runs/{id}/retry", service.RetryRun)
