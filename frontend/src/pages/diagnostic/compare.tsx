@@ -6,11 +6,13 @@ import { CostQualityScatter } from '../../components/diagnostic/cost-quality-sca
 import { FailureBreakdown } from '../../components/diagnostic/failure-breakdown';
 import { RecoveryTimeline } from '../../components/diagnostic/recovery-timeline';
 import { TranscriptEvidence } from '../../components/diagnostic/transcript-evidence';
+import { ErrorBoundary } from '../../components/system';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardHeader } from '../../components/ui/card';
 import { EmptyState } from '../../components/ui/empty-state';
 import { useCompareDiagnostics, useExperiments, useRuns } from '../../lib/hooks';
+import type { Diagnostic } from '../../lib/types';
 import { formatTimeAgo, statusLabel, statusTone } from '../../lib/utils';
 
 /**
@@ -79,13 +81,26 @@ export function DiagnosticComparePage() {
     overLimit ? [] : runIds,
   );
 
+  // Drop any diagnostic that lacks the fingerprint surface the charts
+  // read from. A missing fingerprint indicates the diagnostic row was
+  // written before the AgentDx schema landed; rendering would throw at
+  // `s.diagnostic.fingerprint[key]` and the user would see a blank
+  // page (no surrounding ErrorBoundary on a per-chart granularity).
+  // Skipping these here keeps the surrounding charts working.
   const series = useMemo(() => {
     if (!diagnostics) return [];
-    return diagnostics.map((diag, i) => ({
-      label: shortLabel(experimentRuns, runIds[i] ?? `run-${i + 1}`),
-      diagnostic: diag,
-    }));
+    return diagnostics
+      .map((diag, i) => ({
+        label: shortLabel(experimentRuns, runIds[i] ?? `run-${i + 1}`),
+        diagnostic: diag,
+      }))
+      .filter((entry): entry is { label: string; diagnostic: Diagnostic } => isValidDiagnostic(entry.diagnostic));
   }, [diagnostics, runIds, experimentRuns]);
+
+  const droppedDiagnostics =
+    diagnostics !== undefined && diagnostics.length > series.length
+      ? diagnostics.length - series.length
+      : 0;
 
   const shareLink = () => {
     const params: Record<string, string> = {};
@@ -200,8 +215,25 @@ export function DiagnosticComparePage() {
             {error instanceof Error ? ` (${error.message})` : ''}
           </div>
         </Card>
+      ) : series.length === 0 ? (
+        <Card>
+          <EmptyState
+            title="No diagnostic profiles to show"
+            description="The selected runs don't have diagnostic data yet. Wait for the diagnostic stage to finish, or pick runs that completed grading."
+          />
+        </Card>
       ) : (
-        <>
+        <ErrorBoundary
+          title="A chart failed to render"
+          description="One of the diagnostic charts threw while drawing this selection. Try a different set of runs or refresh."
+        >
+          {droppedDiagnostics > 0 && (
+            <Card>
+              <div className="text-xs text-warning-fg">
+                Skipped {droppedDiagnostics} run{droppedDiagnostics === 1 ? '' : 's'} with incomplete diagnostic data.
+              </div>
+            </Card>
+          )}
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader
@@ -241,7 +273,7 @@ export function DiagnosticComparePage() {
               <TranscriptEvidence series={series} />
             </Card>
           </div>
-        </>
+        </ErrorBoundary>
       )}
     </div>
   );
@@ -324,4 +356,18 @@ function shortLabel(runs: Array<{ id: string; run_number: number }>, runId: stri
   const found = runs.find((r) => r.id === runId);
   if (found) return `Run ${found.run_number}`;
   return runId.length > 12 ? runId.slice(0, 8) + '…' : runId;
+}
+
+/**
+ * The diagnostic charts read off `fingerprint`, `symptoms`, and
+ * `recovery`. A diagnostic written before the AgentDx schema landed
+ * can have those fields missing; treating such a row as "no
+ * diagnostic" is friendlier than crashing the chart render.
+ */
+function isValidDiagnostic(diag: Diagnostic | null | undefined): diag is Diagnostic {
+  if (!diag) return false;
+  if (typeof diag.fingerprint !== 'object' || diag.fingerprint === null) return false;
+  if (typeof diag.symptoms !== 'object' || diag.symptoms === null) return false;
+  if (typeof diag.recovery !== 'object' || diag.recovery === null) return false;
+  return true;
 }
