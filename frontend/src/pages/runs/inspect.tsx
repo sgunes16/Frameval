@@ -10,7 +10,8 @@ import {
 import { ToolHistogram } from '../../components/run-inspector/ToolHistogram';
 import { TurnDiffPanel } from '../../components/run-inspector/TurnDiffPanel';
 import { ErrorState, LoadingSkeleton } from '../../components/system';
-import { useRun, useRunTurns, useTranscript } from '../../lib/hooks';
+import { useDiagnostic, useRun, useRunTurns, useTranscript } from '../../lib/hooks';
+import { buildEvidenceByTurn } from '../../lib/symptom-evidence';
 import { buildToolHistogram } from '../../lib/tool-histogram';
 import {
   applyTurnFilters,
@@ -41,6 +42,7 @@ export function RunInspectPage() {
   const runQuery = useRun(id);
   const turnsQuery = useRunTurns(id);
   const transcriptQuery = useTranscript(id);
+  const diagnosticQuery = useDiagnostic(id);
 
   const filters = useMemo<TurnFilter[]>(
     () => parseFilterTokens(searchParams.getAll('filter')),
@@ -93,6 +95,10 @@ export function RunInspectPage() {
   const filteredTurns = useMemo(() => applyTurnFilters(turns, filters), [turns, filters]);
   const groups = useMemo(() => groupTurns(filteredTurns), [filteredTurns]);
   const histogramRows = useMemo(() => buildToolHistogram(turns), [turns]);
+  const evidenceByTurn = useMemo(
+    () => buildEvidenceByTurn(diagnosticQuery.data),
+    [diagnosticQuery.data],
+  );
 
   const focusedGroup = useMemo(
     () =>
@@ -167,7 +173,11 @@ export function RunInspectPage() {
         >
           <FilterChips filters={filters} onChange={setFilters} />
           <div className="min-h-0 flex-1 border-t border-border">
-            <TurnList turns={filteredTurns} onFocusChange={setFocusedParentIndex} />
+            <TurnList
+              turns={filteredTurns}
+              evidenceByTurn={evidenceByTurn}
+              onFocusChange={setFocusedParentIndex}
+            />
           </div>
         </section>
 

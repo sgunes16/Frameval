@@ -1,4 +1,7 @@
 import { cn } from '../../../lib/utils';
+import type { FailureCode } from '../../../lib/types';
+
+export type { FailureCode };
 
 /**
  * SymptomGlyph renders the failure-code badge attached to a turn in
@@ -16,22 +19,11 @@ import { cn } from '../../../lib/utils';
  *   - Premature stops / silent skips → warning
  *   - Environment / dependency issues → info
  *   - NONE → neutral
+ *
+ * The FailureCode taxonomy lives in lib/types.ts (the API-shapes
+ * source of truth, per CLAUDE.md). It is re-exported here as a
+ * convenience for direct importers of the component.
  */
-
-export type FailureCode =
-  | 'NONE'
-  | 'HAL_API'
-  | 'HAL_FILE'
-  | 'DEP_MISS'
-  | 'STOP_EARLY'
-  | 'STOP_GIVEUP'
-  | 'LOOP_INF'
-  | 'WRONG_ABS'
-  | 'MISREAD'
-  | 'ENV_ERR'
-  | 'SCOPE_DRIFT'
-  | 'TIMEOUT'
-  | 'SILENT_SKIP';
 
 interface SymptomGlyphProps {
   code: FailureCode;

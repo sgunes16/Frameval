@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import type { ParsedTurn } from '../../lib/types';
+import type { EvidenceForTurn } from '../../lib/symptom-evidence';
 import { groupTurns } from './group-turns';
 import { TurnGroupCard } from './TurnGroupCard';
 
@@ -20,6 +21,7 @@ import { TurnGroupCard } from './TurnGroupCard';
 interface TurnListProps {
   turns: ParsedTurn[];
   onFocusChange?: (parentTurnIndex: number | null) => void;
+  evidenceByTurn?: Map<number, EvidenceForTurn>;
 }
 
 // Conservative estimated row height in pixels. react-virtual uses this
@@ -28,7 +30,7 @@ interface TurnListProps {
 // short cards don't cause layout shift on initial scroll.
 const ROW_ESTIMATE_PX = 140;
 
-export function TurnList({ turns, onFocusChange }: TurnListProps) {
+export function TurnList({ turns, onFocusChange, evidenceByTurn }: TurnListProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const groups = groupTurns(turns);
   const [focused, setFocused] = useState<number | null>(null);
@@ -78,6 +80,7 @@ export function TurnList({ turns, onFocusChange }: TurnListProps) {
               <div className="px-1 py-1">
                 <TurnGroupCard
                   group={group}
+                  evidenceByTurn={evidenceByTurn}
                   onFocus={(idx) => {
                     setFocused(idx);
                     onFocusChange?.(idx);
