@@ -265,16 +265,19 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", err.Error())
 		return err
 	}
-	// Inspector V2: announce the structured turns once the transcript is
-	// persisted so the frontend can populate the turn-list without a
-	// follow-up REST call. Live per-block streaming (event-per-turn while
-	// the agent is mid-flight) is a separate story — requires executor
-	// changes — and lands in #62 / #64. For now the WS payload is the
-	// full ParsedTurns slice.
+	// Inspector V2: announce that this run's transcript is ready. The
+	// frontend fetches the turns themselves via the REST endpoint added
+	// in this PR (/api/runs/:id/turns); the WS event is just the signal
+	// to invalidate the query cache. Keeping the payload small means
+	// json.Marshal on the orchestrator goroutine stays O(1) even when a
+	// pathological 500-turn run completes, and the 256-slot broadcast
+	// channel doesn't fill from a single fan-out. Per-block live
+	// streaming (an event per turn as the agent produces it) is a
+	// separate story (#62 / #64) and will land its own contract.
 	o.broadcast("run.turn", map[string]any{
 		"experiment_id": experiment.ID,
 		"run_id":        run.ID,
-		"turns":         result.ParsedTurns,
+		"turn_count":    len(result.ParsedTurns),
 	})
 	// Run the task's verification commands inside the sandbox (which has the
 	// compilers/interpreters), not in the grader container.

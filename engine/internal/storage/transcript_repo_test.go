@@ -5,13 +5,16 @@ import (
 	"testing"
 
 	"github.com/mustafaselman/frameval/engine/internal/models"
-	"github.com/mustafaselman/frameval/engine/pkg/executor"
 )
 
 // seedTranscript inserts a transcript for the given run. seedRun must
 // have been called first (it sets up the FK chain). Used by ListTurns
 // and ListTurnsByExperiment tests to avoid duplicating the boilerplate.
-func seedTranscript(t *testing.T, store *Store, runID string, turns []executor.ParsedTurn) {
+//
+// Uses models.ParsedTurn (the storage-layer public type) so the test
+// matches the boundary the storage layer publishes, not the underlying
+// pkg/executor alias.
+func seedTranscript(t *testing.T, store *Store, runID string, turns []models.ParsedTurn) {
 	t.Helper()
 	ctx := context.Background()
 	transcript := models.Transcript{
@@ -28,7 +31,7 @@ func seedTranscript(t *testing.T, store *Store, runID string, turns []executor.P
 func TestListTurns_ReturnsParsedTurnsForRun(t *testing.T) {
 	store := newTestStore(t)
 	seedRun(t, store, "run-turns-1")
-	seedTranscript(t, store, "run-turns-1", []executor.ParsedTurn{
+	seedTranscript(t, store, "run-turns-1", []models.ParsedTurn{
 		{TurnIndex: 0, BlockKind: "thinking", Content: "let me check"},
 		{TurnIndex: 1, BlockKind: "tool_use", ToolName: "Read", Content: "Read main.go"},
 	})
@@ -69,10 +72,10 @@ func TestListTurnsByExperiment_GroupsByRunID(t *testing.T) {
 		 VALUES ('exp-multi-b', 'exp-1', 'var-1', 1, 'completed')`); err != nil {
 		t.Fatalf("insert second run: %v", err)
 	}
-	seedTranscript(t, store, "exp-multi-a", []executor.ParsedTurn{
+	seedTranscript(t, store, "exp-multi-a", []models.ParsedTurn{
 		{TurnIndex: 0, BlockKind: "text", Content: "from a"},
 	})
-	seedTranscript(t, store, "exp-multi-b", []executor.ParsedTurn{
+	seedTranscript(t, store, "exp-multi-b", []models.ParsedTurn{
 		{TurnIndex: 0, BlockKind: "text", Content: "from b"},
 		{TurnIndex: 1, BlockKind: "text", Content: "more from b"},
 	})
@@ -92,7 +95,7 @@ func TestListTurnsByExperiment_GroupsByRunID(t *testing.T) {
 	}
 }
 
-func keysOf(m map[string][]executor.ParsedTurn) []string {
+func keysOf(m map[string][]models.ParsedTurn) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
