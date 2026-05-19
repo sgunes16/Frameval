@@ -20,6 +20,12 @@ import { cn } from '../../../lib/utils';
  * keyboard users can toggle it without a mouse.
  */
 
+/**
+ * BlockKind constrained to the visual-identity values TurnCard accepts.
+ * The wider, transcript-level type lives in lib/types.ts and includes
+ * '' (empty) for legacy data; consumers reach TurnCard only after
+ * picking a concrete representative kind via groupTurns.
+ */
 export type BlockKind = 'thinking' | 'text' | 'tool_use' | 'tool_result' | 'system';
 
 const barColor: Record<BlockKind, string> = {
@@ -75,7 +81,14 @@ export function TurnCard({
           <button
             type="button"
             aria-label={`${expanded ? 'Collapse' : 'Expand'} turn ${turnIndex}`}
-            onClick={() => setExpanded((v) => !v)}
+            onClick={(e) => {
+              // Stop the click from bubbling to any outer click handler
+              // (TurnGroupCard wraps the card in a role=button div that
+              // fires onFocus on click — without this, expanding would
+              // also focus the turn, which is unexpected UX).
+              e.stopPropagation();
+              setExpanded((v) => !v);
+            }}
             className="inline-flex h-5 w-5 items-center justify-center rounded-sm border border-border bg-bg-elev-2 text-fg-muted transition hover:bg-bg-elev-1"
           >
             {expanded ? '−' : '+'}
