@@ -79,7 +79,7 @@ export function ExperimentsPage() {
       ) : (
         <Card padded={false} className="overflow-hidden">
           <table className="min-w-full text-sm">
-            <thead className="bg-bg-elev-2 text-[11px] uppercase tracking-wider text-fg-muted">
+            <thead className="bg-bg-elev-2 text-xs uppercase tracking-wider text-fg-muted">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Experiment</th>
                 <th className="px-4 py-2 text-left font-medium">Status</th>

@@ -58,7 +58,7 @@ export function NewTaskPage() {
         onChange={(event) => setPrompt(event.target.value)}
         placeholder="Full instruction prompt handed to the agent"
       />
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}</div>}
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving || !name || !prompt}>
           {saving ? 'Saving...' : 'Save task'}

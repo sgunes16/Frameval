@@ -125,7 +125,7 @@ export function DiagnosticLaunchPage() {
                     <div className="font-medium text-fg">{task.name}</div>
                     <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{task.description}</div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2 text-[11px] uppercase tracking-wider text-fg-muted">
+                  <div className="flex shrink-0 items-center gap-2 text-xs uppercase tracking-wider text-fg-muted">
                     <Badge tone="neutral">{task.category}</Badge>
                     <span>{task.codebase_type}</span>
                   </div>
@@ -182,7 +182,7 @@ export function DiagnosticLaunchPage() {
         />
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <div className="mb-1 text-[11px] uppercase tracking-wider text-fg-muted">Executor</div>
+            <div className="mb-1 text-xs uppercase tracking-wider text-fg-muted">Executor</div>
             <div className="flex flex-wrap gap-2">
               {executors.map((e) => (
                 <button
@@ -201,7 +201,7 @@ export function DiagnosticLaunchPage() {
             </div>
           </div>
           <div>
-            <div className="mb-1 text-[11px] uppercase tracking-wider text-fg-muted">Model</div>
+            <div className="mb-1 text-xs uppercase tracking-wider text-fg-muted">Model</div>
             <select
               value={modelID}
               onChange={(event) => setModelID(event.target.value)}
@@ -213,7 +213,7 @@ export function DiagnosticLaunchPage() {
                 </option>
               ))}
             </select>
-            <div className="mt-1 text-[11px] text-fg-muted">
+            <div className="mt-1 text-xs text-fg-muted">
               Showing models compatible with {executorID || 'the selected executor'}. Aider runs
               local Ollama models; Cursor uses its own cloud.
             </div>
@@ -238,7 +238,7 @@ export function DiagnosticLaunchPage() {
           <span className="text-sm font-medium text-fg">{runsPerVariant} runs per variant</span>
         </div>
         <div className="mt-3">
-          <div className="mb-1 text-[11px] uppercase tracking-wider text-fg-muted">
+          <div className="mb-1 text-xs uppercase tracking-wider text-fg-muted">
             Name (optional)
           </div>
           <Input
@@ -257,7 +257,7 @@ export function DiagnosticLaunchPage() {
         </Link>
         <div className="flex items-center gap-3">
           {launch.isError && (
-            <div className="text-sm text-rose-600">
+            <div className="text-sm text-danger">
               {launch.error instanceof Error ? launch.error.message : 'Launch failed'}
             </div>
           )}

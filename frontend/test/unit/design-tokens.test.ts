@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
@@ -89,5 +89,53 @@ describe('design tokens', () => {
     // Accepts either `darkMode: 'class'` (string) or `darkMode: ['class']`
     // (array) — Tailwind 3.x docs document both as equivalent.
     expect(tailwindConfig).toMatch(/darkMode\s*:\s*(?:\[\s*)?['"]class['"]/);
+  });
+});
+
+/**
+ * Source-tree sweep: the spec for Story #74 forbids ad-hoc Tailwind
+ * color literals (slate/white/emerald/amber/red/etc.) and arbitrary
+ * pixel sizes (text-[10px], text-[11px]). These tests scan every
+ * tsx file under src/ to catch regressions before they land. The
+ * lint rule planned for the second slice of #74 will eventually
+ * enforce the same — these tests are the floor.
+ */
+
+const FORBIDDEN_COLOR_PATTERN =
+  /(bg|text|border)-(emerald|amber|red|green|yellow|orange|blue|purple|pink|indigo|cyan|teal|rose|sky|fuchsia|violet|lime|stone|zinc|neutral|gray|slate)-\d+/;
+const FORBIDDEN_PX_PATTERN = /text-\[1[01]px\]/;
+
+function tsxFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = resolve(dir, entry);
+    if (statSync(full).isDirectory()) {
+      out.push(...tsxFiles(full));
+    } else if (entry.endsWith('.tsx')) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+describe('design-token source sweep', () => {
+  const files = tsxFiles(resolve(__dirname, '../../src'));
+
+  it('has no hardcoded Tailwind color-scale literals in component source', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8');
+      if (FORBIDDEN_COLOR_PATTERN.test(text)) offenders.push(file);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('has no text-[10px] / text-[11px] arbitrary pixel sizes', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8');
+      if (FORBIDDEN_PX_PATTERN.test(text)) offenders.push(file);
+    }
+    expect(offenders).toEqual([]);
   });
 });

@@ -75,7 +75,7 @@ export function SymptomGlyph({ code, confidence, rationale, className }: Symptom
       aria-label={`${code} (confidence ${confidence.toFixed(2)})`}
       title={titleParts.join(' — ')}
       className={cn(
-        'inline-flex h-5 min-w-5 items-center justify-center rounded-sm border px-1 font-mono text-[10px] font-semibold leading-none',
+        'inline-flex h-5 min-w-5 items-center justify-center rounded-sm border px-1 font-mono text-xs font-semibold leading-none',
         tone[code],
         className,
       )}

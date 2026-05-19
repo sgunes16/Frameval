@@ -13,9 +13,9 @@ export function ModelsPanel({ models }: { models: ModelConfig[] }) {
           >
             <div>
               <div className="font-medium text-fg">{model.display_name}</div>
-              <div className="text-[11px] text-fg-muted">{model.provider} · {model.model_id}</div>
+              <div className="text-xs text-fg-muted">{model.provider} · {model.model_id}</div>
             </div>
-            <div className="text-[11px] text-fg-muted">
+            <div className="text-xs text-fg-muted">
               ${model.input_price_per_1k.toFixed(3)} / ${model.output_price_per_1k.toFixed(3)} per 1K
             </div>
           </div>

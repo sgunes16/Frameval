@@ -18,7 +18,7 @@ export function RunGrid({ runs }: { runs: Run[] }) {
             </div>
             <Badge tone={statusTone(run.status)}>{statusLabel(run.status)}</Badge>
           </div>
-          <div className="mt-3 text-[11px] text-fg-muted">
+          <div className="mt-3 text-xs text-fg-muted">
             {run.duration_seconds ? `${run.duration_seconds.toFixed(1)}s` : 'Pending duration'}
           </div>
         </Card>

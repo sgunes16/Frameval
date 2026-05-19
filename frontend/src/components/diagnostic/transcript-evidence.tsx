@@ -40,7 +40,7 @@ export function TranscriptEvidence({ series }: Props) {
 
   return (
     <div className="space-y-4 rounded-lg border border-border bg-bg-elev-1 p-4">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">
+      <div className="text-xs font-medium uppercase tracking-wider text-fg-muted">
         Per-failure evidence ({items.length} span{items.length === 1 ? '' : 's'})
       </div>
       {Array.from(groups.entries()).map(([code, spans]) => (
@@ -51,7 +51,7 @@ export function TranscriptEvidence({ series }: Props) {
               key={`${runLabel}-${span.turn_index}-${i}`}
               className="rounded border border-border bg-bg-elev-2/70 p-2 text-xs leading-snug"
             >
-              <div className="mb-1 flex items-center gap-2 text-[10px] text-fg-muted">
+              <div className="mb-1 flex items-center gap-2 text-xs text-fg-muted">
                 <span className="font-medium text-fg">{runLabel}</span>
                 <span>· turn {span.turn_index}</span>
               </div>

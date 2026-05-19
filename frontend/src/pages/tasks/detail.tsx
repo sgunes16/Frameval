@@ -16,7 +16,7 @@ export function TaskDetailPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xl font-semibold text-fg">{task.name}</div>
-            <div className="mt-1 flex items-center gap-2 text-[11px] uppercase tracking-wider text-fg-muted">
+            <div className="mt-1 flex items-center gap-2 text-xs uppercase tracking-wider text-fg-muted">
               <Badge tone="neutral">{task.category}</Badge>
               {task.external_source && <Badge tone="info">{task.external_source}</Badge>}
               <span>{task.codebase_type}</span>
@@ -34,7 +34,7 @@ export function TaskDetailPage() {
         {task.workspace_git_url && (
           <div className="mt-3 rounded-lg border border-border bg-bg-elev-2 px-3 py-2 text-xs text-fg-muted">
             <div className="font-medium text-fg">Workspace is cloned from</div>
-            <code className="font-mono text-[11px]">
+            <code className="font-mono text-xs">
               {task.workspace_git_url}
               {task.workspace_git_ref ? `@${task.workspace_git_ref}` : ''}
             </code>

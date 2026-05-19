@@ -21,7 +21,7 @@ export function LogViewer({ lines }: { lines: string[] }) {
   }, [lines]);
 
   return (
-    <pre ref={ref} className="min-h-48 max-h-[360px] overflow-auto rounded-lg bg-code-bg p-4 font-mono text-[11px] leading-5 text-fg-subtle">
+    <pre ref={ref} className="min-h-48 max-h-[360px] overflow-auto rounded-lg bg-code-bg p-4 font-mono text-xs leading-5 text-fg-subtle">
       {lines.length ? lines.join('\n') : 'Waiting for logs...'}
     </pre>
   );
@@ -104,7 +104,7 @@ function UsageSummary({ usage }: { usage: Usage }) {
     <div className="grid gap-2 sm:grid-cols-6">
       {cells.map(([label, value]) => (
         <div key={label} className="rounded-lg border border-border bg-bg-elev-1 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-fg-subtle">{label}</div>
+          <div className="text-xs uppercase tracking-wide text-fg-subtle">{label}</div>
           <div className="mt-0.5 text-sm font-semibold tabular-nums text-fg">{Number(value).toLocaleString()}</div>
         </div>
       ))}
@@ -129,9 +129,9 @@ function ThinkingCard({ item }: { item: TimelineItem }) {
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-fg-muted transition hover:bg-bg-elev-2">
         <ChevronIcon />
         <span>{label}</span>
-        {!isDone && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />}
+        {!isDone && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />}
       </summary>
-      <pre className="mx-3 mt-1 mb-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 p-3 font-mono text-[11px] leading-5 text-fg-muted">
+      <pre className="mx-3 mt-1 mb-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 p-3 font-mono text-xs leading-5 text-fg-muted">
         {item.body}
       </pre>
     </details>
@@ -149,10 +149,10 @@ function AssistantCard({ item }: { item: TimelineItem }) {
 function ResultCard({ item }: { item: TimelineItem }) {
   const isError = item.status === 'failed';
   return (
-    <div className={`rounded-lg border px-3 py-2 text-xs ${isError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+    <div className={`rounded-lg border px-3 py-2 text-xs ${isError ? 'border-danger/30 bg-danger/10 text-danger' : 'border-success/30 bg-success/10 text-success'}`}>
       <span className="font-medium">{isError ? 'Error' : 'Result'}</span>
       {item.body && (
-        <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px] leading-5 opacity-80">{truncate(item.body, 2000)}</pre>
+        <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-xs leading-5 opacity-80">{truncate(item.body, 2000)}</pre>
       )}
     </div>
   );
@@ -162,7 +162,7 @@ function RawCard({ item }: { item: TimelineItem }) {
   const parsed = parseJSONLine(item.body);
   if (parsed) return <JSONLite data={parsed} />;
   return (
-    <pre className="whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 px-3 py-2 font-mono text-[11px] leading-5 text-fg-muted">
+    <pre className="whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 px-3 py-2 font-mono text-xs leading-5 text-fg-muted">
       {item.body}
     </pre>
   );
@@ -179,7 +179,7 @@ function ToolCard({ item }: { item: TimelineItem }) {
           <span className="font-medium">{item.title}</span>
           <StatusDot status={item.status} />
         </summary>
-        <pre className="mx-3 mt-1 mb-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 p-3 font-mono text-[11px] leading-5 text-fg-muted">
+        <pre className="mx-3 mt-1 mb-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 p-3 font-mono text-xs leading-5 text-fg-muted">
           {item.body}
         </pre>
       </details>
@@ -199,7 +199,7 @@ function ToolCard({ item }: { item: TimelineItem }) {
         <span className="font-medium">{item.title}</span>
         <StatusDot status={item.status} />
       </summary>
-      <pre className="mx-3 mt-1 mb-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 p-3 font-mono text-[11px] leading-5 text-fg-muted">
+      <pre className="mx-3 mt-1 mb-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elev-2 p-3 font-mono text-xs leading-5 text-fg-muted">
         {item.body}
       </pre>
     </details>
@@ -219,15 +219,15 @@ function EditToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
         <ToolIcon kind="edit" />
         <span className="font-mono font-medium">{fileName}</span>
         {(added > 0 || removed > 0) && (
-          <span className="ml-auto flex items-center gap-1.5 text-[11px]">
-            {added > 0 && <span className="font-medium text-emerald-600">+{added}</span>}
-            {removed > 0 && <span className="font-medium text-red-500">-{removed}</span>}
+          <span className="ml-auto flex items-center gap-1.5 text-xs">
+            {added > 0 && <span className="font-medium text-success">+{added}</span>}
+            {removed > 0 && <span className="font-medium text-danger">-{removed}</span>}
           </span>
         )}
         <StatusDot status={item.status} />
       </summary>
       {meta.path && (
-        <div className="border-b border-border bg-bg-elev-2 px-3 py-1 font-mono text-[10px] text-fg-subtle">
+        <div className="border-b border-border bg-bg-elev-2 px-3 py-1 font-mono text-xs text-fg-subtle">
           {meta.path}
         </div>
       )}
@@ -249,18 +249,18 @@ function ShellToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
         <ToolIcon kind="shell" />
         <span className="font-medium">{desc}</span>
         {exitCode !== undefined && (
-          <span className={`ml-auto font-mono text-[11px] ${isError ? 'text-red-500' : 'text-emerald-600'}`}>
+          <span className={`ml-auto font-mono text-xs ${isError ? 'text-danger' : 'text-success'}`}>
             exit {exitCode}
           </span>
         )}
         <StatusDot status={item.status} />
       </summary>
       {meta.command && (
-        <div className="border-b border-border bg-fg px-3 py-1.5 font-mono text-[11px] text-emerald-400">
+        <div className="border-b border-border bg-fg px-3 py-1.5 font-mono text-xs text-success">
           $ {meta.command}
         </div>
       )}
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-code-bg p-3 font-mono text-[11px] leading-5 text-fg-subtle">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-code-bg p-3 font-mono text-xs leading-5 text-fg-subtle">
         {output || 'No output.'}
       </pre>
     </details>
@@ -277,18 +277,18 @@ function SearchToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) 
         <ChevronIcon />
         <ToolIcon kind="search" />
         <span className="font-medium">Search</span>
-        <code className="rounded bg-bg-elev-2 px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">{pattern}</code>
+        <code className="rounded bg-bg-elev-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted">{pattern}</code>
         {matchCount !== undefined && (
-          <span className="ml-auto text-[11px] text-fg-subtle">{matchCount} match{matchCount !== 1 ? 'es' : ''}</span>
+          <span className="ml-auto text-xs text-fg-subtle">{matchCount} match{matchCount !== 1 ? 'es' : ''}</span>
         )}
         <StatusDot status={item.status} />
       </summary>
       {meta.path && (
-        <div className="border-b border-border bg-bg-elev-2 px-3 py-1 font-mono text-[10px] text-fg-subtle">
+        <div className="border-b border-border bg-bg-elev-2 px-3 py-1 font-mono text-xs text-fg-subtle">
           {meta.path}
         </div>
       )}
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-bg-elev-2 p-3 font-mono text-[11px] leading-5 text-fg-muted">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-bg-elev-2 p-3 font-mono text-xs leading-5 text-fg-muted">
         {meta.content || item.body || 'No matches.'}
       </pre>
     </details>
@@ -306,16 +306,16 @@ function ReadToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
         <ToolIcon kind="read" />
         <span className="font-mono font-medium">{fileName}</span>
         {totalLines !== undefined && (
-          <span className="ml-auto text-[11px] text-fg-subtle">{totalLines} lines</span>
+          <span className="ml-auto text-xs text-fg-subtle">{totalLines} lines</span>
         )}
         <StatusDot status={item.status} />
       </summary>
       {meta.path && (
-        <div className="border-b border-border bg-bg-elev-2 px-3 py-1 font-mono text-[10px] text-fg-subtle">
+        <div className="border-b border-border bg-bg-elev-2 px-3 py-1 font-mono text-xs text-fg-subtle">
           {meta.path}
         </div>
       )}
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-bg-elev-1 p-3 font-mono text-[11px] leading-5 text-fg">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-bg-elev-1 p-3 font-mono text-xs leading-5 text-fg">
         {meta.content ?? (item.body || 'Empty.')}
       </pre>
     </details>
@@ -325,19 +325,19 @@ function ReadToolCard({ item, meta }: { item: TimelineItem; meta: ToolMeta }) {
 function DiffView({ diff }: { diff: string }) {
   const lines = diff.split('\n');
   return (
-    <div className="max-h-80 overflow-auto bg-code-bg font-mono text-[11px] leading-5">
+    <div className="max-h-80 overflow-auto bg-code-bg font-mono text-xs leading-5">
       {lines.map((line, i) => {
         let cls = 'text-fg-subtle';
         let bg = '';
         if (line.startsWith('+') && !line.startsWith('+++')) {
-          cls = 'text-emerald-300';
-          bg = 'bg-emerald-500/10';
+          cls = 'text-success';
+          bg = 'bg-success/10';
         } else if (line.startsWith('-') && !line.startsWith('---')) {
-          cls = 'text-red-400';
-          bg = 'bg-red-500/10';
+          cls = 'text-danger';
+          bg = 'bg-danger/10';
         } else if (line.startsWith('@@')) {
-          cls = 'text-blue-400';
-          bg = 'bg-blue-500/5';
+          cls = 'text-info';
+          bg = 'bg-info/10';
         }
         return (
           <div key={i} className={`whitespace-pre-wrap break-words px-3 ${cls} ${bg}`}>
@@ -360,7 +360,7 @@ function MarkdownLite({ content }: { content: string }) {
     if (/^\s*```/.test(line)) {
       if (inCode) {
         elements.push(
-          <pre key={`code-${i}`} className="my-1 overflow-auto rounded-lg bg-code-bg p-3 font-mono text-[11px] leading-5 text-fg-subtle">
+          <pre key={`code-${i}`} className="my-1 overflow-auto rounded-lg bg-code-bg p-3 font-mono text-xs leading-5 text-fg-subtle">
             {codeBuffer.join('\n')}
           </pre>
         );
@@ -392,7 +392,7 @@ function MarkdownLite({ content }: { content: string }) {
 
   if (codeBuffer.length > 0) {
     elements.push(
-      <pre key="code-end" className="my-1 overflow-auto rounded-lg bg-code-bg p-3 font-mono text-[11px] leading-5 text-fg-subtle">
+      <pre key="code-end" className="my-1 overflow-auto rounded-lg bg-code-bg p-3 font-mono text-xs leading-5 text-fg-subtle">
         {codeBuffer.join('\n')}
       </pre>
     );
@@ -406,7 +406,7 @@ function renderInlineCode(text: string) {
   return parts.map((part, i) => {
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={i} className="rounded bg-bg-elev-2 px-1 py-0.5 font-mono text-[12px] text-indigo-600">
+        <code key={i} className="rounded bg-bg-elev-2 px-1 py-0.5 font-mono text-xs text-info">
           {part.slice(1, -1)}
         </code>
       );
@@ -417,7 +417,7 @@ function renderInlineCode(text: string) {
 
 function JSONLite({ data }: { data: Record<string, unknown> }) {
   return (
-    <div className="space-y-0.5 rounded-lg bg-bg-elev-2 p-2 font-mono text-[11px] text-fg">
+    <div className="space-y-0.5 rounded-lg bg-bg-elev-2 p-2 font-mono text-xs text-fg">
       {Object.entries(data).slice(0, 12).map(([key, value]) => (
         <div key={key} className="flex gap-2 rounded px-2 py-0.5">
           <span className="shrink-0 text-fg-subtle">{key}:</span>
@@ -449,9 +449,9 @@ function ToolIcon({ kind }: { kind: string }) {
 
 function StatusDot({ status }: { status?: string }) {
   if (!status) return null;
-  if (status === 'completed') return <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" title="done" />;
-  if (status === 'failed') return <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" title="failed" />;
-  return <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400" title="running" />;
+  if (status === 'completed') return <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-success" title="done" />;
+  if (status === 'failed') return <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-danger" title="failed" />;
+  return <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-warning" title="running" />;
 }
 
 export function parseAgentEvents(events: AgentLogEvent[], runs: Run[]): { items: TimelineItem[]; usage: Usage } {
