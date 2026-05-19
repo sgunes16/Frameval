@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -425,19 +426,21 @@ func instructionFilesForHarness(harnessID string) []string {
 
 // refreshExperimentAnchors rebuilds the cached AnchorBundle for an
 // experiment and persists it to experiments.anchors_json. Called
-// best-effort after each run finalize. Errors are logged via the
-// existing log layer but never propagated — a stale anchor cache
-// is fine; a wedged orchestrator is not.
+// best-effort after each run finalize. Errors flow through slog
+// (Warn) so they're visible in structured-log aggregators with the
+// experiment_id key; the run continues regardless of failure —
+// stale anchors are acceptable, blocked finalize is not.
 func (o *Orchestrator) refreshExperimentAnchors(ctx context.Context, experimentID string) {
+	log := slog.Default()
 	perRun, err := o.store.ListTurnsByExperiment(ctx, experimentID)
 	if err != nil {
-		fmt.Printf("anchors: list turns: %v\n", err)
+		log.Warn("anchors refresh: list turns failed", "experiment_id", experimentID, "err", err)
 		return
 	}
 	// ListTurnsByExperiment returns models.ParsedTurn keyed by run ID.
-	// The diagnostic builder operates on pkgexec.ParsedTurn — same shape,
-	// converted via a JSON round-trip avoidance: the executor type IS
-	// the models type for this field, so we can pass it through.
+	// models.ParsedTurn is a type alias for executor.ParsedTurn (see
+	// engine/internal/models/run.go), so this map assignment is a
+	// no-op conversion at the type system level.
 	pkgPerRun := make(map[string][]pkgexec.ParsedTurn, len(perRun))
 	for runID, turns := range perRun {
 		pkgPerRun[runID] = turns
@@ -445,11 +448,11 @@ func (o *Orchestrator) refreshExperimentAnchors(ctx context.Context, experimentI
 	bundle := diagnostic.BuildAnchors(pkgPerRun)
 	payload, err := json.Marshal(bundle)
 	if err != nil {
-		fmt.Printf("anchors: marshal: %v\n", err)
+		log.Warn("anchors refresh: marshal failed", "experiment_id", experimentID, "err", err)
 		return
 	}
 	if err := o.store.SetExperimentAnchors(ctx, experimentID, string(payload)); err != nil {
-		fmt.Printf("anchors: persist: %v\n", err)
+		log.Warn("anchors refresh: persist failed", "experiment_id", experimentID, "err", err)
 	}
 }
 

@@ -166,8 +166,10 @@ func (s *Store) SetExperimentEstimate(ctx context.Context, experimentID string, 
 
 // GetExperimentAnchors returns the cached anchor bundle as a raw JSON
 // string. Empty / never-computed experiments return the canonical "{}"
-// placeholder so callers don't have to distinguish missing-row from
-// empty-bundle (handler renders both as an empty AnchorBundle).
+// placeholder so callers don't have to distinguish missing-default
+// from explicit-empty. Returns sql.ErrNoRows (wrapped) when the
+// experiment row itself is missing — the handler maps that to 404
+// and any other error to 500.
 func (s *Store) GetExperimentAnchors(ctx context.Context, experimentID string) (string, error) {
 	var raw sql.NullString
 	err := s.DB.QueryRowContext(ctx, `SELECT anchors_json FROM experiments WHERE id = ?`, experimentID).Scan(&raw)
