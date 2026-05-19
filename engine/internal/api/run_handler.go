@@ -80,6 +80,21 @@ func (s *Service) RetryRun(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusAccepted, map[string]bool{"queued": true})
 }
 
+// ReparseRun re-runs the executor's ParseTranscript on a finished
+// run's stored raw_output, refreshing the per-block structure
+// (block_kind / tool_name / files_touched) the Inspector V2 reads.
+// No agent re-execution; this only updates the structured view of
+// already-captured output. Used when a parser improvement lands and
+// the user wants existing transcripts to benefit retroactively.
+func (s *Service) ReparseRun(w http.ResponseWriter, r *http.Request) {
+	count, err := s.orchestrator.ReparseRunTranscript(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
+		return
+	}
+	JSON(w, http.StatusOK, map[string]int{"turn_count": count})
+}
+
 func (s *Service) RegradeRun(w http.ResponseWriter, r *http.Request) {
 	err := s.orchestrator.RegradeRun(r.Context(), chi.URLParam(r, "id"))
 	if errors.Is(err, experiment.ErrGraderUnavailable) {

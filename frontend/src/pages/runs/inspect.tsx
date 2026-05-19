@@ -11,7 +11,8 @@ import {
 import { ToolHistogram } from '../../components/run-inspector/ToolHistogram';
 import { TurnDiffPanel } from '../../components/run-inspector/TurnDiffPanel';
 import { ErrorState, LoadingSkeleton } from '../../components/system';
-import { useDiagnostic, useRun, useRunTurns, useTranscript } from '../../lib/hooks';
+import { Button } from '../../components/ui/button';
+import { useDiagnostic, useReparseRun, useRun, useRunTurns, useTranscript } from '../../lib/hooks';
 import { buildEvidenceByTurn } from '../../lib/symptom-evidence';
 import { buildToolHistogram } from '../../lib/tool-histogram';
 import {
@@ -49,6 +50,7 @@ export function RunInspectPage() {
   // the turns + transcript queries on each event. Re-connect on
   // socket drop reconciles missed turns via the next REST refetch.
   const stream = useTurnStream(id);
+  const reparse = useReparseRun();
 
   const filters = useMemo<TurnFilter[]>(
     () => parseFilterTokens(searchParams.getAll('filter')),
@@ -174,6 +176,25 @@ export function RunInspectPage() {
                 lastEventAt={stream.lastEventAt}
                 turnCount={stream.lastTurnCount}
               />
+            )}
+            {/*
+              Re-parse rewires the persisted ParsedTurns from raw_output
+              using the latest executor parser. Useful when a parser
+              improvement landed AFTER this run finished — Inspector
+              V2 reads the structured turns, so existing runs need this
+              one-shot refresh to surface filters / histogram / diffs.
+              Only meaningful for terminal runs.
+            */}
+            {id && run && run.status !== 'running' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={reparse.isPending}
+                onClick={() => reparse.mutate(id)}
+                title="Re-parse the stored raw output with the latest parser"
+              >
+                {reparse.isPending ? 'Re-parsing…' : 'Re-parse turns'}
+              </Button>
             )}
             {run && (
               <div className="text-xs text-fg-muted">

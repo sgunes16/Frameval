@@ -137,6 +137,24 @@ export function useExecutors() {
   return useQuery({ queryKey: ['executors'], queryFn: () => api.get<ExecutorInfo[]>('/config/executors') });
 }
 
+/**
+ * Re-runs the executor's ParseTranscript on an already-captured
+ * raw_output and refreshes the persisted ParsedTurns. Used to retro-
+ * actively apply parser improvements to existing transcripts without
+ * a full agent re-execute.
+ */
+export function useReparseRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) =>
+      api.post<{ turn_count: number }>(`/runs/${runId}/reparse`, {}),
+    onSuccess: (_data, runId) => {
+      client.invalidateQueries({ queryKey: ['run-turns', runId] });
+      client.invalidateQueries({ queryKey: ['transcript', runId] });
+    },
+  });
+}
+
 export function useLaunchDiagnostic() {
   const client = useQueryClient();
   return useMutation({

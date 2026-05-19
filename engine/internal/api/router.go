@@ -83,6 +83,7 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 		r.Get("/runs/{id}/diagnostic", service.GetRunDiagnostic)
 		r.Post("/runs/{id}/retry", service.RetryRun)
 		r.Post("/runs/{id}/regrade", service.RegradeRun)
+		r.Post("/runs/{id}/reparse", service.ReparseRun)
 		r.Get("/tasks", service.ListTasks)
 		r.Post("/tasks", service.CreateTask)
 		r.Get("/tasks/{id}", service.GetTask)
