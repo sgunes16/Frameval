@@ -11,9 +11,15 @@ type Registry struct {
 }
 
 func NewRegistry(manager *sandbox.Manager) *Registry {
+	// opencode is the canonical local-Ollama executor: its --format
+	// json output gives us pre-stamped ParsedTurns (no heuristic
+	// parser). aider stays registered for back-compat with existing
+	// experiments / transcripts but is no longer the recommended
+	// path — new experiments should default to opencode.
 	return &Registry{executors: map[string]AgentExecutor{
-		"aider":  NewAiderExecutor(manager),
-		"cursor": NewCursorExecutor(manager),
+		"opencode": NewOpenCodeExecutor(manager),
+		"aider":    NewAiderExecutor(manager),
+		"cursor":   NewCursorExecutor(manager),
 	}}
 }
 

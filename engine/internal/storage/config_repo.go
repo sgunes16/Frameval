@@ -148,8 +148,8 @@ func redactKey(value string) string {
 
 func (s *Store) ListAgents() []models.AgentInfo {
 	return []models.AgentInfo{
+		{Name: "opencode", Modes: []string{"cli"}, Available: true},
+		{Name: "aider", Modes: []string{"cli"}, Available: true},
 		{Name: "cursor", Modes: []string{"cli"}, Available: true},
-		{Name: "gemini", Modes: []string{"cli"}, Available: true},
-		{Name: "api", Modes: []string{"api"}, Available: true},
 	}
 }
