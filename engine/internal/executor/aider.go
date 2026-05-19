@@ -104,6 +104,21 @@ func (e *AiderExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 		if current.Timestamp == "" {
 			current.Timestamp = now
 		}
+		// Inspector V2: map Aider's role-based output to the structured
+		// BlockKind taxonomy. Aider's plain-text history exposes a `tool:`
+		// prefix that is *already a combined tool_use+result emission* —
+		// the agent has both invoked the tool and seen the result by the
+		// time the line is flushed. Modeling it as tool_use would make
+		// every Aider turn appear as an orphaned tool call to the Inspector
+		// (because there's no matching tool_result), spamming the warning
+		// glyph. Map it to text instead; downstream code that wants the
+		// "this turn used a tool" signal reads Role == "tool".
+		switch current.Role {
+		case "system":
+			current.BlockKind = BlockKindSystem
+		default:
+			current.BlockKind = BlockKindText
+		}
 		turns = append(turns, current)
 		current = ParsedTurn{}
 		buf.Reset()
@@ -124,7 +139,7 @@ func (e *AiderExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 		buf.WriteString("\n")
 	}
 	flush()
-	return turns, nil
+	return AssignTurnGrouping(turns), nil
 }
 
 var aiderRolePrefix = regexp.MustCompile(`(?i)^(user|assistant|tool|system)\s*:\s*`)

@@ -42,6 +42,17 @@ type RunResult struct {
 	StreamedOutput bool
 }
 
+// Stable BlockKind values. Executors that don't distinguish should set
+// "text" (the default semantic) so consumers don't have to special-case
+// the empty string.
+const (
+	BlockKindThinking   = "thinking"
+	BlockKindText       = "text"
+	BlockKindToolUse    = "tool_use"
+	BlockKindToolResult = "tool_result"
+	BlockKindSystem     = "system"
+)
+
 // ParsedTurn is a single structured turn in an agent transcript.
 //
 // Defined here (in the public package) because third-party harnesses, executors,
@@ -49,11 +60,56 @@ type RunResult struct {
 //
 // Stage is set by harnesses that perform multi-stage invocations (e.g., speckit)
 // so downstream consumers can group turns by stage.
+//
+// The Inspector-V2 fields (TurnIndex through TokensOut) are stamped by
+// executors and/or AssignTurnGrouping. Legacy transcripts that predate the
+// schema extension deserialize with zero values for these fields — UIs
+// must treat zeroes as "not stamped" rather than "stamped to zero".
 type ParsedTurn struct {
 	Role      string `json:"role"`
 	Content   string `json:"content"`
 	Timestamp string `json:"timestamp"`
 	Stage     string `json:"stage,omitempty"`
+
+	// TurnIndex is a 0-based monotonic counter across the run's transcript.
+	// Assigned by AssignTurnGrouping. NOT `omitempty` because the first
+	// turn legitimately has index 0 and omitting it would make a stamped
+	// first turn indistinguishable from a legacy unstamped block on
+	// re-marshal. Consumers check BlockKind != "" to know whether the
+	// turn was stamped.
+	TurnIndex int `json:"turn_index"`
+
+	// BlockKind classifies the payload: thinking, text, tool_use,
+	// tool_result, system. Empty == legacy "we didn't classify this".
+	BlockKind string `json:"block_kind,omitempty"`
+
+	// ToolUseID pairs a tool_use with the tool_result that answered it.
+	// Empty on non-tool blocks.
+	ToolUseID string `json:"tool_use_id,omitempty"`
+
+	// ParentTurnIndex is the TurnIndex of the first block in this
+	// "decision" (e.g., thinking → tool_use → tool_result all share the
+	// thinking's TurnIndex). NOT `omitempty` for the same reason as
+	// TurnIndex — a block that is its own parent legitimately has
+	// ParentTurnIndex == 0.
+	ParentTurnIndex int `json:"parent_turn_index"`
+
+	// ToolName is set on tool_use blocks ("Edit", "Bash", "Read"). The
+	// Tool Histogram sidebar groups on this.
+	ToolName string `json:"tool_name,omitempty"`
+
+	// FilesTouched names workspace paths this turn modified (tool_use
+	// only). Compare V2's anchor algorithm hashes on (tool_name, files).
+	FilesTouched []string `json:"files_touched,omitempty"`
+
+	// DurationMs records how long this block took to produce, when the
+	// executor can measure it (streamed CLIs can).
+	DurationMs int `json:"duration_ms,omitempty"`
+
+	// TokensIn / TokensOut are per-block token counts; useful for the
+	// turn-by-turn cost view.
+	TokensIn  int `json:"tokens_in,omitempty"`
+	TokensOut int `json:"tokens_out,omitempty"`
 }
 
 // AgentExecutor abstracts a single agent CLI or API backend.

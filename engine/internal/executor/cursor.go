@@ -108,9 +108,32 @@ func (e *CursorExecutor) ParseTranscript(raw []byte) ([]ParsedTurn, error) {
 			Role:      role,
 			Content:   content,
 			Timestamp: now,
+			BlockKind: cursorBlockKind(role),
 		})
 	}
-	return turns, nil
+	// Cursor's stream emits ordered events but no tool_use_id pairing in
+	// the plain-text history Aider-style; AssignTurnGrouping still stamps
+	// TurnIndex and gives each block its own ParentTurnIndex unless a
+	// thinking-then-tool sequence shows up (Cursor occasionally emits one).
+	return AssignTurnGrouping(turns), nil
+}
+
+// cursorBlockKind maps Cursor's role/type label to the structured
+// BlockKind taxonomy. Unknown roles default to "text" so the Inspector
+// never sees an empty BlockKind from a Cursor transcript.
+func cursorBlockKind(role string) string {
+	switch role {
+	case "thinking":
+		return BlockKindThinking
+	case "tool", "tool_use":
+		return BlockKindToolUse
+	case "tool_result", "result":
+		return BlockKindToolResult
+	case "system":
+		return BlockKindSystem
+	default:
+		return BlockKindText
+	}
 }
 
 func mergeEnv(base map[string]string, additions map[string]string) map[string]string {
