@@ -48,6 +48,12 @@ type taskManifest struct {
 	SetupScript     string            `json:"setup_script" yaml:"setup_script"`
 	CodebasePath    string            `json:"codebase_path" yaml:"codebase_path"`
 	TestCases       []models.TestCase `json:"test_cases" yaml:"test_cases"`
+	// TaskRootPath is NOT a YAML field — the seeder fills it in with the
+	// task's on-disk directory so harnesses can resolve sibling
+	// `harness_context/` bundles (ClaudeMd, SpecKit). Without this the
+	// ClaudeMd harness Setup returns ErrClaudemdSourceMissing for every
+	// per-directory task even when the file exists on disk.
+	TaskRootPath string `json:"-" yaml:"-"`
 }
 
 // promptText returns the agent prompt regardless of which YAML key the
@@ -123,6 +129,11 @@ func (s *Store) SeedBuiltinTasks(ctx context.Context, tasksRoot string) error {
 					single.CodebasePath = wsPath
 				}
 			}
+			// Record the on-disk task directory so harnesses (ClaudeMd,
+			// SpecKit) can locate sibling harness_context/ bundles at
+			// runtime. Legacy monolithic manifests don't have a per-task
+			// directory, so this stays empty for them.
+			single.TaskRootPath = taskDir
 			manifests = append(manifests, single)
 			seenIDs[single.ID] = struct{}{}
 		}
@@ -215,6 +226,7 @@ func (s *Store) upsertManifests(ctx context.Context, manifests []taskManifest) e
 			TechnicalDetail: manifest.TechnicalDetail,
 			SetupScript:     manifest.SetupScript,
 			CodebasePath:    manifest.CodebasePath,
+			TaskRootPath:    manifest.TaskRootPath,
 			IsBuiltin:       true,
 			TestCases:       manifest.TestCases,
 		}
