@@ -44,7 +44,7 @@ export function ToolUseBlock({ block }: { block: ParsedTurn }) {
 
   return (
     <div className="space-y-1.5">
-      <div className="flex items-baseline gap-2 font-mono text-[13px] leading-5">
+      <div className="flex items-baseline gap-2 font-mono text-sm leading-5">
         <span
           className={cn(
             'font-medium',
@@ -147,7 +147,7 @@ function ToolOutputSnippet({ output, toolName }: { output: string; toolName: str
       onClick={(e) => e.stopPropagation()}
     >
       {headerChip && (
-        <div className="px-2 pt-1 text-[10.5px] uppercase tracking-wider text-fg-subtle">
+        <div className="px-2 pt-1 text-xs uppercase tracking-wider text-fg-subtle">
           {headerChip}
         </div>
       )}
@@ -157,7 +157,7 @@ function ToolOutputSnippet({ output, toolName }: { output: string; toolName: str
           return (
             <div
               key={i}
-              className="rounded-sm border border-warning/40 bg-warning/10 px-2 py-1 text-[11.5px] leading-[1.55] text-warning-fg"
+              className="rounded-sm border border-warning/40 bg-warning/10 px-2 py-1 text-xs leading-[1.55] text-warning-fg"
             >
               {seg.body}
             </div>
@@ -167,7 +167,7 @@ function ToolOutputSnippet({ output, toolName }: { output: string; toolName: str
           return (
             <div
               key={i}
-              className="rounded-sm border border-danger/40 bg-danger/10 px-2 py-1 font-mono text-[11.5px] leading-[1.55] text-danger-fg"
+              className="rounded-sm border border-danger/40 bg-danger/10 px-2 py-1 font-mono text-xs leading-[1.55] text-danger-fg"
             >
               {seg.body}
             </div>
@@ -179,11 +179,11 @@ function ToolOutputSnippet({ output, toolName }: { output: string; toolName: str
           return (
             <div key={i}>
               {footer && (
-                <div className="px-2 text-[10.5px] uppercase tracking-wider text-fg-subtle">
+                <div className="px-2 text-xs uppercase tracking-wider text-fg-subtle">
                   {footer}
                 </div>
               )}
-              <pre className="overflow-auto whitespace-pre-wrap bg-success/5 px-2 py-1 font-mono text-[11.5px] leading-[1.55] text-fg">
+              <pre className="overflow-auto whitespace-pre-wrap bg-success/5 px-2 py-1 font-mono text-xs leading-[1.55] text-fg">
                 {visible}
               </pre>
             </div>
@@ -202,14 +202,14 @@ function ToolOutputSnippet({ output, toolName }: { output: string; toolName: str
             {isUnknownTag && (
               <span
                 title={`Opencode emitted <${seg.tag}> but the Inspector has no bespoke renderer for it yet. Body is shown below verbatim; add a case in blocks.tsx ToolOutputSnippet to style it.`}
-                className="inline-flex items-center gap-1 rounded-sm border border-warning/40 bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] text-warning-fg"
+                className="inline-flex items-center gap-1 rounded-sm border border-warning/40 bg-warning/10 px-1.5 py-0.5 font-mono text-xs text-warning-fg"
               >
                 <span aria-hidden>⚠</span>
                 <span>unhandled tag: &lt;{seg.tag}&gt;</span>
               </span>
             )}
             {visible.trim() && (
-              <pre className="overflow-auto whitespace-pre-wrap bg-success/5 px-2 py-1 font-mono text-[11.5px] leading-[1.55] text-fg-muted">
+              <pre className="overflow-auto whitespace-pre-wrap bg-success/5 px-2 py-1 font-mono text-xs leading-[1.55] text-fg-muted">
                 {visible}
               </pre>
             )}
@@ -223,7 +223,7 @@ function ToolOutputSnippet({ output, toolName }: { output: string; toolName: str
             e.stopPropagation();
             setExpanded((v) => !v);
           }}
-          className="px-2 text-[11px] font-medium text-fg-subtle underline-offset-2 hover:text-accent hover:underline"
+          className="px-2 text-xs font-medium text-fg-subtle underline-offset-2 hover:text-accent hover:underline"
         >
           {expanded
             ? '− collapse'
@@ -468,7 +468,7 @@ function UnifiedDiff({ oldStr, newStr }: { oldStr: string; newStr: string }) {
     return row;
   });
   return (
-    <div className="max-h-80 overflow-auto bg-code-bg/60 font-mono text-[11.5px]">
+    <div className="max-h-80 overflow-auto bg-code-bg/60 font-mono text-xs">
       {rows.map((r, i) => (
         <div
           key={i}
@@ -479,10 +479,10 @@ function UnifiedDiff({ oldStr, newStr }: { oldStr: string; newStr: string }) {
             r.kind === ' ' && 'text-fg-muted',
           )}
         >
-          <span className="w-9 select-none border-r border-border/40 px-1 text-right text-[10.5px] tabular-nums text-fg-subtle">
+          <span className="w-9 select-none border-r border-border/40 px-1 text-right text-xs tabular-nums text-fg-subtle">
             {r.old ?? '·'}
           </span>
-          <span className="w-9 select-none border-r border-border/40 px-1 text-right text-[10.5px] tabular-nums text-fg-subtle">
+          <span className="w-9 select-none border-r border-border/40 px-1 text-right text-xs tabular-nums text-fg-subtle">
             {r.new ?? '·'}
           </span>
           <span className="w-3 select-none text-center opacity-60">{r.kind}</span>
@@ -495,7 +495,7 @@ function UnifiedDiff({ oldStr, newStr }: { oldStr: string; newStr: string }) {
 
 function TerminalBlock({ command }: { command: string }) {
   return (
-    <pre className="overflow-auto whitespace-pre-wrap bg-code-bg/60 px-1 py-0.5 font-mono text-[11.5px] leading-[1.55] text-fg">
+    <pre className="overflow-auto whitespace-pre-wrap bg-code-bg/60 px-1 py-0.5 font-mono text-xs leading-[1.55] text-fg">
       <span className="select-none text-fg-subtle">$ </span>
       {command}
     </pre>
@@ -504,7 +504,7 @@ function TerminalBlock({ command }: { command: string }) {
 
 function CodeBlock({ body }: { body: string }) {
   return (
-    <pre className="max-h-72 overflow-auto whitespace-pre-wrap bg-code-bg/60 px-1 py-0.5 font-mono text-[11.5px] leading-[1.55] text-fg">
+    <pre className="max-h-72 overflow-auto whitespace-pre-wrap bg-code-bg/60 px-1 py-0.5 font-mono text-xs leading-[1.55] text-fg">
       {body}
     </pre>
   );
@@ -605,13 +605,13 @@ function MarkdownProse({ body, muted = false }: { body: string; muted?: boolean 
             const isBlock = typeof className === 'string' && className.startsWith('language-');
             if (isBlock) return <code className="font-mono">{children}</code>;
             return (
-              <code className="rounded-sm bg-bg-elev-2 px-1 py-0.5 font-mono text-[12px] text-fg">
+              <code className="rounded-sm bg-bg-elev-2 px-1 py-0.5 font-mono text-xs text-fg">
                 {children}
               </code>
             );
           },
           pre: ({ children }) => (
-            <pre className="overflow-auto whitespace-pre-wrap bg-code-bg/60 px-2 py-1.5 font-mono text-[11.5px] leading-[1.55] text-fg">
+            <pre className="overflow-auto whitespace-pre-wrap bg-code-bg/60 px-2 py-1.5 font-mono text-xs leading-[1.55] text-fg">
               {children}
             </pre>
           ),

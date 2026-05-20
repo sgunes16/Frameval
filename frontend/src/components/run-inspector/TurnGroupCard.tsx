@@ -121,7 +121,7 @@ export function TurnGroupCard({
           fire();
         }
       }}
-      aria-label={`Focus step ${group.parentTurnIndex + 1}`}
+      aria-label={`Focus turn ${group.parentTurnIndex}`}
       className="group/turn relative grid w-full cursor-pointer grid-cols-[28px_1fr] gap-3 px-2 py-2 text-left transition focus:outline-none hover:bg-bg-elev-1/40 focus-visible:bg-bg-elev-1/60"
     >
       {/* Rail + dot. The rail spans the full card height so adjacent

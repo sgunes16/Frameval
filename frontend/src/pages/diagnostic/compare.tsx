@@ -693,7 +693,7 @@ function DimOrderBar({
     onChange(next);
   };
   return (
-    <div className="mb-2 flex items-center gap-2 text-[11px] text-fg-muted">
+    <div className="mb-2 flex items-center gap-2 text-xs text-fg-muted">
       <span className="uppercase tracking-wider">Group by</span>
       <ol className="flex flex-wrap items-center gap-1">
         {order.map((dim, i) => (
@@ -709,7 +709,7 @@ function DimOrderBar({
               }}
               onDragEnd={() => setDragging(null)}
               className={cn(
-                'inline-flex cursor-grab items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[11px] active:cursor-grabbing',
+                'inline-flex cursor-grab items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-xs active:cursor-grabbing',
                 dragging === i
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'border-border bg-bg-elev-1 text-fg hover:border-border-strong',
@@ -789,11 +789,11 @@ function PivotHead({
   return (
     <thead>
       {rows.map((row, rowIdx) => (
-        <tr key={row.dim} className="text-left text-[11px] text-fg-muted">
+        <tr key={row.dim} className="text-left text-xs text-fg-muted">
           {rowIdx === 0 ? (
             <th
               rowSpan={dimOrder.length}
-              className="border-b border-border py-2 pr-3 align-bottom text-[10px] font-semibold uppercase tracking-wider text-fg-muted"
+              className="border-b border-border py-2 pr-3 align-bottom text-xs font-semibold uppercase tracking-wider text-fg-muted"
             >
               Metric
             </th>
@@ -817,10 +817,10 @@ function PivotHead({
               title={`${DIM_LABEL[row.dim]}: ${g.value}`}
             >
               <span className="flex flex-col gap-0.5">
-                <span className="text-[9.5px] uppercase tracking-wider text-fg-subtle">
+                <span className="text-xs uppercase tracking-wider text-fg-subtle">
                   {DIM_LABEL[row.dim]}
                 </span>
-                <span className="truncate font-mono text-[11px] text-fg">{g.value}</span>
+                <span className="truncate font-mono text-xs text-fg">{g.value}</span>
               </span>
             </th>
           ))}
@@ -849,7 +849,7 @@ function SectionHeader({ label, colSpan }: { label: string; colSpan: number }) {
     <tr>
       <td
         colSpan={colSpan}
-        className="border-b border-border bg-bg-elev-2/40 py-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-muted"
+        className="border-b border-border bg-bg-elev-2/40 py-1.5 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-fg-muted"
       >
         {label}
       </td>
@@ -1134,7 +1134,7 @@ function TestResultsTable({ runIds, runs, grades, expIndex }: {
                       <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${headers.length}, minmax(0, 1fr))` }}>
                         {cellEntries.map((t, i) => (
                           <div key={i} className="min-w-0">
-                            <div className="mb-1 text-[10px] uppercase tracking-wider text-fg-muted">
+                            <div className="mb-1 text-xs uppercase tracking-wider text-fg-muted">
                               {headers[i]}
                             </div>
                             {t == null ? (
@@ -1142,7 +1142,7 @@ function TestResultsTable({ runIds, runs, grades, expIndex }: {
                             ) : t.passed ? (
                               <div className="text-xs text-success-fg">passed — no output</div>
                             ) : (
-                              <pre className="max-h-48 overflow-auto whitespace-pre-wrap bg-code-bg/60 px-2 py-1.5 font-mono text-[11px] leading-[1.5] text-fg-muted">
+                              <pre className="max-h-48 overflow-auto whitespace-pre-wrap bg-code-bg/60 px-2 py-1.5 font-mono text-xs leading-[1.5] text-fg-muted">
                                 {t.output || '(no output captured)'}
                               </pre>
                             )}
@@ -1216,7 +1216,7 @@ function ExperimentPicker({ experiments, isLoading, selectedIDs, onChange }: Exp
           <button
             type="button"
             onClick={() => onChange([])}
-            className="rounded-sm border border-border bg-bg-elev-2 px-2 py-0.5 text-[11px] text-fg-muted hover:bg-bg-elev-1"
+            className="rounded-sm border border-border bg-bg-elev-2 px-2 py-0.5 text-xs text-fg-muted hover:bg-bg-elev-1"
           >
             Clear
           </button>
@@ -1231,7 +1231,7 @@ function ExperimentPicker({ experiments, isLoading, selectedIDs, onChange }: Exp
       />
       <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-bg-elev-1">
         {filtered.length === 0 ? (
-          <div className="px-3 py-3 text-center text-[11px] text-fg-subtle">
+          <div className="px-3 py-3 text-center text-xs text-fg-subtle">
             {experiments.length === 0 ? 'No experiments yet.' : 'No matches.'}
           </div>
         ) : (
@@ -1248,7 +1248,7 @@ function ExperimentPicker({ experiments, isLoading, selectedIDs, onChange }: Exp
                     onChange(Array.from(next));
                   }
                 }}
-                className="block w-full border-b border-border px-3 py-1.5 text-left text-[11px] text-fg-subtle hover:bg-bg-elev-2 hover:text-fg"
+                className="block w-full border-b border-border px-3 py-1.5 text-left text-xs text-fg-subtle hover:bg-bg-elev-2 hover:text-fg"
               >
                 {allFilteredSelected ? 'Untick all visible' : `Tick all ${filtered.length} visible`}
               </button>
@@ -1269,7 +1269,7 @@ function ExperimentPicker({ experiments, isLoading, selectedIDs, onChange }: Exp
                       />
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="truncate">{exp.name}</span>
-                        <span className="truncate font-mono text-[11px] text-fg-subtle">
+                        <span className="truncate font-mono text-xs text-fg-subtle">
                           {exp.agent_cli} · {exp.model} · {totalRuns} run{totalRuns === 1 ? '' : 's'}
                         </span>
                       </span>
