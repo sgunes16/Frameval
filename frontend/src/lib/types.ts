@@ -93,6 +93,7 @@ export type Variant = {
   description?: string;
   is_control: boolean;
   ordering: number;
+  harness_id?: string;
   artifact_versions?: ArtifactVersion[];
 };
 

@@ -66,10 +66,23 @@ export function DiagnosticLaunchPage() {
   const [name, setName] = useState('');
   const [partialError, setPartialError] = useState<string | null>(null);
 
+  // opencode is the default — it's the only executor we currently
+  // exercise end-to-end (proper tool calling, structured event
+  // stream, both Ollama and bundled free-cloud models). aider and
+  // cursor are kept in the list as future work but disabled here so
+  // first-time users land on the path that actually completes.
+  const ENABLED_EXECUTORS = new Set(['opencode']);
+  const isExecutorDisabled = (id: string) => !ENABLED_EXECUTORS.has(id);
+
   useEffect(() => {
-    if (selectedExecutors.length === 0 && executors.length > 0) {
-      setSelectedExecutors([executors[0].id]);
-    }
+    if (selectedExecutors.length > 0) return;
+    if (executors.length === 0) return;
+    const preferred = executors.find((e) => ENABLED_EXECUTORS.has(e.id));
+    setSelectedExecutors([preferred?.id ?? executors[0].id]);
+    // ENABLED_EXECUTORS is a stable module-level constant; React's
+    // exhaustive-deps lint would force it into the array but doing
+    // so creates a useless dep with no observable effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executors, selectedExecutors.length]);
   useEffect(() => {
     if (!taskID && tasks.length > 0 && !initialTask) setTaskID(tasks[0].id);
@@ -246,16 +259,21 @@ export function DiagnosticLaunchPage() {
                 />
               ))}
             </MatrixGroup>
-            <MatrixGroup label="Executors">
-              {executors.map((e) => (
-                <Chip
-                  key={e.id}
-                  label={e.id}
-                  title={describeExecutor(e)}
-                  checked={selectedExecutors.includes(e.id)}
-                  onToggle={() => toggleExecutor(e.id)}
-                />
-              ))}
+            <MatrixGroup label="Executors" hint="opencode only for now · aider / cursor coming soon">
+              {executors.map((e) => {
+                const disabled = isExecutorDisabled(e.id);
+                return (
+                  <Chip
+                    key={e.id}
+                    label={e.id}
+                    title={describeExecutor(e)}
+                    checked={selectedExecutors.includes(e.id)}
+                    onToggle={() => toggleExecutor(e.id)}
+                    disabled={disabled}
+                    badge={disabled ? 'soon' : undefined}
+                  />
+                );
+              })}
             </MatrixGroup>
             <MatrixGroup
               label="Models"
@@ -424,18 +442,24 @@ interface ChipProps {
   title?: string;
   checked: boolean;
   onToggle: () => void;
+  disabled?: boolean;
+  badge?: string;
 }
 
-function Chip({ label, title, checked, onToggle }: ChipProps) {
+function Chip({ label, title, checked, onToggle, disabled, badge }: ChipProps) {
   return (
     <button
       type="button"
-      onClick={onToggle}
-      title={title}
+      onClick={disabled ? undefined : onToggle}
+      title={disabled ? `${label} — coming soon` : title}
       aria-pressed={checked}
+      aria-disabled={disabled}
+      disabled={disabled}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition',
-        checked
+        disabled
+          ? 'cursor-not-allowed border-dashed border-border bg-bg-elev-1/50 text-fg-subtle opacity-60'
+          : checked
           ? 'border-fg bg-fg text-bg'
           : 'border-border bg-bg-elev-1 text-fg-muted hover:border-border-strong hover:text-fg',
       )}
@@ -444,12 +468,21 @@ function Chip({ label, title, checked, onToggle }: ChipProps) {
         aria-hidden
         className={cn(
           'flex h-3 w-3 items-center justify-center rounded-sm border',
-          checked ? 'border-bg bg-bg text-fg' : 'border-border bg-bg-elev-2',
+          disabled
+            ? 'border-border bg-bg-elev-2'
+            : checked
+            ? 'border-bg bg-bg text-fg'
+            : 'border-border bg-bg-elev-2',
         )}
       >
-        {checked && <span className="text-[10px] font-bold leading-none">✓</span>}
+        {checked && !disabled && <span className="text-[10px] font-bold leading-none">✓</span>}
       </span>
       <span className="truncate">{label}</span>
+      {badge && (
+        <span className="ml-1 rounded-sm border border-border bg-bg-elev-2 px-1 text-[9px] uppercase tracking-wider text-fg-subtle">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
