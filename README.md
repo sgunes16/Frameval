@@ -11,9 +11,6 @@ sandboxed environments and producing structured diagnostic profiles
 that benchmark scalar scores cannot. Built originally as a master's thesis
 project; designed for open-source community extension.
 
-> Status: 4-week MVP. Core framework + 5 built-in harnesses + 3 stress tasks
-> are in. Orchestrator-side Frameval wiring (auto-extract + persist on each
-> completed run) and the calibration study are the active follow-ups.
 
 ---
 
