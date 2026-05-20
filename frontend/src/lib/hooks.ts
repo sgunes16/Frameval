@@ -34,6 +34,50 @@ export function useRuns(experimentId?: string) {
   return useQuery({ queryKey: ['runs', experimentId], enabled: Boolean(experimentId), queryFn: () => api.get<Run[]>(`/experiments/${experimentId}/runs`) });
 }
 
+// useRunsForExperiments fans out across N experiments and returns
+// {expId, runs}[] in the same order as the input. Used by the
+// Compare page when the launcher fired a matrix of experiments and
+// passed them via `?experiments=id1,id2,...`. A 404 on one expId
+// resolves to an empty run list rather than failing the whole
+// query — partial matrix results are still useful.
+export function useRunsForExperiments(experimentIds: string[]) {
+  return useQuery({
+    queryKey: ['compare-runs', experimentIds],
+    enabled: experimentIds.length > 0,
+    queryFn: () =>
+      Promise.all(
+        experimentIds.map(async (id) => {
+          try {
+            const runs = await api.get<Run[]>(`/experiments/${id}/runs`);
+            return { experimentId: id, runs };
+          } catch {
+            return { experimentId: id, runs: [] as Run[] };
+          }
+        }),
+      ),
+  });
+}
+
+// useExperimentsForIds — same shape as useExperiment but fans out
+// for the Compare matrix view; lets us label each run with its
+// experiment's name/agent_cli/model.
+export function useExperimentsForIds(experimentIds: string[]) {
+  return useQuery({
+    queryKey: ['compare-experiments', experimentIds],
+    enabled: experimentIds.length > 0,
+    queryFn: () =>
+      Promise.all(
+        experimentIds.map(async (id) => {
+          try {
+            return await api.get<Experiment>(`/experiments/${id}`);
+          } catch {
+            return null;
+          }
+        }),
+      ),
+  });
+}
+
 export function useRun(runId?: string) {
   return useQuery({ queryKey: ['run', runId], enabled: Boolean(runId), queryFn: () => api.get<Run>(`/runs/${runId}`) });
 }

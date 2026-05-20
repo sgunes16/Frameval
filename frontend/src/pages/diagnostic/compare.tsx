@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 
 import { cn } from '../../lib/utils';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -14,8 +14,15 @@ import { Button } from '../../components/ui/button';
 import { Card, CardHeader } from '../../components/ui/card';
 import { EmptyState } from '../../components/ui/empty-state';
 import { ScoreBar } from '../../components/system/composite/ScoreBar';
-import { useCompareDiagnostics, useCompareGrades, useExperiments, useRuns } from '../../lib/hooks';
-import type { Diagnostic, Grade } from '../../lib/types';
+import {
+  useCompareDiagnostics,
+  useCompareGrades,
+  useExperiments,
+  useExperimentsForIds,
+  useRuns,
+  useRunsForExperiments,
+} from '../../lib/hooks';
+import type { Diagnostic, Experiment, Grade, Run } from '../../lib/types';
 import { formatTimeAgo, statusLabel, statusTone } from '../../lib/utils';
 
 /**
@@ -34,31 +41,85 @@ import { formatTimeAgo, statusLabel, statusTone } from '../../lib/utils';
  */
 export function DiagnosticComparePage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const experimentID = searchParams.get('experiment') ?? '';
 
-  // URL → selection. selectedRuns drives both the checkboxes and the
-  // compare-diagnostics fetch. Empty when no experiment is picked.
+  // Two URL shapes: legacy `?experiment=X` (single) and new
+  // `?experiments=X,Y,Z` (matrix from the launcher). Multi wins when
+  // both are present so a copy-paste from a matrix launch doesn't
+  // accidentally fall back to the first-only behaviour.
+  const experimentIDs = useMemo<string[]>(() => {
+    const multi = searchParams.get('experiments');
+    if (multi) return multi.split(',').map((s) => s.trim()).filter(Boolean);
+    const single = searchParams.get('experiment');
+    return single ? [single] : [];
+  }, [searchParams]);
+  const isMatrix = experimentIDs.length > 1;
+
   const initialRunIds = useMemo(() => {
     const raw = searchParams.get('runs') ?? '';
     return raw.split(',').map((id) => id.trim()).filter(Boolean);
   }, [searchParams]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialRunIds));
 
-  // Re-sync local state when the URL changes from outside (back/forward,
-  // share-link paste). We deliberately avoid pushing local state changes
-  // back into the URL on every checkbox click — that would re-trigger
-  // this effect in a loop. URL state is only pushed via the explicit
-  // Share-link / Clear buttons or when the experiment is picked.
   useEffect(() => {
     setSelected(new Set(initialRunIds));
   }, [initialRunIds]);
 
   const { data: experiments = [], isLoading: experimentsLoading } = useExperiments();
-  const { data: experimentRuns = [], isLoading: runsLoading } = useRuns(experimentID || undefined);
+  // Single-experiment fast path uses the existing cached endpoint;
+  // matrix mode fans out across the whole id list. Both produce the
+  // same `experimentRuns` array shape downstream so the picker and
+  // diagnostic queries don't have to care.
+  const singleID = isMatrix ? undefined : experimentIDs[0];
+  const { data: singleRuns = [], isLoading: singleRunsLoading } = useRuns(singleID);
+  const { data: matrixBundles, isLoading: matrixLoading } = useRunsForExperiments(
+    isMatrix ? experimentIDs : [],
+  );
+  const { data: matrixExperiments } = useExperimentsForIds(isMatrix ? experimentIDs : []);
+
+  // Index from experimentId → Experiment so RunPicker can label rows
+  // with the experiment's variant signature (harness/agent/model).
+  const expIndex = useMemo<Map<string, Experiment>>(() => {
+    const m = new Map<string, Experiment>();
+    if (isMatrix && matrixExperiments) {
+      for (const e of matrixExperiments) {
+        if (e) m.set(e.id, e);
+      }
+    } else if (!isMatrix && experimentIDs[0]) {
+      const e = experiments.find((x) => x.id === experimentIDs[0]);
+      if (e) m.set(e.id, e);
+    }
+    return m;
+  }, [isMatrix, matrixExperiments, experiments, experimentIDs]);
+
+  // Flatten runs across all selected experiments; each row still
+  // carries its `experiment_id` (it's already on the Run schema)
+  // so the picker can show which variant a run belongs to.
+  const experimentRuns: Run[] = useMemo(() => {
+    if (isMatrix && matrixBundles) {
+      return matrixBundles.flatMap((b) => b.runs);
+    }
+    return singleRuns;
+  }, [isMatrix, matrixBundles, singleRuns]);
+  const runsLoading = isMatrix ? matrixLoading : singleRunsLoading;
+
+  // Auto-select all completed runs the first time a matrix lands —
+  // the user usually launched N variants specifically to compare
+  // them, so default to "all of them". Only fires once per URL,
+  // gated on the user not having a pre-existing run selection.
+  const autoSelectedRef = useUrlAutoSelect();
+  useEffect(() => {
+    if (!isMatrix) return;
+    if (autoSelectedRef.current) return;
+    if (initialRunIds.length > 0) return;
+    if (experimentRuns.length === 0) return;
+    const completed = experimentRuns.filter((r) => r.status === 'completed').map((r) => r.id);
+    if (completed.length === 0) return;
+    autoSelectedRef.current = true;
+    // Cap at 5 to respect the chart-sanity ceiling.
+    setSelected(new Set(completed.slice(0, 5)));
+  }, [isMatrix, experimentRuns, initialRunIds.length, autoSelectedRef]);
 
   const setExperiment = (next: string) => {
-    // Switching experiments clears the run selection — the old ids would
-    // never be valid against the new experiment's runs anyway.
     setSelected(new Set());
     setSearchParams(next ? { experiment: next } : {});
   };
@@ -73,7 +134,9 @@ export function DiagnosticComparePage() {
   };
 
   const selectAllCompleted = () => {
-    setSelected(new Set(experimentRuns.filter((r) => r.status === 'completed').map((r) => r.id)));
+    setSelected(
+      new Set(experimentRuns.filter((r) => r.status === 'completed').map((r) => r.id).slice(0, 5)),
+    );
   };
   const clearSelection = () => setSelected(new Set());
 
@@ -95,7 +158,7 @@ export function DiagnosticComparePage() {
     if (!diagnostics) return [];
     return diagnostics
       .map((diag, i) => ({
-        label: shortLabel(experimentRuns, runIds[i] ?? `run-${i + 1}`),
+        label: shortLabel(experimentRuns, runIds[i] ?? `run-${i + 1}`, expIndex),
         diagnostic: diag,
       }))
       .filter((entry): entry is { label: string; diagnostic: Diagnostic } => isValidDiagnostic(entry.diagnostic));
@@ -108,7 +171,8 @@ export function DiagnosticComparePage() {
 
   const shareLink = () => {
     const params: Record<string, string> = {};
-    if (experimentID) params.experiment = experimentID;
+    if (experimentIDs.length > 1) params.experiments = experimentIDs.join(',');
+    else if (experimentIDs.length === 1) params.experiment = experimentIDs[0];
     if (runIds.length > 0) params.runs = runIds.join(',');
     setSearchParams(params);
   };
@@ -127,27 +191,22 @@ export function DiagnosticComparePage() {
         </div>
 
         <div className="mt-3 grid gap-3 md:grid-cols-[280px_1fr]">
-          <label className="flex flex-col gap-1 text-xs text-fg-muted">
-            Experiment
-            <select
-              value={experimentID}
-              onChange={(e) => setExperiment(e.target.value)}
-              className="rounded-md border border-border bg-bg-elev-1 px-2 py-1.5 text-sm text-fg"
-              disabled={experimentsLoading}
-            >
-              <option value="">{experimentsLoading ? 'Loading…' : '— Select experiment —'}</option>
-              {experiments.map((exp) => (
-                <option key={exp.id} value={exp.id}>
-                  {exp.name} · {exp.agent_cli} ({exp.runs_per_variant * (exp.variants?.length ?? 0)} runs)
-                </option>
-              ))}
-            </select>
-          </label>
+          <ExperimentPicker
+            experiments={experiments}
+            isLoading={experimentsLoading}
+            selectedIDs={experimentIDs}
+            onChange={(ids) => {
+              setSelected(new Set());
+              if (ids.length === 0) setSearchParams({});
+              else if (ids.length === 1) setSearchParams({ experiment: ids[0] });
+              else setSearchParams({ experiments: ids.join(',') });
+            }}
+          />
 
           <div className="flex flex-col gap-1 text-xs text-fg-muted">
             <div className="flex items-baseline justify-between">
               <span>Runs ({runIds.length} selected{overLimit ? ' — too many' : ''})</span>
-              {experimentID && experimentRuns.length > 0 && (
+              {experimentIDs.length > 0 && experimentRuns.length > 0 && (
                 <span className="flex gap-2">
                   <button
                     type="button"
@@ -167,11 +226,13 @@ export function DiagnosticComparePage() {
               )}
             </div>
             <RunPicker
-              experimentId={experimentID}
+              experimentId={experimentIDs[0] ?? ''}
               runs={experimentRuns}
               isLoading={runsLoading}
               selected={selected}
               onToggle={toggleRun}
+              expIndex={expIndex}
+              isMatrix={isMatrix}
             />
           </div>
         </div>
@@ -190,7 +251,7 @@ export function DiagnosticComparePage() {
         </div>
       </Card>
 
-      {!experimentID ? (
+      {experimentIDs.length === 0 ? (
         <Card>
           <EmptyState
             title="Pick an experiment to start"
@@ -221,7 +282,12 @@ export function DiagnosticComparePage() {
               title="Grade comparison"
               description="Deterministic scores from the grader sidecar — code, judge, spec, and process metrics side-by-side."
             />
-            <GradeComparisonTable runIds={runIds} runs={experimentRuns} grades={grades ?? []} />
+            <GradeComparisonTable
+              runIds={runIds}
+              runs={experimentRuns}
+              grades={grades ?? []}
+              expIndex={expIndex}
+            />
           </Card>
 
           <Card>
@@ -229,7 +295,12 @@ export function DiagnosticComparePage() {
               title="Test results"
               description="Verification cases the grader ran inside the sandbox. Click a failing row to expand its output."
             />
-            <TestResultsTable runIds={runIds} runs={experimentRuns} grades={grades ?? []} />
+            <TestResultsTable
+              runIds={runIds}
+              runs={experimentRuns}
+              grades={grades ?? []}
+              expIndex={expIndex}
+            />
           </Card>
 
           {/* Behavioral diagnostic charts. These need fingerprint /
@@ -319,14 +390,31 @@ export function DiagnosticComparePage() {
 
 interface RunPickerProps {
   experimentId: string;
-  runs: Array<{ id: string; run_number: number; status: string; variant_id: string; created_at?: string }>;
+  runs: Array<{
+    id: string;
+    run_number: number;
+    status: string;
+    variant_id: string;
+    experiment_id?: string;
+    created_at?: string;
+  }>;
   isLoading: boolean;
   selected: Set<string>;
   onToggle: (id: string) => void;
+  expIndex?: Map<string, Experiment>;
+  isMatrix?: boolean;
 }
 
-function RunPicker({ experimentId, runs, isLoading, selected, onToggle }: RunPickerProps) {
-  if (!experimentId) {
+function RunPicker({
+  experimentId,
+  runs,
+  isLoading,
+  selected,
+  onToggle,
+  expIndex,
+  isMatrix,
+}: RunPickerProps) {
+  if (!isMatrix && !experimentId) {
     return (
       <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-4 text-center text-xs text-fg-subtle">
         Pick an experiment to list its runs.
@@ -343,7 +431,7 @@ function RunPicker({ experimentId, runs, isLoading, selected, onToggle }: RunPic
   if (runs.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-4 text-center text-xs text-fg-muted">
-        This experiment has no runs yet.
+        {isMatrix ? 'No runs across the selected experiments yet.' : 'This experiment has no runs yet.'}
       </div>
     );
   }
@@ -356,6 +444,8 @@ function RunPicker({ experimentId, runs, isLoading, selected, onToggle }: RunPic
     >
       {runs.map((run) => {
         const isSelected = selected.has(run.id);
+        const exp = run.experiment_id ? expIndex?.get(run.experiment_id) : undefined;
+        const variantSig = exp ? variantSignature(exp) : null;
         return (
           <li
             key={run.id}
@@ -371,9 +461,17 @@ function RunPicker({ experimentId, runs, isLoading, selected, onToggle }: RunPic
                 className="h-4 w-4 accent-accent"
                 aria-label={`Compare run ${run.run_number}`}
               />
-              <span className="flex flex-1 items-center gap-2">
+              <span className="flex flex-1 items-center gap-2 min-w-0">
                 <span className="font-mono text-fg-muted">#{run.run_number}</span>
                 <Badge tone={statusTone(run.status)}>{statusLabel(run.status)}</Badge>
+                {variantSig && (
+                  <span
+                    className="truncate font-mono text-xs text-fg"
+                    title={`harness/executor/model · ${variantSig}`}
+                  >
+                    {variantSig}
+                  </span>
+                )}
                 <span className="font-mono text-xs text-fg-subtle">{run.id.slice(0, 8)}…</span>
               </span>
               {run.created_at && (
@@ -387,10 +485,27 @@ function RunPicker({ experimentId, runs, isLoading, selected, onToggle }: RunPic
   );
 }
 
+// Build a short `harness/executor/model` label out of an experiment.
+// The launcher already encodes the matrix coordinates into the
+// experiment's name (`"<prefix> · <harness>/<executor>/<model>"`),
+// so we just pull the trailing `… · X` segment off; falling back to
+// agent_cli + model when the name doesn't carry the convention.
+function variantSignature(exp: Experiment): string {
+  const dot = ' · ';
+  const idx = exp.name.lastIndexOf(dot);
+  if (idx >= 0) {
+    const tail = exp.name.slice(idx + dot.length).trim();
+    if (tail.includes('/')) return tail;
+  }
+  const harness = exp.variants?.[0]?.harness_id ?? exp.variants?.[0]?.name ?? '?';
+  return `${harness}/${exp.agent_cli}/${exp.model}`;
+}
+
 interface GradeComparisonTableProps {
   runIds: string[];
-  runs: Array<{ id: string; run_number: number; status: string }>;
+  runs: Array<{ id: string; run_number: number; status: string; experiment_id?: string }>;
   grades: Array<Grade | null>;
+  expIndex?: Map<string, Experiment>;
 }
 
 /**
@@ -460,23 +575,58 @@ const METRIC_HELP: Record<string, string> = {
     'Number of explicit "don\'t" constraints the agent broke (touching forbidden files, changing public schema, etc.).',
 };
 
-function GradeComparisonTable({ runIds, runs, grades }: GradeComparisonTableProps) {
+type Dim = 'harness' | 'agent' | 'model';
+const DIM_LABEL: Record<Dim, string> = {
+  harness: 'Harness',
+  agent: 'Agent',
+  model: 'Model',
+};
+
+function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeComparisonTableProps) {
+  // The dimension order controls which axis groups outermost in the
+  // multi-index header. Drag-to-reorder so the user can pivot the
+  // comparison: "show me models grouped by harness" vs "show me
+  // harnesses grouped by agent" without losing the underlying data.
+  const [dimOrder, setDimOrder] = useState<Dim[]>(['harness', 'agent', 'model']);
+
   if (runIds.length === 0) {
     return <div className="text-sm text-fg-muted">No runs selected.</div>;
   }
-  const headers = runIds.map((id) => shortLabel(runs, id));
+
+  // Per-run coordinate in the (harness, agent, model) lattice. We
+  // sort columns lexicographically by the user-chosen dim order so
+  // the multi-index header's colspans stay contiguous; otherwise a
+  // 4-variant matrix renders columns in insertion order and the
+  // grouped headers look ragged.
+  const rawHeaders = runIds.map((id) => shortLabel(runs, id, expIndex));
+  const rawCoords = runIds.map((id) => {
+    const run = runs.find((r) => r.id === id);
+    const exp = run?.experiment_id ? expIndex?.get(run.experiment_id) : undefined;
+    return {
+      harness: exp?.variants?.[0]?.harness_id ?? exp?.variants?.[0]?.name ?? '—',
+      agent: exp?.agent_cli ?? '—',
+      model: exp?.model ?? '—',
+    } satisfies Record<Dim, string>;
+  });
+  const colOrder = runIds
+    .map((_, i) => i)
+    .sort((a, b) => {
+      for (const dim of dimOrder) {
+        const cmp = rawCoords[a][dim].localeCompare(rawCoords[b][dim]);
+        if (cmp !== 0) return cmp;
+      }
+      return 0;
+    });
+  const headers = colOrder.map((i) => rawHeaders[i]);
+  const orderedGrades = colOrder.map((i) => grades[i]);
+  const coords = colOrder.map((i) => rawCoords[i]);
+  grades = orderedGrades;
 
   return (
     <div className="overflow-x-auto">
+      <DimOrderBar order={dimOrder} onChange={setDimOrder} />
       <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border text-left text-xs text-fg-muted">
-            <th className="py-2 pr-3 font-medium">Metric</th>
-            {headers.map((label, i) => (
-              <th key={i} className="py-2 pr-3 font-medium">{label}</th>
-            ))}
-          </tr>
-        </thead>
+        <PivotHead dimOrder={dimOrder} coords={coords} headers={headers} />
         <tbody>
           <HeadlineRow label="Composite" headers={headers} grades={grades} pick={(g) => g.composite_score} scale={10} />
 
@@ -515,6 +665,180 @@ function GradeComparisonTable({ runIds, runs, grades }: GradeComparisonTableProp
         </tbody>
       </table>
     </div>
+  );
+}
+
+// --- Multi-index header primitives -----------------------------------
+
+/**
+ * DimOrderBar renders the three pivot dimensions (Harness · Agent ·
+ * Model) as drag-reorderable pills. The leftmost pill becomes the
+ * outermost header row in the grade table, so reordering inverts the
+ * grouping ("models grouped by harness" → "harnesses grouped by
+ * model"). Native HTML5 drag-and-drop; no extra dependency.
+ */
+function DimOrderBar({
+  order,
+  onChange,
+}: {
+  order: Dim[];
+  onChange: (next: Dim[]) => void;
+}) {
+  const [dragging, setDragging] = useState<number | null>(null);
+  const move = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= order.length) return;
+    const next = [...order];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    onChange(next);
+  };
+  return (
+    <div className="mb-2 flex items-center gap-2 text-[11px] text-fg-muted">
+      <span className="uppercase tracking-wider">Group by</span>
+      <ol className="flex flex-wrap items-center gap-1">
+        {order.map((dim, i) => (
+          <li key={dim} className="flex items-center gap-1">
+            <button
+              type="button"
+              draggable
+              onDragStart={() => setDragging(i)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                if (dragging !== null) move(dragging, i);
+                setDragging(null);
+              }}
+              onDragEnd={() => setDragging(null)}
+              className={cn(
+                'inline-flex cursor-grab items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[11px] active:cursor-grabbing',
+                dragging === i
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border bg-bg-elev-1 text-fg hover:border-border-strong',
+              )}
+              title="Drag to reorder, or use arrows to move"
+            >
+              <span aria-hidden className="text-fg-subtle">⋮⋮</span>
+              <span>{DIM_LABEL[dim]}</span>
+              <span className="ml-1 inline-flex gap-0.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    move(i, i - 1);
+                  }}
+                  disabled={i === 0}
+                  aria-label={`Move ${DIM_LABEL[dim]} left`}
+                  className="rounded-sm px-1 text-fg-subtle hover:text-fg disabled:opacity-30"
+                >
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    move(i, i + 1);
+                  }}
+                  disabled={i === order.length - 1}
+                  aria-label={`Move ${DIM_LABEL[dim]} right`}
+                  className="rounded-sm px-1 text-fg-subtle hover:text-fg disabled:opacity-30"
+                >
+                  ▶
+                </button>
+              </span>
+            </button>
+            {i < order.length - 1 && <span className="text-fg-subtle">›</span>}
+          </li>
+        ))}
+      </ol>
+      <span className="ml-auto text-fg-subtle">
+        outer ←→ inner · drag to pivot
+      </span>
+    </div>
+  );
+}
+
+/**
+ * PivotHead renders the multi-index `<thead>`: one row per dimension
+ * in `dimOrder`, with consecutive same-value cells merged via
+ * colspan. Last row is the innermost dim (one cell per column).
+ * The "Metric" corner cell sits in the first column with rowSpan
+ * matching the depth so it visually grounds the row labels below.
+ */
+function PivotHead({
+  dimOrder,
+  coords,
+  headers,
+}: {
+  dimOrder: Dim[];
+  coords: Array<Record<Dim, string>>;
+  headers: string[];
+}) {
+  // Pre-compute, per row, the colspan groups: [{value, span, startCol}].
+  const rows = dimOrder.map((dim) => {
+    const groups: Array<{ value: string; span: number; startCol: number }> = [];
+    coords.forEach((c, col) => {
+      const last = groups[groups.length - 1];
+      if (last && last.value === c[dim]) {
+        last.span += 1;
+      } else {
+        groups.push({ value: c[dim], span: 1, startCol: col });
+      }
+    });
+    return { dim, groups };
+  });
+
+  return (
+    <thead>
+      {rows.map((row, rowIdx) => (
+        <tr key={row.dim} className="text-left text-[11px] text-fg-muted">
+          {rowIdx === 0 ? (
+            <th
+              rowSpan={dimOrder.length}
+              className="border-b border-border py-2 pr-3 align-bottom text-[10px] font-semibold uppercase tracking-wider text-fg-muted"
+            >
+              Metric
+            </th>
+          ) : null}
+          {row.groups.map((g) => (
+            // Every cell shows its dim/value. Adjacent same-values
+            // were already collapsed into one colspan during the
+            // grouping pass above, so we never render the same value
+            // twice horizontally — a span=1 cell on the innermost
+            // row genuinely has a distinct value worth showing.
+            <th
+              key={`${row.dim}-${g.startCol}`}
+              colSpan={g.span}
+              className={cn(
+                'border-b border-border py-1.5 pr-3 font-medium',
+                rowIdx === dimOrder.length - 1
+                  ? 'border-b-2 border-b-border-strong text-fg'
+                  : 'text-fg-muted',
+                g.startCol > 0 && 'border-l border-border/60',
+              )}
+              title={`${DIM_LABEL[row.dim]}: ${g.value}`}
+            >
+              <span className="flex flex-col gap-0.5">
+                <span className="text-[9.5px] uppercase tracking-wider text-fg-subtle">
+                  {DIM_LABEL[row.dim]}
+                </span>
+                <span className="truncate font-mono text-[11px] text-fg">{g.value}</span>
+              </span>
+            </th>
+          ))}
+        </tr>
+      ))}
+      {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
+      {(() => {
+        // headers prop is retained for callers that want a flat
+        // fallback row label; we don't render it in MultiIndex mode
+        // because the bottom row already names every column.
+        return null;
+      })()}
+      <tr aria-hidden className="sr-only">
+        {headers.map((h, i) => (
+          <th key={i}>{h}</th>
+        ))}
+      </tr>
+    </thead>
   );
 }
 
@@ -684,11 +1008,20 @@ function BoolRow({
   );
 }
 
-function shortLabel(runs: Array<{ id: string; run_number: number }>, runId: string): string {
-  // Prefer the human-readable run_number ("Run 3") when we can find it
-  // in the loaded experiment's run list. Falls back to the UUID prefix
-  // for share-link round-trips where the run list hasn't loaded yet.
+function shortLabel(
+  runs: Array<{ id: string; run_number: number; experiment_id?: string }>,
+  runId: string,
+  expIndex?: Map<string, Experiment>,
+): string {
+  // Matrix mode: prefer the variant signature ("bare/opencode/Big
+  // Pickle") so charts can be distinguished by what was actually
+  // compared. Single-experiment mode: keep the cheap "Run N" label
+  // since every variant shares the same harness/exec/model anyway.
   const found = runs.find((r) => r.id === runId);
+  if (found && expIndex && found.experiment_id) {
+    const exp = expIndex.get(found.experiment_id);
+    if (exp) return variantSignature(exp);
+  }
   if (found) return `Run ${found.run_number}`;
   return runId.length > 12 ? runId.slice(0, 8) + '…' : runId;
 }
@@ -716,15 +1049,16 @@ function isValidDiagnostic(diag: Diagnostic | null | undefined): diag is Diagnos
  * order. Pass/fail badge clicks toggle an inline output panel so a
  * failing case's traceback is one click away without leaving Compare.
  */
-function TestResultsTable({ runIds, runs, grades }: {
+function TestResultsTable({ runIds, runs, grades, expIndex }: {
   runIds: string[];
-  runs: Array<{ id: string; run_number: number; status: string }>;
+  runs: Array<{ id: string; run_number: number; status: string; experiment_id?: string }>;
   grades: Array<Grade | null>;
+  expIndex?: Map<string, Experiment>;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   if (runIds.length === 0) return <div className="text-sm text-fg-muted">No runs selected.</div>;
 
-  const headers = runIds.map((id) => shortLabel(runs, id));
+  const headers = runIds.map((id) => shortLabel(runs, id, expIndex));
   // Build the union of test names while keeping a stable order: first
   // seen wins. Tests rarely change between runs but a re-grade can
   // introduce new ones; the union avoids losing them.
@@ -823,6 +1157,130 @@ function TestResultsTable({ runIds, runs, grades }: {
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// useUrlAutoSelect tracks whether the "auto-select-all-completed"
+// effect has already fired for the current URL. Without this gate
+// the effect would race against the user's clicks and re-tick rows
+// they intentionally cleared. The ref resets on remount, which is
+// the right granularity — a back/forward to the same URL keeps the
+// selection, a fresh navigation re-arms it.
+function useUrlAutoSelect(): MutableRefObject<boolean> {
+  return useRef(false);
+}
+
+interface ExperimentPickerProps {
+  experiments: Experiment[];
+  isLoading: boolean;
+  selectedIDs: string[];
+  onChange: (ids: string[]) => void;
+}
+
+/**
+ * ExperimentPicker is a search-filtered checkbox list of experiments
+ * that produces a multi-select URL. It replaces the old single-pick
+ * dropdown so users can compare runs across the matrix that the
+ * launcher just fanned out into N "1-variant" experiments — without
+ * needing to know about the `?experiments=…` URL contract.
+ */
+function ExperimentPicker({ experiments, isLoading, selectedIDs, onChange }: ExperimentPickerProps) {
+  const [query, setQuery] = useState('');
+  const selected = useMemo(() => new Set(selectedIDs), [selectedIDs]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return experiments;
+    return experiments.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.agent_cli.toLowerCase().includes(q) ||
+        e.model.toLowerCase().includes(q),
+    );
+  }, [experiments, query]);
+
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(Array.from(next));
+  };
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((e) => selected.has(e.id));
+
+  return (
+    <div className="flex flex-col gap-1.5 text-xs text-fg-muted">
+      <div className="flex items-baseline justify-between gap-2">
+        <span>Experiments ({selectedIDs.length} selected)</span>
+        {selectedIDs.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="rounded-sm border border-border bg-bg-elev-2 px-2 py-0.5 text-[11px] text-fg-muted hover:bg-bg-elev-1"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={isLoading ? 'Loading…' : 'Search by name, agent, model…'}
+        className="rounded-md border border-border bg-bg-elev-1 px-2 py-1.5 text-sm text-fg placeholder:text-fg-subtle"
+      />
+      <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-bg-elev-1">
+        {filtered.length === 0 ? (
+          <div className="px-3 py-3 text-center text-[11px] text-fg-subtle">
+            {experiments.length === 0 ? 'No experiments yet.' : 'No matches.'}
+          </div>
+        ) : (
+          <>
+            {filtered.length > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (allFilteredSelected) {
+                    onChange(selectedIDs.filter((id) => !filtered.some((e) => e.id === id)));
+                  } else {
+                    const next = new Set(selectedIDs);
+                    for (const e of filtered) next.add(e.id);
+                    onChange(Array.from(next));
+                  }
+                }}
+                className="block w-full border-b border-border px-3 py-1.5 text-left text-[11px] text-fg-subtle hover:bg-bg-elev-2 hover:text-fg"
+              >
+                {allFilteredSelected ? 'Untick all visible' : `Tick all ${filtered.length} visible`}
+              </button>
+            )}
+            <ul role="listbox" aria-multiselectable="true">
+              {filtered.map((exp) => {
+                const isSelected = selected.has(exp.id);
+                const totalRuns = exp.runs_per_variant * (exp.variants?.length ?? 0);
+                return (
+                  <li key={exp.id} role="option" aria-selected={isSelected} className="border-b border-border last:border-b-0">
+                    <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm text-fg hover:bg-bg-elev-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggle(exp.id)}
+                        className="h-4 w-4 accent-accent"
+                        aria-label={`Compare ${exp.name}`}
+                      />
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate">{exp.name}</span>
+                        <span className="truncate font-mono text-[11px] text-fg-subtle">
+                          {exp.agent_cli} · {exp.model} · {totalRuns} run{totalRuns === 1 ? '' : 's'}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
     </div>
   );
 }
