@@ -227,12 +227,12 @@ export function DiagnosticLaunchPage() {
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate font-medium text-fg">{task.name}</span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-[10px] uppercase tracking-wider text-fg-subtle">
+                      <span className="flex shrink-0 items-center gap-1.5 text-xs uppercase tracking-wider text-fg-subtle">
                         <Badge tone="neutral">{task.category}</Badge>
                         <span>{task.codebase_type}</span>
                       </span>
                     </div>
-                    <div className="mt-0.5 line-clamp-1 text-[11px] text-fg-muted">
+                    <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">
                       {task.description}
                     </div>
                   </button>
@@ -284,7 +284,7 @@ export function DiagnosticLaunchPage() {
               }
             >
               {visibleModels.length === 0 ? (
-                <span className="text-[11px] text-fg-subtle">
+                <span className="text-xs text-fg-subtle">
                   {selectedExecutors.length === 0
                     ? 'no executors selected'
                     : 'no compatible models'}
@@ -327,13 +327,13 @@ export function DiagnosticLaunchPage() {
             onChange={(event) => setRunsPerVariant(Number(event.target.value))}
             className="w-full accent-accent"
           />
-          <div className="mt-1 flex justify-between text-[10px] uppercase tracking-wider text-fg-subtle">
+          <div className="mt-1 flex justify-between text-xs uppercase tracking-wider text-fg-subtle">
             <span>1 — smoke</span>
             <span>5 — recommended</span>
             <span>30 — saturated</span>
           </div>
           <div className="mt-3">
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-fg-muted">
+            <div className="mb-1 text-xs uppercase tracking-wider text-fg-muted">
               Name prefix (optional)
             </div>
             <Input
@@ -343,7 +343,7 @@ export function DiagnosticLaunchPage() {
                 selectedTask ? `${selectedTask.name} matrix` : 'Matrix run · auto-named'
               }
             />
-            <div className="mt-1 text-[10.5px] text-fg-subtle">
+            <div className="mt-1 text-xs text-fg-subtle">
               Each variant →{' '}
               <code className="font-mono">{`<prefix> · <harness>/<executor>/<model>`}</code>
             </div>
@@ -410,7 +410,7 @@ function CompactHeader({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="mb-3 flex items-baseline justify-between gap-2">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-fg">{title}</h2>
-      {hint && <span className="text-[10px] text-fg-subtle">{hint}</span>}
+      {hint && <span className="text-xs text-fg-subtle">{hint}</span>}
     </div>
   );
 }
@@ -427,10 +427,10 @@ function MatrixGroup({
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">
+        <span className="text-xs font-medium uppercase tracking-wider text-fg-muted">
           {label}
         </span>
-        {hint && <span className="text-[10px] text-fg-subtle">{hint}</span>}
+        {hint && <span className="text-xs text-fg-subtle">{hint}</span>}
       </div>
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
@@ -475,11 +475,11 @@ function Chip({ label, title, checked, onToggle, disabled, badge }: ChipProps) {
             : 'border-border bg-bg-elev-2',
         )}
       >
-        {checked && !disabled && <span className="text-[10px] font-bold leading-none">✓</span>}
+        {checked && !disabled && <span className="text-xs font-bold leading-none">✓</span>}
       </span>
       <span className="truncate">{label}</span>
       {badge && (
-        <span className="ml-1 rounded-sm border border-border bg-bg-elev-2 px-1 text-[9px] uppercase tracking-wider text-fg-subtle">
+        <span className="ml-1 rounded-sm border border-border bg-bg-elev-2 px-1 text-xs uppercase tracking-wider text-fg-subtle">
           {badge}
         </span>
       )}
@@ -490,13 +490,13 @@ function Chip({ label, title, checked, onToggle, disabled, badge }: ChipProps) {
 function VariantPreview({ variants }: { variants: Variant[] }) {
   if (variants.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-3 text-center text-[11px] text-fg-muted">
+      <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-3 text-center text-xs text-fg-muted">
         No valid variants yet. Tick at least one harness, executor, and model.
       </div>
     );
   }
   return (
-    <ul className="max-h-56 space-y-0.5 overflow-auto rounded-md border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-[11px]">
+    <ul className="max-h-56 space-y-0.5 overflow-auto rounded-md border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs">
       {variants.map((v, i) => (
         <li
           key={`${v.harness}-${v.executor}-${v.model}-${i}`}
