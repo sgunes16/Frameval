@@ -76,12 +76,10 @@ func TestAPIKeys_GetDecryptedRoundtrip(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
 
-	// Use "anthropic" — the api_keys table CHECK constraint limits provider
-	// to ('anthropic', 'openai', 'google'); "openrouter" is not yet allowed.
-	if err := store.UpsertAPIKey(ctx, "anthropic", "sk-or-v1-test-key-xyz"); err != nil {
+	if err := store.UpsertAPIKey(ctx, "openrouter", "sk-or-v1-test-key-xyz"); err != nil {
 		t.Fatalf("UpsertAPIKey: %v", err)
 	}
-	got, err := store.GetDecryptedAPIKey(ctx, "anthropic")
+	got, err := store.GetDecryptedAPIKey(ctx, "openrouter")
 	if err != nil {
 		t.Fatalf("GetDecryptedAPIKey: %v", err)
 	}
