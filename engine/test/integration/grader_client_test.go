@@ -40,7 +40,7 @@ func TestGraderClient_GradeRun_RoundTripsThroughFakeGrader(t *testing.T) {
 		TestPassRate:   0.75,
 	})
 
-	client := experiment.NewGraderClient(addr, nil)
+	client := experiment.NewGraderClient(addr, nil, nil)
 	t.Cleanup(func() { _ = client.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -51,7 +51,7 @@ func TestGraderClient_GradeRun_RoundTripsThroughFakeGrader(t *testing.T) {
 		RawOutput: "fake",
 	}
 
-	grade, err := client.GradeRun(ctx, task, nil, transcript, "")
+	grade, err := client.GradeRun(ctx, task, nil, transcript)
 	if err != nil {
 		t.Fatalf("GradeRun: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestGraderClient_ClassifyFailure_RoundTripsThroughFakeGrader(t *testing.T) 
 		FailureRationale:  "agent called nonexistent method",
 	})
 
-	client := experiment.NewGraderClient(addr, nil)
+	client := experiment.NewGraderClient(addr, nil, nil)
 	t.Cleanup(func() { _ = client.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -89,7 +89,7 @@ func TestGraderClient_FallsBackWhenGraderUnreachable(t *testing.T) {
 	// Empty addr forces the GraderClient's "no grader configured" branch:
 	// it must return a fallback grade rather than blocking on a dial that
 	// never resolves.
-	client := experiment.NewGraderClient("", nil)
+	client := experiment.NewGraderClient("", nil, nil)
 	t.Cleanup(func() { _ = client.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -98,7 +98,7 @@ func TestGraderClient_FallsBackWhenGraderUnreachable(t *testing.T) {
 	task := models.Task{ID: "task-1", TaskPrompt: "p"}
 	transcript := models.Transcript{RunID: "run-1", TotalTokens: 100}
 
-	grade, err := client.GradeRun(ctx, task, nil, transcript, "")
+	grade, err := client.GradeRun(ctx, task, nil, transcript)
 	if err != nil {
 		t.Fatalf("expected fallback, got error: %v", err)
 	}

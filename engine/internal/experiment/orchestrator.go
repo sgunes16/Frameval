@@ -94,7 +94,7 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 		return err
 	}
 	artifact, _ := o.store.GetLatestArtifactByVariant(ctx, run.VariantID)
-	grade, err := o.grader.GradeRun(ctx, *task, artifact, *run.Transcript, experiment.JudgeModel)
+	grade, err := o.grader.GradeRun(ctx, *task, artifact, *run.Transcript)
 	if err != nil {
 		return err
 	}
@@ -112,11 +112,10 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 }
 
 func (o *Orchestrator) RegradeRunPayload(ctx context.Context, runID string, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript) (*models.Grade, error) {
-	// JudgeModel deliberately empty here — RegradeRunPayload is the
-	// re-grade-from-arbitrary-transcript path used by tests and CLI tools
-	// that don't have an experiment row handy. GradeRun applies the
-	// defaultJudgeModel fallback.
-	grade, err := o.grader.GradeRun(ctx, task, artifact, transcript, "")
+	// JudgeConfig is populated from SQLite settings by GradeRun itself;
+	// the grader falls back to its env defaults when the settings store
+	// has no judge configuration or judge.enabled is not "true".
+	grade, err := o.grader.GradeRun(ctx, task, artifact, transcript)
 	if err != nil {
 		return nil, err
 	}
@@ -307,8 +306,8 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "grading", "variant_id": run.VariantID})
 	o.broadcast("grading.progress", map[string]any{"run_id": run.ID, "grader": "composite", "status": "running"})
 	gradeStart := time.Now()
-	slog.Info("grader.start", "run_id", run.ID, "experiment_id", experiment.ID, "judge_model", experiment.JudgeModel)
-	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript, experiment.JudgeModel)
+	slog.Info("grader.start", "run_id", run.ID, "experiment_id", experiment.ID)
+	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript)
 	if gradeErr != nil {
 		slog.Error("grader.failed", "run_id", run.ID, "experiment_id", experiment.ID, "err", gradeErr, "duration_ms", time.Since(gradeStart).Milliseconds())
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", gradeErr.Error())
