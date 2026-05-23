@@ -35,12 +35,24 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
         }
         code = grade_code(task, output_files)
         process = process_grade(request.transcript_json)
-        judge = judge_grade(code, process) if settings.enable_llm_judge else disabled_judge_result()
+        judge_cfg = request.judge_config if request.HasField("judge_config") else None
+        if settings.enable_llm_judge or judge_cfg is not None:
+            judge = judge_grade(
+                code,
+                process,
+                task=task,
+                output_files=output_files,
+                transcript_json=request.transcript_json.encode(),
+                config_override=judge_cfg,
+            )
+        else:
+            judge = disabled_judge_result()
         adherence = disabled_adherence_result()
+        judge_active = settings.enable_llm_judge or judge_cfg is not None
         composite = compute_composite(
             code,
             process,
-            judge if settings.enable_llm_judge else None,
+            judge if judge_active else None,
             None,
         )
         return grader_pb2.GradeRunResponse(

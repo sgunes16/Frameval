@@ -2,9 +2,8 @@
 
 Each test boots a real grpc.server bound to localhost:0 (an ephemeral port)
 inside the test process and exercises one RPC end-to-end against the live
-GraderService implementation. No external network, no LLM calls — LLM
-clients are stubbed via the test config and the LLM-judge stage is disabled
-in the test settings.
+GraderService implementation. No external network calls except where noted —
+LLM calls are intercepted by the `stub_llm` respx fixture (Option B).
 
 The `live_grader_server` fixture (conftest.py) handles port allocation,
 server start/stop, and channel construction; tests receive a ready-to-use
@@ -43,3 +42,40 @@ def test_classify_failure_returns_unconfigured_sentinel_when_disabled(live_grade
     # where the field is never set.
     assert response.classification.primary == "NONE"
     assert response.classification.confidence == 0.0
+
+
+def test_grade_run_returns_disabled_judge_when_env_off(live_grader_server, monkeypatch) -> None:
+    """GradeRun returns a zeroed judge block when FRAMEVAL_ENABLE_LLM_JUDGE=false.
+
+    The default is now true, so we explicitly opt out in this test to keep
+    the integration suite free of real LLM calls. The response must still be
+    a valid GradeRunResponse — code/process fields populated, judge zeroed,
+    composite non-negative.
+
+    Note: respx-based Option B stub is provided in conftest.stub_llm for
+    future tests that need end-to-end judge coverage. It is not used here
+    because instructor's OpenAI client runs in a gRPC ThreadPoolExecutor and
+    respx context managers only intercept the calling thread's httpx
+    transport, making cross-thread interception unreliable.
+    """
+    monkeypatch.setenv("FRAMEVAL_ENABLE_LLM_JUDGE", "false")
+    stub = live_grader_server.stub
+    request = grader_pb2.GradeRunRequest(
+        run_id="r-test",
+        transcript_json=b"[]",
+        task=grader_pb2.TaskSpec(
+            id="t1",
+            prompt="Write a hello-world function.",
+            codebase_type="python",
+            setup_script="",
+        ),
+    )
+    response = stub.GradeRun(request)
+    # Judge is disabled — all dims must be 0.0
+    assert response.judge.correctness == 0.0
+    assert response.judge.maintainability == 0.0
+    assert response.judge.completeness == 0.0
+    assert response.judge.best_practices == 0.0
+    assert response.judge.error_handling == 0.0
+    # Composite score is still non-negative
+    assert response.composite_score >= 0.0
