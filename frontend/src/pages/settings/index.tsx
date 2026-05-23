@@ -1,6 +1,7 @@
 import { AgentsPanel } from '../../components/settings/agents';
 import { ApiKeysPanel } from '../../components/settings/api-keys';
 import { DefaultsPanel } from '../../components/settings/defaults';
+import { JudgeProviderPanel } from '../../components/settings/judge-provider';
 import { ModelsPanel } from '../../components/settings/models';
 import { Card, CardHeader } from '../../components/ui/card';
 import { useAgents, useAPIKeys, useModels } from '../../lib/hooks';
@@ -22,9 +23,10 @@ export function SettingsPage() {
           <span><code className="rounded bg-bg-elev-1 px-2 py-1">CURSOR_API_KEY</code> — Cursor agent mode</span>
           <span><code className="rounded bg-bg-elev-1 px-2 py-1">OLLAMA_BASE_URL</code> — local LLM endpoint (Aider)</span>
           <span><code className="rounded bg-bg-elev-1 px-2 py-1">AIDER_MODEL</code> — local agent model id</span>
-          <span><code className="rounded bg-bg-elev-1 px-2 py-1">FRAMEVAL_ENABLE_LLM_JUDGE</code> — enable LLM grading</span>
+          <span><code className="rounded bg-bg-elev-1 px-2 py-1">FRAMEVAL_ENABLE_LLM_JUDGE</code> — fallback default; configure via the LLM judge panel above</span>
         </div>
       </Card>
+      <JudgeProviderPanel />
       <div className="grid gap-4 lg:grid-cols-2">
         <ApiKeysPanel keys={apiKeys} />
         <ModelsPanel models={models} />
