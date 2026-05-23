@@ -313,3 +313,12 @@ export type QueueStatus = {
   active_workers: number;
   max_workers: number;
 };
+
+export type LLMProvider = 'openrouter' | 'zai' | 'ollama' | 'openai' | 'anthropic';
+
+export type LLMSettings = {
+  provider: LLMProvider;
+  model: string;
+  enabled: boolean;
+  api_key_present: boolean;
+};

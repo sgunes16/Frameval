@@ -13,6 +13,7 @@ import type {
   HarnessInfo,
   LaunchDiagnosticRequest,
   LaunchDiagnosticResponse,
+  LLMSettings,
   ModelConfig,
   ParsedTurn,
   QueueStatus,
@@ -230,7 +231,7 @@ export function useLaunchDiagnostic() {
 }
 
 export function useAPIKeys() {
-  return useQuery({ queryKey: ['api-keys'], queryFn: () => api.get<APIKey[]>('/config/api-keys') });
+  return useQuery({ queryKey: ['config', 'api-keys'], queryFn: () => api.get<APIKey[]>('/config/api-keys') });
 }
 
 export function useDockerStatus() {
@@ -289,4 +290,47 @@ export function useWebSocket() {
     return () => socket.close();
   }, [wsBase]);
   return useMemo(() => ({ events }), [events]);
+}
+
+export function useLLMSettings() {
+  return useQuery({
+    queryKey: ['config', 'llm-settings'],
+    queryFn: () => api.get<LLMSettings>('/config/llm-settings'),
+  });
+}
+
+export function useSaveLLMSettings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Pick<LLMSettings, 'provider' | 'model' | 'enabled'>) =>
+      api.put<LLMSettings>('/config/llm-settings', payload),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['config', 'llm-settings'] });
+      client.invalidateQueries({ queryKey: ['config', 'api-keys'] });
+    },
+  });
+}
+
+export function useUpsertAPIKey() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { provider: string; api_key: string }) =>
+      api.post<void>('/config/api-keys', payload),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['config', 'api-keys'] });
+      client.invalidateQueries({ queryKey: ['config', 'llm-settings'] });
+    },
+  });
+}
+
+export function useDeleteAPIKey() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (provider: string) =>
+      api.delete<void>(`/config/api-keys/${encodeURIComponent(provider)}`),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['config', 'api-keys'] });
+      client.invalidateQueries({ queryKey: ['config', 'llm-settings'] });
+    },
+  });
 }
