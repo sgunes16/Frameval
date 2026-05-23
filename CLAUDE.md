@@ -159,8 +159,14 @@ SQLite schema lives in `engine/internal/storage/migrations/`. Migrations are num
 | `FRAMEVAL_LOG_FORMAT` | engine | slog format: `json` (default) or `pretty` for human-readable text |
 | `FRAMEVAL_PORT` | engine | HTTP server port (default: `8080`) |
 | `GRADER_PORT` | grader | gRPC server port (default: `50051`) |
-| `ANTHROPIC_API_KEY` | grader, sandbox | Anthropic API key |
-| `OPENAI_API_KEY` | grader, sandbox | OpenAI API key |
+| `FRAMEVAL_LLM_PROVIDER` | grader | **Fallback only** — SQLite `app_settings['judge.provider']` is authoritative. Default: `openrouter`. |
+| `FRAMEVAL_LLM_MODEL` | grader | **Fallback only** — overridden by `app_settings['judge.model']`. |
+| `FRAMEVAL_LLM_BASE_URL` | grader | Override endpoint (Ollama self-host, etc.). Always env-only. |
+| `OPENROUTER_API_KEY` | grader | **Fallback only** — overridden by `api_keys` row for provider=openrouter. |
+| `ZAI_API_KEY` | grader | Fallback only; SQLite `api_keys` authoritative. |
+| `OPENAI_API_KEY` | grader, sandbox | Fallback for grader; primary for sandboxed agents. |
+| `ANTHROPIC_API_KEY` | grader, sandbox | Optional grader fallback; primary for Claude agent runs. |
+| `FRAMEVAL_ENABLE_LLM_JUDGE` | grader | Fallback default `true`; overridden by `app_settings['judge.enabled']`. |
 | `GOOGLE_API_KEY` | grader, sandbox | Google API key |
 
 ## Important Constraints
@@ -172,3 +178,5 @@ SQLite schema lives in `engine/internal/storage/migrations/`. Migrations are num
 - Cross-model judging is enforced by default: if the agent is Claude, the judge must be GPT-4o (or user-overridden).
 - Minimum runs per variant is 5. This is enforced in both the API and the UI.
 - All gRPC changes start in `proto/grader.proto`. Run `buf generate` to update both Go and Python stubs.
+- Judge provider, model, enable flag, and API keys are SQLite-stored (`app_settings` + `api_keys` tables) and editable from the frontend Settings page. Env vars exist only as headless fallbacks.
+- The API key flows from engine to grader via the `JudgeConfig` proto field on each `GradeRun` call. This is acceptable for the default localhost / in-container deployment. If the grader is ever split to a separate host, gRPC TLS becomes mandatory.
