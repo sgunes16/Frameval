@@ -233,6 +233,40 @@ func redactKey(value string) string {
 	return value[:4] + "..." + value[len(value)-4:]
 }
 
+// GetDecryptedAPIKey returns the plaintext API key for provider, or
+// sql.ErrNoRows when no row exists. The encrypted column was written
+// by UpsertAPIKey via encryptKey; this is its inverse.
+func (s *Store) GetDecryptedAPIKey(ctx context.Context, provider string) (string, error) {
+	var encrypted string
+	err := s.DB.QueryRowContext(ctx, `SELECT encrypted_key FROM api_keys WHERE provider = ?`, provider).Scan(&encrypted)
+	if err != nil {
+		return "", err
+	}
+	return decryptKey(encrypted)
+}
+
+func decryptKey(encrypted string) (string, error) {
+	key := sha256.Sum256([]byte("frameval-local-dev-key"))
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return "", fmt.Errorf("create cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("create gcm: %w", err)
+	}
+	ciphertext, err := base64.StdEncoding.DecodeString(encrypted)
+	if err != nil {
+		return "", fmt.Errorf("decode base64: %w", err)
+	}
+	nonce := key[:gcm.NonceSize()]
+	plain, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", fmt.Errorf("gcm open: %w", err)
+	}
+	return string(plain), nil
+}
+
 func (s *Store) ListAgents() []models.AgentInfo {
 	return []models.AgentInfo{
 		{Name: "opencode", Modes: []string{"cli"}, Available: true},

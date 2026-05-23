@@ -71,3 +71,31 @@ func TestSettings_SetUpsertsExisting(t *testing.T) {
 		t.Errorf("got %q, want %q (upsert should replace)", got, "ollama")
 	}
 }
+
+func TestAPIKeys_GetDecryptedRoundtrip(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	// Use "anthropic" — the api_keys table CHECK constraint limits provider
+	// to ('anthropic', 'openai', 'google'); "openrouter" is not yet allowed.
+	if err := store.UpsertAPIKey(ctx, "anthropic", "sk-or-v1-test-key-xyz"); err != nil {
+		t.Fatalf("UpsertAPIKey: %v", err)
+	}
+	got, err := store.GetDecryptedAPIKey(ctx, "anthropic")
+	if err != nil {
+		t.Fatalf("GetDecryptedAPIKey: %v", err)
+	}
+	if got != "sk-or-v1-test-key-xyz" {
+		t.Errorf("got %q, want plaintext key", got)
+	}
+}
+
+func TestAPIKeys_GetDecryptedMissingReturnsErrNoRows(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	_, err := store.GetDecryptedAPIKey(ctx, "nonexistent")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("expected sql.ErrNoRows, got %v", err)
+	}
+}
