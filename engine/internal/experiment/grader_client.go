@@ -2,6 +2,7 @@ package experiment
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -350,7 +351,13 @@ func (c *GraderClient) buildJudgeConfig(ctx context.Context) *graderpb.JudgeConf
 		return nil
 	}
 	provider := settings["judge.provider"]
-	apiKey, _ := c.settings.GetDecryptedAPIKey(ctx, provider) // empty when missing — that's OK
+	apiKey, err := c.settings.GetDecryptedAPIKey(ctx, provider)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		// sql.ErrNoRows is the documented "no key set" path; anything else
+		// (base64 decode failure, AES-GCM open failure) signals a corrupted
+		// api_keys row that the operator needs to see in logs.
+		c.logger.Warn("buildJudgeConfig: decrypt API key failed", "provider", provider, "err", err)
+	}
 	return &graderpb.JudgeConfig{
 		Provider:    provider,
 		Model:       settings["judge.model"],
