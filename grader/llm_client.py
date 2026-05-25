@@ -58,26 +58,32 @@ def load_config(override: Any = None) -> LLMClientConfig:
     )
 
 
-def build_client(cfg: LLMClientConfig):
+def build_client(cfg: LLMClientConfig, *, async_client: bool = False):
     """Return an instructor-wrapped chat completions surface.
 
-    Anthropic uses instructor.from_anthropic; everything else uses
-    instructor.from_openai (OpenRouter / Z.ai / Ollama / OpenAI are all
-    OpenAI-compat). The returned object exposes .create(...) with
-    instructor's response_model / max_retries kwargs.
+    When async_client=True, the returned `.create(...)` is awaitable —
+    required for per-dimension judge calls run concurrently via
+    asyncio.gather. The default (sync) surface preserves single-call
+    callers (failure_classifier) without changes.
     """
     if cfg.provider == "anthropic":
         import instructor
-        from anthropic import Anthropic
         if not cfg.api_key:
             raise RuntimeError("anthropic provider needs api_key")
+        if async_client:
+            from anthropic import AsyncAnthropic
+            return instructor.from_anthropic(AsyncAnthropic(api_key=cfg.api_key)).messages
+        from anthropic import Anthropic
         return instructor.from_anthropic(Anthropic(api_key=cfg.api_key)).messages
 
     import instructor
-    from openai import OpenAI
     client_kwargs: dict[str, object] = {}
     if cfg.base_url:
         client_kwargs["base_url"] = cfg.base_url
     # Ollama accepts any non-empty key; OpenRouter / Z.ai / OpenAI require real keys.
     client_kwargs["api_key"] = cfg.api_key or "not-needed"
+    if async_client:
+        from openai import AsyncOpenAI
+        return instructor.from_openai(AsyncOpenAI(**client_kwargs)).chat.completions
+    from openai import OpenAI
     return instructor.from_openai(OpenAI(**client_kwargs)).chat.completions
