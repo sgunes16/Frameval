@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -67,11 +67,18 @@ function renderPage() {
 }
 
 describe('RunGradingPage', () => {
-  it('renders composite score, judge dimension labels, rationale, and Regrade button', () => {
+  it('renders composite score, judge dimension labels, and Regrade button', () => {
     renderPage();
     expect(screen.getByText(/Composite score: 6\.50/)).toBeInTheDocument();
     expect(screen.getAllByText(/Correctness/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/solid solution on correctness/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Regrade/ })).toBeInTheDocument();
+  });
+
+  it('shows rationale text after expanding an accordion item', () => {
+    renderPage();
+    // Rationale is hidden behind accordion — click the Correctness button to expand it.
+    const correctnessBtn = screen.getAllByRole('button', { name: /Correctness/ })[0];
+    fireEvent.click(correctnessBtn);
+    expect(screen.getByText(/solid solution on correctness/)).toBeInTheDocument();
   });
 });

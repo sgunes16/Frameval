@@ -219,6 +219,7 @@ export type Grade = {
   judge_scores?: Record<string, number>;
   judge_rationales?: Record<string, string>;
   judge_irr_alpha?: number;
+  judge_user_prompt?: string;
   raw_judge_responses?: string[];
 
   // --- Spec / instruction adherence ---

@@ -147,8 +147,22 @@ export function useCompareDiagnostics(runIds: string[]) {
   });
 }
 
-export function useGrade(runId?: string) {
-  return useQuery({ queryKey: ['grade', runId], enabled: Boolean(runId), queryFn: () => api.get<Grade>(`/runs/${runId}/grade`) });
+export function useGrade(runId?: string, runStatus?: string) {
+  return useQuery({
+    queryKey: ['grade', runId],
+    enabled: Boolean(runId),
+    queryFn: () => api.get<Grade>(`/runs/${runId}/grade`),
+    // Poll while the LLM judge is still in flight. The backend persists a
+    // partial grade row immediately after sandbox verifications; the judge
+    // adds judge_scores when it returns 30-90s later.
+    refetchInterval: (query) => {
+      const data = query.state.data as Grade | undefined;
+      const judgeDone = data && data.judge_scores && Object.keys(data.judge_scores).length > 0;
+      const runTerminal = runStatus === 'completed' || runStatus === 'failed' || runStatus === 'cancelled';
+      if (judgeDone || runTerminal) return false;
+      return 2000;
+    },
+  });
 }
 
 export function useRegradeRun() {

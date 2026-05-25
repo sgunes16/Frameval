@@ -3,11 +3,19 @@ import type { Grade } from '../../lib/types';
 import { Badge } from '../ui/badge';
 import { Card, CardHeader } from '../ui/card';
 
-export function LLMJudgeCard({ grade }: { grade: Grade }) {
+export function LLMJudgeCard({ grade, isGrading }: { grade: Grade; isGrading?: boolean }) {
   const [showRaw, setShowRaw] = useState(false);
+  const [openDims, setOpenDims] = useState<Set<string>>(new Set());
   const scores = grade.judge_scores ?? {};
   const rationales = grade.judge_rationales ?? {};
   const dimEntries = Object.entries(scores);
+
+  const toggle = (dim: string) =>
+    setOpenDims((prev) => {
+      const next = new Set(prev);
+      next.has(dim) ? next.delete(dim) : next.add(dim);
+      return next;
+    });
 
   return (
     <Card>
@@ -16,50 +24,82 @@ export function LLMJudgeCard({ grade }: { grade: Grade }) {
         description="Multi-dimension judgment from the configured judge model."
       />
 
-      <div className="space-y-1">
-        {dimEntries.map(([key, value]) => (
-          <DimRow key={key} label={prettyDim(key)} value={value} />
-        ))}
-      </div>
-
-      {grade.judge_irr_alpha != null && grade.judge_irr_alpha > 0 && (
-        <div className="mt-2 text-xs text-fg-muted">
-          Inter-rater α: <span className="font-mono">{grade.judge_irr_alpha.toFixed(2)}</span>
-        </div>
-      )}
-
-      {dimEntries.length > 0 && (
-        <div className="mt-4 space-y-3 border-t border-border pt-4">
-          <div className="text-xs uppercase tracking-wider text-fg-muted">
-            Per-dimension rationale
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {dimEntries.map(([dim, score]) => (
-              <RationaleCard
-                key={dim}
-                dim={dim}
-                score={score}
-                rationale={rationales[dim] ?? ''}
-              />
+      {isGrading ? (
+        <>
+          <div className="space-y-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-3 text-sm">
+                <div className="h-3 w-32 animate-pulse rounded bg-bg-elev-2" />
+                <div className="h-2 flex-1 animate-pulse rounded bg-bg-elev-2" />
+                <div className="h-3 w-12 animate-pulse rounded bg-bg-elev-2" />
+              </div>
             ))}
           </div>
-        </div>
-      )}
+          <div className="mt-3 text-xs text-fg-muted">
+            Judge in progress… (this can take 30-90s on free-tier models)
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="space-y-1">
+            {dimEntries.map(([key, value]) => (
+              <DimRow key={key} label={prettyDim(key)} value={value} />
+            ))}
+          </div>
 
-      {(grade.raw_judge_responses?.length ?? 0) > 0 && (
-        <div className="mt-3 border-t border-border pt-3">
-          <button
-            className="text-xs text-fg-muted underline"
-            onClick={() => setShowRaw((v) => !v)}
-          >
-            {showRaw ? 'hide raw response' : 'show raw response (debug)'}
-          </button>
-          {showRaw && (
-            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-bg-elev-2 p-2 text-xs text-fg-muted">
-              {JSON.stringify(grade.raw_judge_responses, null, 2)}
-            </pre>
+          {grade.judge_irr_alpha != null && grade.judge_irr_alpha > 0 && (
+            <div className="mt-2 text-xs text-fg-muted">
+              Inter-rater α: <span className="font-mono">{grade.judge_irr_alpha.toFixed(2)}</span>
+            </div>
           )}
-        </div>
+
+          {grade.judge_user_prompt && (
+            <details className="mb-3 rounded-lg border border-border bg-bg-elev-1 p-2">
+              <summary className="cursor-pointer text-xs font-medium text-fg-muted">
+                Prompt sent to judge ({grade.judge_user_prompt.length.toLocaleString()} chars)
+              </summary>
+              <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap rounded bg-bg-elev-2 p-2 font-mono text-xs text-fg">
+                {grade.judge_user_prompt}
+              </pre>
+            </details>
+          )}
+
+          {dimEntries.length > 0 && (
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <div className="text-xs uppercase tracking-wider text-fg-muted">
+                Per-dimension rationale
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {dimEntries.map(([dim, score]) => (
+                  <RationaleCard
+                    key={dim}
+                    dim={dim}
+                    score={score}
+                    rationale={rationales[dim] ?? ''}
+                    open={openDims.has(dim)}
+                    onToggle={() => toggle(dim)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(grade.raw_judge_responses?.length ?? 0) > 0 && (
+            <div className="mt-3 border-t border-border pt-3">
+              <button
+                className="text-xs text-fg-muted underline"
+                onClick={() => setShowRaw((v) => !v)}
+              >
+                {showRaw ? 'hide raw response' : 'show raw response (debug)'}
+              </button>
+              {showRaw && (
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-bg-elev-2 p-2 text-xs text-fg-muted">
+                  {JSON.stringify(grade.raw_judge_responses, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+        </>
       )}
     </Card>
   );
@@ -82,26 +122,42 @@ function RationaleCard({
   dim,
   score,
   rationale,
+  open,
+  onToggle,
 }: {
   dim: string;
   score: number;
   rationale: string;
+  open: boolean;
+  onToggle: () => void;
 }) {
   const isSentinel = rationale.startsWith('judge_unavailable:');
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-elev-1 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-medium capitalize text-fg">{prettyDim(dim)}</div>
+    <div className="rounded-lg border border-border bg-bg-elev-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-2 p-3 text-left"
+        aria-expanded={open}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-fg-muted">{open ? '▾' : '▸'}</span>
+          <span className="text-sm font-medium capitalize text-fg">{prettyDim(dim)}</span>
+        </div>
         <Badge tone={toneFor(score)}>{score.toFixed(2)} / 10</Badge>
-      </div>
-      {rationale ? (
-        isSentinel ? (
-          <p className="font-mono text-xs text-fg-muted">{rationale}</p>
-        ) : (
-          <p className="text-sm leading-relaxed text-fg">{rationale}</p>
-        )
-      ) : (
-        <p className="text-xs italic text-fg-muted">No rationale returned by the judge.</p>
+      </button>
+      {open && (
+        <div className="border-t border-border px-3 pb-3 pt-2">
+          {rationale ? (
+            isSentinel ? (
+              <p className="font-mono text-xs text-fg-muted">{rationale}</p>
+            ) : (
+              <p className="text-sm leading-relaxed text-fg">{rationale}</p>
+            )
+          ) : (
+            <p className="text-xs italic text-fg-muted">No rationale returned by the judge.</p>
+          )}
+        </div>
       )}
     </div>
   );
