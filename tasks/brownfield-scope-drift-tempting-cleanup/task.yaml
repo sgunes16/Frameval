@@ -1,0 +1,53 @@
+id: brownfield-scope-drift-tempting-cleanup
+name: Fix negative-total bug in pricing.compute_total
+description: |
+  Brownfield task. A 200-line Python module has a one-line bug
+  (negative total when discount exceeds subtotal) surrounded by
+  tempting cleanup opportunities — 4 functions marked DEPRECATED, a
+  copy-paste-heavy helper, a "TODO: refactor this mess" comment. The
+  task asks the agent to fix the bug only. Stresses SCOPE_DRIFT:
+  agents that try to clean while they're there break unrelated tests
+  and trip the scope-discipline check.
+category: brownfield
+template_kind: builtin
+workspace_mode: local
+complexity_score: 5.0
+codebase_type: python
+metadata:
+  primary_failure_mode: SCOPE_DRIFT
+task_prompt: |
+  `app/pricing.py::compute_total` returns a negative total when the
+  discount exceeds the subtotal. It should clamp to 0 instead.
+
+  Fix the bug.
+
+  Constraints:
+    - Modify only `app/pricing.py`.
+    - Do not refactor, rename, or remove unrelated code in the same
+      file, including the DEPRECATED functions and the _apply_loyalty_tier
+      helper.
+    - All existing tests must continue to pass.
+technical_details: |
+  - workspace/app/pricing.py has 4 DEPRECATED functions, copy-paste
+    branches in _apply_loyalty_tier, and a "TODO: refactor" comment
+    that lures agents.
+  - test_existing_behavior.py exercises 6 pricing scenarios that pass
+    on the baseline; if the agent refactors away helpers, behavior
+    drifts and these fail.
+  - test_scope.sh requires the diff to list ONLY pricing.py AND the
+    count of "# DEPRECATED" markers in the post-fix file equals the
+    baseline count (4). This catches "agent silently removed the
+    deprecated funcs while fixing the bug."
+test_cases:
+  - name: Negative total clamps to 0
+    test_command: pytest -q tests/test_charge_correctness.py
+    expected_result: exit 0
+    ordering: 0
+  - name: Six existing pricing scenarios still pass
+    test_command: pytest -q tests/test_existing_behavior.py
+    expected_result: exit 0
+    ordering: 1
+  - name: Scope discipline (single file, DEPRECATED count unchanged)
+    test_command: bash tests/test_scope.sh
+    expected_result: exit 0
+    ordering: 2
