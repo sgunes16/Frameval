@@ -41,11 +41,8 @@ def grade(
     """
     try:
         cfg = load_config(config_override)
-        print(f"[judge_debug] resolved cfg provider={cfg.provider} base_url={cfg.base_url} model={cfg.model} has_key={bool(cfg.api_key)}", flush=True)
         client = build_client(cfg)
-        print(f"[judge_debug] client built", flush=True)
     except Exception as exc:
-        print(f"[judge_debug] client init exception: {exc!r}", flush=True)
         logger.warning("judge client init failed: %s", exc)
         return _failed_judge_result(str(exc))
 
@@ -56,7 +53,6 @@ def grade(
         output_files=output_files or [],
         transcript_json=transcript_json or b"",
     )
-    print(f"[judge_debug] calling client.create model={cfg.model} prompt_len={len(prompt)}", flush=True)
     try:
         verdict: JudgeResult = client.create(
             model=cfg.model,
@@ -68,9 +64,7 @@ def grade(
                 {"role": "user", "content": prompt},
             ],
         )
-        print(f"[judge_debug] client.create returned ok correctness={verdict.correctness}", flush=True)
     except Exception as exc:
-        print(f"[judge_debug] client.create exception: {exc!r}", flush=True)
         logger.warning("judge call failed: %s", exc)
         return _failed_judge_result(str(exc))
 
