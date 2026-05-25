@@ -1,0 +1,45 @@
+id: brownfield-hal-api-pydantic-version
+name: Add Pydantic v2 validator (not v1!) to User model
+description: |
+  Brownfield task. Project uses Pydantic 2.x (pinned in pyproject and
+  requirements). Task: add a validator to the User model that rejects
+  invalid email addresses. Bare agents with stale priors often use
+  the v1 `@validator` decorator (now deprecated). The trap test
+  greps for the v2 `@field_validator` import to enforce correct API
+  usage. Stresses HAL_API: hallucinated/outdated API path.
+category: brownfield
+template_kind: builtin
+workspace_mode: local
+complexity_score: 4.5
+codebase_type: python
+metadata:
+  primary_failure_mode: HAL_API
+task_prompt: |
+  Add a validator to the `User` model in `app/models.py` that rejects
+  email addresses missing an `@` symbol. On rejection, raise a
+  ValueError with the message "invalid email".
+
+  The project uses Pydantic 2.x — check pyproject.toml.
+technical_details: |
+  - workspace/pyproject.toml pins pydantic ^2.7.
+  - test_validator_works.py constructs User with bad and good email,
+    asserts ValidationError on bad.
+  - test_imports_v2_api.py greps app/models.py for:
+      * MUST contain `from pydantic import field_validator` OR
+        `from pydantic import field_validator, ...`
+      * MUST NOT contain `from pydantic import validator` or
+        `from pydantic import .*validator(?!_)`
+  - test_scope.sh: only app/models.py may change.
+test_cases:
+  - name: Validator rejects invalid emails
+    test_command: pytest -q tests/test_validator_works.py
+    expected_result: exit 0
+    ordering: 0
+  - name: Validator uses Pydantic v2 API (field_validator, not validator)
+    test_command: pytest -q tests/test_imports_v2_api.py
+    expected_result: exit 0
+    ordering: 1
+  - name: Scope (only app/models.py)
+    test_command: bash tests/test_scope.sh
+    expected_result: exit 0
+    ordering: 2
