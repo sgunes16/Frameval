@@ -12,6 +12,7 @@ import { RunGradingPage } from './pages/runs/grading';
 import { DiagnosticComparePage } from './pages/diagnostic/compare';
 import { DiagnosticLaunchPage } from './pages/diagnostic/launch';
 import { SettingsPage } from './pages/settings';
+import { RubricsPage } from './pages/rubrics';
 
 export function AppRoutes() {
   return (
@@ -29,6 +30,7 @@ export function AppRoutes() {
       <Route path="/diagnostic/launch" element={<DiagnosticLaunchPage />} />
       <Route path="/diagnostic/compare" element={<DiagnosticComparePage />} />
       <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/rubrics" element={<RubricsPage />} />
     </Routes>
   );
 }
