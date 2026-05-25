@@ -27,19 +27,21 @@ vi.mock('../../lib/hooks', () => ({
       context_utilization: 0.6,
       spec_instruction_compliance: 9,
       test_results: [{ name: 'test_one', passed: true, output: 'ok' }],
-      judge_correctness: 8,
-      judge_maintainability: 7,
-      judge_completeness: 8,
-      judge_best_practices: 6,
-      judge_error_handling: 5,
+      judge_scores: {
+        correctness: 8.0,
+        maintainability: 7.0,
+        completeness: 9.0,
+        best_practices: 6.0,
+        error_handling: 5.0,
+      },
+      judge_rationales: {
+        correctness: 'solid solution on correctness',
+        maintainability: 'clean names',
+        completeness: 'all requirements covered',
+        best_practices: 'sync lock in async code',
+        error_handling: 'happy path only',
+      },
       judge_irr_alpha: 0,
-      raw_judge_responses: [
-        'dim=correctness;{"score":8.0,"rationale":"solid solution on correctness"}',
-        'dim=maintainability;{"score":7.0,"rationale":"clean names"}',
-        'dim=completeness;{"score":9.0,"rationale":"all requirements covered"}',
-        'dim=best_practices;{"score":6.0,"rationale":"sync lock in async code"}',
-        'dim=error_handling;{"score":5.0,"rationale":"happy path only"}',
-      ],
       turn_count: 5,
       total_tokens: 1200,
     },
@@ -68,7 +70,7 @@ describe('RunGradingPage', () => {
   it('renders composite score, judge dimension labels, rationale, and Regrade button', () => {
     renderPage();
     expect(screen.getByText(/Composite score: 6\.50/)).toBeInTheDocument();
-    expect(screen.getByText(/Correctness/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Correctness/).length).toBeGreaterThan(0);
     expect(screen.getByText(/solid solution on correctness/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Regrade/ })).toBeInTheDocument();
   });

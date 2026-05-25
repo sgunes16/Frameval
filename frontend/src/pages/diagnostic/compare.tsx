@@ -666,11 +666,18 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
               </td>
             ))}
           </tr>
-          <BarRow label="Correctness" headers={headers} grades={grades} pick={(g) => g.judge_correctness} />
-          <BarRow label="Maintainability" headers={headers} grades={grades} pick={(g) => g.judge_maintainability ?? 0} />
-          <BarRow label="Completeness" headers={headers} grades={grades} pick={(g) => g.judge_completeness ?? 0} />
-          <BarRow label="Best practices" headers={headers} grades={grades} pick={(g) => g.judge_best_practices ?? 0} />
-          <BarRow label="Error handling" headers={headers} grades={grades} pick={(g) => g.judge_error_handling ?? 0} />
+          {/* dynamic: iterate the union of dim keys across selected grades */}
+          {Array.from(
+            new Set(grades.flatMap((g) => Object.keys(g?.judge_scores ?? {}))),
+          ).map((dim) => (
+            <BarRow
+              key={dim}
+              label={dim.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())}
+              headers={headers}
+              grades={grades}
+              pick={(g) => g.judge_scores?.[dim] ?? 0}
+            />
+          ))}
           <NumericRow label="Inter-rater α" headers={headers} grades={grades} format={(g) => g.judge_irr_alpha != null ? g.judge_irr_alpha.toFixed(2) : '—'} />
 
           <SectionHeader colSpan={headers.length + 1} label="Spec adherence" />
