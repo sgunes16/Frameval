@@ -150,6 +150,17 @@ export function useGrade(runId?: string) {
   return useQuery({ queryKey: ['grade', runId], enabled: Boolean(runId), queryFn: () => api.get<Grade>(`/runs/${runId}/grade`) });
 }
 
+export function useRegradeRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => api.post<void>(`/runs/${runId}/regrade`, null),
+    onSuccess: (_, runId) => {
+      client.invalidateQueries({ queryKey: ['grade', runId] });
+      client.invalidateQueries({ queryKey: ['diagnostic', runId] });
+    },
+  });
+}
+
 // useCompareGrades parallels useCompareDiagnostics: one query that
 // fans out to N runs' grade endpoints and resolves to a Grade[] in
 // the same order as the input ids. A missing grade (run not yet
