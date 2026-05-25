@@ -153,6 +153,7 @@ SQLite schema lives in `engine/internal/storage/migrations/`. Migrations are num
 |---|---|---|
 | `FRAMEVAL_DB_PATH` | engine | SQLite file path (default: `./frameval.db`) |
 | `FRAMEVAL_GRADER_ADDR` | engine | Grader gRPC address (default: `grader:50051`) |
+| `FRAMEVAL_GRADER_TIMEOUT_SECONDS` | engine | Caps the engine→grader gRPC `GradeRun` call. Default `600`. Bump higher for slow free-tier judge models. |
 | `FRAMEVAL_MAX_CONCURRENT` | engine | Max parallel sandboxes (default: `3`) |
 | `FRAMEVAL_LOG_RING_BYTES` | engine | Max bytes retained per sandbox log (default: `8388608` = 8 MiB) |
 | `FRAMEVAL_LOG_LEVEL` | engine | slog level: `debug` / `info` / `warn` / `error` (default: `info`) |
