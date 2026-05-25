@@ -318,7 +318,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		"experiment_id", experiment.ID,
 		"duration_ms", time.Since(gradeStart).Milliseconds(),
 		"composite", grade.CompositeScore,
-		"judge_correctness", grade.JudgeCorrectness,
+		"judge_dimensions", len(grade.JudgeScores),
 		"spec_compliance", grade.SpecInstructionCompliance,
 		"source", grade.Source,
 	)
@@ -808,7 +808,16 @@ func isHiddenTest(testCase models.TestCase) bool {
 func recomputeCompositeScore(grade models.Grade) float64 {
 	codeScore := grade.TestPassRate * 10
 	processScore := ((grade.SelfValidationRate * 0.4) + (grade.TokenEfficiency * 0.3) + (grade.ContextUtilization * 0.3)) * 10
-	composite := (codeScore * 0.3) + (grade.JudgeCorrectness * 0.3) + (processScore * 0.2) + (grade.SpecInstructionCompliance * 0.2)
+	// Derive a single judge score from the map: average all dimensions when present.
+	judgeScore := 0.0
+	if len(grade.JudgeScores) > 0 {
+		sum := 0.0
+		for _, v := range grade.JudgeScores {
+			sum += v
+		}
+		judgeScore = sum / float64(len(grade.JudgeScores))
+	}
+	composite := (codeScore * 0.3) + (judgeScore * 0.3) + (processScore * 0.2) + (grade.SpecInstructionCompliance * 0.2)
 	return math.Round(composite*10000) / 10000
 }
 

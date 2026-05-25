@@ -16,6 +16,7 @@ import (
 	"github.com/sony/gobreaker/v2"
 
 	"github.com/mustafaselman/frameval/engine/internal/models"
+	"github.com/mustafaselman/frameval/engine/internal/storage"
 	"github.com/mustafaselman/frameval/engine/pkg/diagnostic"
 	graderpb "github.com/mustafaselman/frameval/engine/proto"
 	"google.golang.org/grpc"
@@ -52,6 +53,7 @@ type GraderClient struct {
 type SettingsStore interface {
 	GetSettingsByPrefix(ctx context.Context, prefix string) (map[string]string, error)
 	GetDecryptedAPIKey(ctx context.Context, provider string) (string, error)
+	ListRubrics(ctx context.Context) ([]storage.Rubric, error)
 }
 
 // NewGraderClient dials the grader at addr and stores the resulting
@@ -286,11 +288,6 @@ func fallbackGrade(transcript models.Transcript) models.Grade {
 		CostUSD:                   transcript.CostUSD,
 		TokenEfficiency:           tokenEfficiency,
 		ContextUtilization:        contextUtilization,
-		JudgeCorrectness:          0,
-		JudgeMaintainability:      0,
-		JudgeCompleteness:         0,
-		JudgeBestPractices:        0,
-		JudgeErrorHandling:        0,
 		SpecInstructionCompliance: 0,
 		SpecConventionAdherence:   0,
 		CompositeScore:            compositeScore,
@@ -325,12 +322,14 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 		grade.ContextUtilization = float64(response.Process.ContextUtilization)
 	}
 	if response.Judge != nil {
-		// TODO: rubric-editor PR (Task 4) — migrate to map shape
-		// grade.JudgeCorrectness = float64(response.Judge.Correctness)
-		// grade.JudgeMaintainability = float64(response.Judge.Maintainability)
-		// grade.JudgeCompleteness = float64(response.Judge.Completeness)
-		// grade.JudgeBestPractices = float64(response.Judge.BestPractices)
-		// grade.JudgeErrorHandling = float64(response.Judge.ErrorHandling)
+		grade.JudgeScores = make(map[string]float64, len(response.Judge.Scores))
+		for k, v := range response.Judge.Scores {
+			grade.JudgeScores[k] = v
+		}
+		grade.JudgeRationales = make(map[string]string, len(response.Judge.Rationales))
+		for k, v := range response.Judge.Rationales {
+			grade.JudgeRationales[k] = v
+		}
 		grade.JudgeIRRAlpha = float64(response.Judge.IrrAlpha)
 		grade.RawJudgeResponses = response.Judge.RawResponses
 	}
@@ -377,11 +376,22 @@ func (c *GraderClient) buildJudgeConfig(ctx context.Context) *graderpb.JudgeConf
 		// api_keys row that the operator needs to see in logs.
 		c.logger.Warn("buildJudgeConfig: decrypt API key failed", "provider", provider, "err", err)
 	}
+	var rubricsProto []*graderpb.DimensionRubric
+	if c.settings != nil {
+		rubricRows, _ := c.settings.ListRubrics(ctx)
+		rubricsProto = make([]*graderpb.DimensionRubric, 0, len(rubricRows))
+		for _, r := range rubricRows {
+			rubricsProto = append(rubricsProto, &graderpb.DimensionRubric{
+				Key: r.Key, Prompt: r.Prompt,
+			})
+		}
+	}
 	return &graderpb.JudgeConfig{
 		Provider:    provider,
 		Model:       settings["judge.model"],
 		ApiKey:      apiKey,
 		JudgeRounds: 1,
+		Rubrics:     rubricsProto,
 	}
 }
 

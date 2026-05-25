@@ -57,3 +57,29 @@ func TestBuildJudgeConfig_EnabledMissingKey(t *testing.T) {
 		t.Errorf("ApiKey = %q, want empty string (grader falls back to env)", cfg.ApiKey)
 	}
 }
+
+func TestBuildJudgeConfig_PopulatesRubrics(t *testing.T) {
+	store := support.TmpStore(t)
+	ctx := context.Background()
+	_ = store.SetSetting(ctx, "judge.enabled", "true")
+	_ = store.SetSetting(ctx, "judge.provider", "openrouter")
+	_ = store.SetSetting(ctx, "judge.model", "x")
+
+	cfg := BuildJudgeConfigForTest(ctx, store)
+	if cfg == nil {
+		t.Fatal("expected non-nil cfg")
+	}
+	if len(cfg.Rubrics) != 5 {
+		t.Errorf("want 5 seeded rubrics, got %d", len(cfg.Rubrics))
+	}
+	found := false
+	for _, r := range cfg.Rubrics {
+		if r.Key == "correctness" && len(r.Prompt) > 50 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("correctness rubric missing or empty prompt")
+	}
+}

@@ -20,11 +20,8 @@ type Grade struct {
 	ErrorRecoveryCount        int                 `json:"error_recovery_count"`
 	ToolCallAccuracy          float64             `json:"tool_call_accuracy"`
 	ContextUtilization        float64             `json:"context_utilization"`
-	JudgeCorrectness          float64             `json:"judge_correctness"`
-	JudgeMaintainability      float64             `json:"judge_maintainability"`
-	JudgeCompleteness         float64             `json:"judge_completeness"`
-	JudgeBestPractices        float64             `json:"judge_best_practices"`
-	JudgeErrorHandling        float64             `json:"judge_error_handling"`
+	JudgeScores               map[string]float64  `json:"judge_scores,omitempty"`
+	JudgeRationales           map[string]string   `json:"judge_rationales,omitempty"`
 	JudgeIRRAlpha             float64             `json:"judge_irr_alpha"`
 	RawJudgeResponses         []string            `json:"raw_judge_responses,omitempty"`
 	SpecInstructionCompliance float64             `json:"spec_instruction_compliance"`
