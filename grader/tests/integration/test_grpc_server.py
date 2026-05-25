@@ -71,11 +71,9 @@ def test_grade_run_returns_disabled_judge_when_env_off(live_grader_server, monke
         ),
     )
     response = stub.GradeRun(request)
-    # Judge is disabled — all dims must be 0.0
-    assert response.judge.correctness == 0.0
-    assert response.judge.maintainability == 0.0
-    assert response.judge.completeness == 0.0
-    assert response.judge.best_practices == 0.0
-    assert response.judge.error_handling == 0.0
+    # Judge is disabled — scores and rationales maps must be empty
+    assert len(response.judge.scores) == 0
+    assert len(response.judge.rationales) == 0
+    assert "llm_judge_disabled" in response.judge.raw_responses
     # Composite score is still non-negative
     assert response.composite_score >= 0.0

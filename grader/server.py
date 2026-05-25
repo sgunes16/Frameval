@@ -55,6 +55,12 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
             judge if judge_active else None,
             None,
         )
+        judge_pb = grader_pb2.JudgeGradeResult(
+            scores=judge["scores"],
+            rationales=judge["rationales"],
+            irr_alpha=judge["irr_alpha"],
+            raw_responses=judge["raw_responses"],
+        )
         return grader_pb2.GradeRunResponse(
             code=grader_pb2.CodeGradeResult(
                 test_pass_rate=code["test_pass_rate"],
@@ -66,7 +72,7 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
                 test_results=[grader_pb2.TestResult(name=item["name"], passed=item["passed"], output=item["output"]) for item in code["test_results"]],
             ),
             process=grader_pb2.ProcessGradeResult(**process),
-            judge=grader_pb2.JudgeGradeResult(**judge),
+            judge=judge_pb,
             adherence=grader_pb2.SpecAdherenceResult(
                 instruction_compliance=adherence["instruction_compliance"],
                 constraint_violations=adherence["constraint_violations"],
@@ -170,13 +176,10 @@ def serve() -> None:
     server.wait_for_termination()
 
 
-def disabled_judge_result() -> dict[str, float | list[str]]:
+def disabled_judge_result() -> dict:
     return {
-        "correctness": 0.0,
-        "maintainability": 0.0,
-        "completeness": 0.0,
-        "best_practices": 0.0,
-        "error_handling": 0.0,
+        "scores": {},
+        "rationales": {},
         "irr_alpha": 0.0,
         "raw_responses": ["llm_judge_disabled"],
     }
