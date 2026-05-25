@@ -97,6 +97,11 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 		r.Delete("/config/api-keys/{provider}", service.DeleteAPIKey)
 		r.Get("/config/llm-settings", service.GetLLMSettings)
 		r.Put("/config/llm-settings", service.PutLLMSettings)
+		r.Get("/config/rubrics", service.ListRubrics)
+		r.Post("/config/rubrics", service.CreateRubric)
+		r.Get("/config/rubrics/{key}", service.GetRubric)
+		r.Put("/config/rubrics/{key}", service.UpdateRubric)
+		r.Delete("/config/rubrics/{key}", service.DeleteRubricHandler)
 	})
 	return r
 }

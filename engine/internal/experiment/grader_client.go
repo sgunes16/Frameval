@@ -325,11 +325,12 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 		grade.ContextUtilization = float64(response.Process.ContextUtilization)
 	}
 	if response.Judge != nil {
-		grade.JudgeCorrectness = float64(response.Judge.Correctness)
-		grade.JudgeMaintainability = float64(response.Judge.Maintainability)
-		grade.JudgeCompleteness = float64(response.Judge.Completeness)
-		grade.JudgeBestPractices = float64(response.Judge.BestPractices)
-		grade.JudgeErrorHandling = float64(response.Judge.ErrorHandling)
+		// TODO: rubric-editor PR (Task 4) — migrate to map shape
+		// grade.JudgeCorrectness = float64(response.Judge.Correctness)
+		// grade.JudgeMaintainability = float64(response.Judge.Maintainability)
+		// grade.JudgeCompleteness = float64(response.Judge.Completeness)
+		// grade.JudgeBestPractices = float64(response.Judge.BestPractices)
+		// grade.JudgeErrorHandling = float64(response.Judge.ErrorHandling)
 		grade.JudgeIRRAlpha = float64(response.Judge.IrrAlpha)
 		grade.RawJudgeResponses = response.Judge.RawResponses
 	}
