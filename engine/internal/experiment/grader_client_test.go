@@ -44,7 +44,7 @@ func TestGraderClient_GradeRunNoGraderConfiguredReturnsFallbackSource(t *testing
 	// surface 503 instead of silently persisting placeholder data.
 	c := NewGraderClient("", nil, nil)
 
-	grade, err := c.GradeRun(context.Background(), models.Task{ID: "t1"}, nil, models.Transcript{RunID: "r1"})
+	grade, err := c.GradeRun(context.Background(), models.Task{ID: "t1"}, nil, models.Transcript{RunID: "r1"}, nil)
 	if err != nil {
 		t.Fatalf("GradeRun unexpected error: %v", err)
 	}

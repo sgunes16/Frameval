@@ -27,6 +27,25 @@ message GradeRunRequest {
   TaskSpec task = 5;
   ArtifactSpec artifact = 6;
   JudgeConfig judge_config = 7;
+  // Engine-side test results from the actual sandbox (which has the test
+  // files). When present, the grader skips its own subprocess-based test
+  // runner — that one operates on output_files in a tempdir and reports
+  // 0/N for brownfield tasks whose test files aren't in output_files.
+  // Without this, the judge sees test_pass_rate=0 even when tests passed,
+  // and hallucinates "tests failed" rationales.
+  VerifiedTestResults verified_test_results = 8;
+}
+
+message VerifiedTestResults {
+  int32 pass_count = 1;
+  int32 fail_count = 2;
+  repeated VerifiedTestResult results = 3;
+}
+
+message VerifiedTestResult {
+  string name = 1;
+  bool passed = 2;
+  string output = 3;
 }
 
 message OutputFile {

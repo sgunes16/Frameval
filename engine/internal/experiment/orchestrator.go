@@ -94,7 +94,11 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 		return err
 	}
 	artifact, _ := o.store.GetLatestArtifactByVariant(ctx, run.VariantID)
-	grade, err := o.grader.GradeRun(ctx, *task, artifact, *run.Transcript)
+	// Regrade: pass the previously-stored verified test results so the
+	// judge sees the real test_pass_rate (its own grade_code would otherwise
+	// return 0/N — see grader_client.go:buildVerifiedTestResults).
+	verified := loadVerifiedTestResults(ctx, o.store, run.ID)
+	grade, err := o.grader.GradeRun(ctx, *task, artifact, *run.Transcript, verified)
 	if err != nil {
 		return err
 	}
@@ -115,7 +119,8 @@ func (o *Orchestrator) RegradeRunPayload(ctx context.Context, runID string, task
 	// JudgeConfig is populated from SQLite settings by GradeRun itself;
 	// the grader falls back to its env defaults when the settings store
 	// has no judge configuration or judge.enabled is not "true".
-	grade, err := o.grader.GradeRun(ctx, task, artifact, transcript)
+	verified := loadVerifiedTestResults(ctx, o.store, runID)
+	grade, err := o.grader.GradeRun(ctx, task, artifact, transcript, verified)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +312,12 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	o.broadcast("grading.progress", map[string]any{"run_id": run.ID, "grader": "composite", "status": "running"})
 	gradeStart := time.Now()
 	slog.Info("grader.start", "run_id", run.ID, "experiment_id", experiment.ID)
-	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript)
+	// Pass the sandbox-side verification results so the judge sees the
+	// real test_pass_rate. Without this, grader/code_grader.grade re-runs
+	// the tests in its own tempdir (which lacks the test files) and
+	// reports 0/N, causing the judge to hallucinate "tests failed"
+	// rationales even for runs that actually pass.
+	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript, testResults)
 	if gradeErr != nil {
 		slog.Error("grader.failed", "run_id", run.ID, "experiment_id", experiment.ID, "err", gradeErr, "duration_ms", time.Since(gradeStart).Milliseconds())
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", gradeErr.Error())
@@ -423,6 +433,19 @@ func (o *Orchestrator) persistDiagnostic(
 		return
 	}
 	o.broadcast("diagnostic.ready", map[string]any{"run_id": run.ID, "experiment_id": experiment.ID})
+}
+
+// loadVerifiedTestResults reads the stored test results for runID off the
+// last persisted grade row. Used on regrade paths so the LLM judge sees
+// the same test_pass_rate the engine originally verified, not the 0/N
+// the grader's own sandbox-less subprocess runner would compute. Returns
+// nil if no prior grade exists or the row had no test results.
+func loadVerifiedTestResults(ctx context.Context, store *storage.Store, runID string) []models.TestResult {
+	prior, err := store.GetGradeByRun(ctx, runID)
+	if err != nil || prior == nil {
+		return nil
+	}
+	return prior.TestResults
 }
 
 func filenamesOfOutputs(files []models.OutputFile) []string {

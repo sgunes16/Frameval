@@ -217,18 +217,19 @@ func failureClassificationFromProto(p *graderpb.FailureClassificationProto) diag
 // exhaustion). Callers that need to surface "grading actually happened"
 // — e.g. the regrade HTTP handler — should branch on grade.Source
 // rather than assuming a non-empty grade is real.
-func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript) (models.Grade, error) {
+func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript, verifiedTests []models.TestResult) (models.Grade, error) {
 	if c.client == nil {
 		return fallbackGrade(transcript), nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, gradeRunTimeout)
 	defer cancel()
 	request := &graderpb.GradeRunRequest{
-		RunId:          transcript.RunID,
-		TranscriptJson: transcript.RawOutput,
-		FilesystemDiff: transcript.FilesystemDiff,
-		Task:           &graderpb.TaskSpec{Id: task.ID, Prompt: task.TaskPrompt, CodebaseType: task.CodebaseType, SetupScript: task.SetupScript},
-		JudgeConfig:    c.buildJudgeConfig(ctx),
+		RunId:                transcript.RunID,
+		TranscriptJson:       transcript.RawOutput,
+		FilesystemDiff:       transcript.FilesystemDiff,
+		Task:                 &graderpb.TaskSpec{Id: task.ID, Prompt: task.TaskPrompt, CodebaseType: task.CodebaseType, SetupScript: task.SetupScript},
+		JudgeConfig:          c.buildJudgeConfig(ctx),
+		VerifiedTestResults:  buildVerifiedTestResults(verifiedTests),
 	}
 	for _, testCase := range task.TestCases {
 		if strings.EqualFold(strings.TrimSpace(testCase.Visibility), "hidden") || strings.TrimSpace(testCase.SetupScript) != "" {
@@ -265,6 +266,26 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 	grade := gradeFromProto(response)
 	grade.Source = models.GradeSourceGrader
 	return grade, nil
+}
+
+// buildVerifiedTestResults converts the engine's sandbox-side verification
+// results into the proto shape the grader consumes. Returning nil for an
+// empty slice keeps the field proto-absent so the grader can detect the
+// "no override; run my own tests" case via HasField().
+func buildVerifiedTestResults(results []models.TestResult) *graderpb.VerifiedTestResults {
+	if len(results) == 0 {
+		return nil
+	}
+	out := &graderpb.VerifiedTestResults{Results: make([]*graderpb.VerifiedTestResult, 0, len(results))}
+	for _, r := range results {
+		if r.Passed {
+			out.PassCount++
+		} else {
+			out.FailCount++
+		}
+		out.Results = append(out.Results, &graderpb.VerifiedTestResult{Name: r.Name, Passed: r.Passed, Output: r.Output})
+	}
+	return out
 }
 
 func fallbackGrade(transcript models.Transcript) models.Grade {
