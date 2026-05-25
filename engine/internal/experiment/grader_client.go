@@ -98,6 +98,12 @@ func (c *GraderClient) Close() error {
 // is generous to absorb Anthropic API hiccups without losing diagnostic.
 const classifyFailureTimeout = 30 * time.Second
 
+// gradeRunTimeout caps the end-to-end GradeRun gRPC call. The grader runs
+// code tests + process metrics + a real LLM judge call serially; on free-
+// tier OpenRouter models the judge alone can take 30-60s. 90s leaves
+// headroom without letting a hung run pin a worker indefinitely.
+const gradeRunTimeout = 90 * time.Second
+
 // ClassifyFailureResult bundles the verdict + transport latency the grader
 // reports back. The orchestrator persists both into the `diagnostic` row.
 type ClassifyFailureResult struct {
@@ -201,7 +207,7 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 	if c.client == nil {
 		return fallbackGrade(transcript), nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, gradeRunTimeout)
 	defer cancel()
 	request := &graderpb.GradeRunRequest{
 		RunId:          transcript.RunID,

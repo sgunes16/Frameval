@@ -34,9 +34,13 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
             "test_cases": [{"name": tc.name, "command": tc.command, "expected_result": tc.expected_result} for tc in request.task.test_cases],
         }
         code = grade_code(task, output_files)
+        print(f"[judge_debug] code_grade done; test_pass_rate={code.get('test_pass_rate')}", flush=True)
         process = process_grade(request.transcript_json)
+        print(f"[judge_debug] process_grade done", flush=True)
         judge_cfg = request.judge_config if request.HasField("judge_config") else None
+        print(f"[judge_debug] judge_cfg={'<set>' if judge_cfg else None} env_enable={settings.enable_llm_judge} provider={getattr(judge_cfg, 'provider', None)} model={getattr(judge_cfg, 'model', None)} has_key={bool(getattr(judge_cfg, 'api_key', None))}", flush=True)
         if settings.enable_llm_judge or judge_cfg is not None:
+            print(f"[judge_debug] calling judge_grade...", flush=True)
             judge = judge_grade(
                 code,
                 process,
@@ -45,8 +49,10 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
                 transcript_json=request.transcript_json.encode(),
                 config_override=judge_cfg,
             )
+            print(f"[judge_debug] judge_grade returned; raw_responses_head={(judge.get('raw_responses') or ['<empty>'])[0][:120]}", flush=True)
         else:
             judge = disabled_judge_result()
+            print(f"[judge_debug] judge disabled (env=false, no proto config)", flush=True)
         adherence = disabled_adherence_result()
         judge_active = settings.enable_llm_judge or judge_cfg is not None
         composite = compute_composite(
