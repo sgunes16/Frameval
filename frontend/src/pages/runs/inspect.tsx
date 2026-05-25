@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import {
   FilterChips,
@@ -41,6 +41,7 @@ import { useTurnStream } from '../../lib/use-turn-stream';
 export function RunInspectPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const runQuery = useRun(id);
   const turnsQuery = useRunTurns(id);
@@ -194,6 +195,15 @@ export function RunInspectPage() {
                 title="Re-parse the stored raw output with the latest parser"
               >
                 {reparse.isPending ? 'Re-parsing…' : 'Re-parse turns'}
+              </Button>
+            )}
+            {id && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => navigate(`/runs/${id}/grading`)}
+              >
+                View grading →
               </Button>
             )}
             {run && (

@@ -13,9 +13,11 @@ import type {
   HarnessInfo,
   LaunchDiagnosticRequest,
   LaunchDiagnosticResponse,
+  LLMSettings,
   ModelConfig,
   ParsedTurn,
   QueueStatus,
+  Rubric,
   Run,
   Task,
   Transcript,
@@ -79,7 +81,20 @@ export function useExperimentsForIds(experimentIds: string[]) {
 }
 
 export function useRun(runId?: string) {
-  return useQuery({ queryKey: ['run', runId], enabled: Boolean(runId), queryFn: () => api.get<Run>(`/runs/${runId}`) });
+  return useQuery({
+    queryKey: ['run', runId],
+    enabled: Boolean(runId),
+    queryFn: () => api.get<Run>(`/runs/${runId}`),
+    // While the run is non-terminal, refetch every 3s so callers (notably
+    // useGrade's polling, which keys off run.status) see status flips
+    // without manual invalidation.
+    refetchInterval: (query) => {
+      const data = query.state.data as Run | undefined;
+      if (!data) return false;
+      const terminal = data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled';
+      return terminal ? false : 3000;
+    },
+  });
 }
 
 export function useTranscript(runId?: string) {
@@ -145,8 +160,46 @@ export function useCompareDiagnostics(runIds: string[]) {
   });
 }
 
-export function useGrade(runId?: string) {
-  return useQuery({ queryKey: ['grade', runId], enabled: Boolean(runId), queryFn: () => api.get<Grade>(`/runs/${runId}/grade`) });
+export function useGrade(runId?: string, runStatus?: string) {
+  return useQuery({
+    queryKey: ['grade', runId],
+    enabled: Boolean(runId),
+    queryFn: () => api.get<Grade>(`/runs/${runId}/grade`),
+    // Poll while the LLM judge is still in flight. The backend persists a
+    // partial grade row immediately after sandbox verifications; the judge
+    // adds judge_scores when it returns 30-90s later. Stop polling when:
+    //  - judge_scores has any entries (judge ran successfully), OR
+    //  - raw_judge_responses contains the "llm_judge_disabled" sentinel
+    //    (server-side disabled_judge_result() — judge_scores stays empty
+    //    forever in that case, so we'd otherwise poll until the run
+    //    transitions to a terminal state — and if the run never does,
+    //    forever), OR
+    //  - the run reached a terminal status, OR
+    //  - we've polled 300 times (10 min hard ceiling — safety net against
+    //    a hung run that never reaches "completed").
+    refetchInterval: (query) => {
+      const data = query.state.data as Grade | undefined;
+      if (data) {
+        if (data.judge_scores && Object.keys(data.judge_scores).length > 0) return false;
+        const firstRaw = data.raw_judge_responses?.[0];
+        if (firstRaw && firstRaw.startsWith('llm_judge_disabled')) return false;
+      }
+      if (runStatus === 'completed' || runStatus === 'failed' || runStatus === 'cancelled') return false;
+      if ((query.state.dataUpdateCount ?? 0) > 300) return false;
+      return 2000;
+    },
+  });
+}
+
+export function useRegradeRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => api.post<void>(`/runs/${runId}/regrade`, null),
+    onSuccess: (_, runId) => {
+      client.invalidateQueries({ queryKey: ['grade', runId] });
+      client.invalidateQueries({ queryKey: ['diagnostic', runId] });
+    },
+  });
 }
 
 // useCompareGrades parallels useCompareDiagnostics: one query that
@@ -230,7 +283,7 @@ export function useLaunchDiagnostic() {
 }
 
 export function useAPIKeys() {
-  return useQuery({ queryKey: ['api-keys'], queryFn: () => api.get<APIKey[]>('/config/api-keys') });
+  return useQuery({ queryKey: ['config', 'api-keys'], queryFn: () => api.get<APIKey[]>('/config/api-keys') });
 }
 
 export function useDockerStatus() {
@@ -289,4 +342,88 @@ export function useWebSocket() {
     return () => socket.close();
   }, [wsBase]);
   return useMemo(() => ({ events }), [events]);
+}
+
+export function useLLMSettings() {
+  return useQuery({
+    queryKey: ['config', 'llm-settings'],
+    queryFn: () => api.get<LLMSettings>('/config/llm-settings'),
+  });
+}
+
+export function useSaveLLMSettings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Pick<LLMSettings, 'provider' | 'model' | 'enabled'>) =>
+      api.put<LLMSettings>('/config/llm-settings', payload),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['config', 'llm-settings'] });
+      client.invalidateQueries({ queryKey: ['config', 'api-keys'] });
+    },
+  });
+}
+
+export function useUpsertAPIKey() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { provider: string; api_key: string }) =>
+      api.post<void>('/config/api-keys', payload),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['config', 'api-keys'] });
+      client.invalidateQueries({ queryKey: ['config', 'llm-settings'] });
+    },
+  });
+}
+
+export function useDeleteAPIKey() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (provider: string) =>
+      api.delete<void>(`/config/api-keys/${encodeURIComponent(provider)}`),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['config', 'api-keys'] });
+      client.invalidateQueries({ queryKey: ['config', 'llm-settings'] });
+    },
+  });
+}
+
+export function useRubrics() {
+  return useQuery({
+    queryKey: ['config', 'rubrics'],
+    queryFn: () => api.get<Rubric[]>('/config/rubrics'),
+  });
+}
+
+export function useRubric(key?: string) {
+  return useQuery({
+    queryKey: ['config', 'rubrics', key],
+    enabled: Boolean(key),
+    queryFn: () => api.get<Rubric>(`/config/rubrics/${key}`),
+  });
+}
+
+export function useCreateRubric() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Pick<Rubric, 'key' | 'display_name' | 'prompt'>) =>
+      api.post<Rubric>('/config/rubrics', payload),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['config', 'rubrics'] }),
+  });
+}
+
+export function useUpdateRubric() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, ...payload }: Pick<Rubric, 'key' | 'display_name' | 'prompt'>) =>
+      api.put<Rubric>(`/config/rubrics/${key}`, payload),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['config', 'rubrics'] }),
+  });
+}
+
+export function useDeleteRubric() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => api.delete<void>(`/config/rubrics/${key}`),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['config', 'rubrics'] }),
+  });
 }

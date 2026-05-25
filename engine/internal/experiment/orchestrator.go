@@ -94,7 +94,11 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 		return err
 	}
 	artifact, _ := o.store.GetLatestArtifactByVariant(ctx, run.VariantID)
-	grade, err := o.grader.GradeRun(ctx, *task, artifact, *run.Transcript, experiment.JudgeModel)
+	// Regrade: pass the previously-stored verified test results so the
+	// judge sees the real test_pass_rate (its own grade_code would otherwise
+	// return 0/N — see grader_client.go:buildVerifiedTestResults).
+	verified := loadVerifiedTestResults(ctx, o.store, run.ID)
+	grade, err := o.grader.GradeRun(ctx, *task, artifact, *run.Transcript, verified)
 	if err != nil {
 		return err
 	}
@@ -112,11 +116,11 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 }
 
 func (o *Orchestrator) RegradeRunPayload(ctx context.Context, runID string, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript) (*models.Grade, error) {
-	// JudgeModel deliberately empty here — RegradeRunPayload is the
-	// re-grade-from-arbitrary-transcript path used by tests and CLI tools
-	// that don't have an experiment row handy. GradeRun applies the
-	// defaultJudgeModel fallback.
-	grade, err := o.grader.GradeRun(ctx, task, artifact, transcript, "")
+	// JudgeConfig is populated from SQLite settings by GradeRun itself;
+	// the grader falls back to its env defaults when the settings store
+	// has no judge configuration or judge.enabled is not "true".
+	verified := loadVerifiedTestResults(ctx, o.store, runID)
+	grade, err := o.grader.GradeRun(ctx, task, artifact, transcript, verified)
 	if err != nil {
 		return nil, err
 	}
@@ -306,9 +310,39 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	_ = o.store.UpdateRunStatus(ctx, run.ID, "grading", "")
 	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "grading", "variant_id": run.VariantID})
 	o.broadcast("grading.progress", map[string]any{"run_id": run.ID, "grader": "composite", "status": "running"})
+	// Phase 1: persist deterministic grade fields immediately so the frontend
+	// can render the grading page without waiting for the LLM judge (which
+	// can take 30-90s on free-tier models). The full grade (Phase 2) will
+	// replace this row via SaveGrade's DELETE-then-INSERT semantics.
+	partialTotal := passed + failed
+	partialPassRate := 0.0
+	if partialTotal > 0 {
+		partialPassRate = float64(passed) / float64(partialTotal)
+	}
+	partial := models.Grade{
+		ID:             uuid.NewString(),
+		RunID:          run.ID,
+		TestResults:    testResults,
+		TestPassCount:  passed,
+		TestFailCount:  failed,
+		TestPassRate:   partialPassRate,
+		FileStateValid: len(outputFiles) > 0,
+		LintScore:      10.0,
+		TypeCheckPass:  true,
+		Source:         models.GradeSourceGrader,
+		GradedAt:       time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := o.store.SaveGrade(ctx, partial); err != nil {
+		slog.Warn("partial grade save failed; continuing to full grade", "run_id", run.ID, "err", err)
+	}
 	gradeStart := time.Now()
-	slog.Info("grader.start", "run_id", run.ID, "experiment_id", experiment.ID, "judge_model", experiment.JudgeModel)
-	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript, experiment.JudgeModel)
+	slog.Info("grader.start", "run_id", run.ID, "experiment_id", experiment.ID)
+	// Pass the sandbox-side verification results so the judge sees the
+	// real test_pass_rate. Without this, grader/code_grader.grade re-runs
+	// the tests in its own tempdir (which lacks the test files) and
+	// reports 0/N, causing the judge to hallucinate "tests failed"
+	// rationales even for runs that actually pass.
+	grade, gradeErr := o.grader.GradeRun(ctx, *task, artifact, transcript, testResults)
 	if gradeErr != nil {
 		slog.Error("grader.failed", "run_id", run.ID, "experiment_id", experiment.ID, "err", gradeErr, "duration_ms", time.Since(gradeStart).Milliseconds())
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", gradeErr.Error())
@@ -319,7 +353,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		"experiment_id", experiment.ID,
 		"duration_ms", time.Since(gradeStart).Milliseconds(),
 		"composite", grade.CompositeScore,
-		"judge_correctness", grade.JudgeCorrectness,
+		"judge_dimensions", len(grade.JudgeScores),
 		"spec_compliance", grade.SpecInstructionCompliance,
 		"source", grade.Source,
 	)
@@ -424,6 +458,19 @@ func (o *Orchestrator) persistDiagnostic(
 		return
 	}
 	o.broadcast("diagnostic.ready", map[string]any{"run_id": run.ID, "experiment_id": experiment.ID})
+}
+
+// loadVerifiedTestResults reads the stored test results for runID off the
+// last persisted grade row. Used on regrade paths so the LLM judge sees
+// the same test_pass_rate the engine originally verified, not the 0/N
+// the grader's own sandbox-less subprocess runner would compute. Returns
+// nil if no prior grade exists or the row had no test results.
+func loadVerifiedTestResults(ctx context.Context, store *storage.Store, runID string) []models.TestResult {
+	prior, err := store.GetGradeByRun(ctx, runID)
+	if err != nil || prior == nil {
+		return nil
+	}
+	return prior.TestResults
 }
 
 func filenamesOfOutputs(files []models.OutputFile) []string {
@@ -809,7 +856,16 @@ func isHiddenTest(testCase models.TestCase) bool {
 func recomputeCompositeScore(grade models.Grade) float64 {
 	codeScore := grade.TestPassRate * 10
 	processScore := ((grade.SelfValidationRate * 0.4) + (grade.TokenEfficiency * 0.3) + (grade.ContextUtilization * 0.3)) * 10
-	composite := (codeScore * 0.3) + (grade.JudgeCorrectness * 0.3) + (processScore * 0.2) + (grade.SpecInstructionCompliance * 0.2)
+	// Derive a single judge score from the map: average all dimensions when present.
+	judgeScore := 0.0
+	if len(grade.JudgeScores) > 0 {
+		sum := 0.0
+		for _, v := range grade.JudgeScores {
+			sum += v
+		}
+		judgeScore = sum / float64(len(grade.JudgeScores))
+	}
+	composite := (codeScore * 0.3) + (judgeScore * 0.3) + (processScore * 0.2) + (grade.SpecInstructionCompliance * 0.2)
 	return math.Round(composite*10000) / 10000
 }
 

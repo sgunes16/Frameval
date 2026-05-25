@@ -27,6 +27,25 @@ message GradeRunRequest {
   TaskSpec task = 5;
   ArtifactSpec artifact = 6;
   JudgeConfig judge_config = 7;
+  // Engine-side test results from the actual sandbox (which has the test
+  // files). When present, the grader skips its own subprocess-based test
+  // runner — that one operates on output_files in a tempdir and reports
+  // 0/N for brownfield tasks whose test files aren't in output_files.
+  // Without this, the judge sees test_pass_rate=0 even when tests passed,
+  // and hallucinates "tests failed" rationales.
+  VerifiedTestResults verified_test_results = 8;
+}
+
+message VerifiedTestResults {
+  int32 pass_count = 1;
+  int32 fail_count = 2;
+  repeated VerifiedTestResult results = 3;
+}
+
+message VerifiedTestResult {
+  string name = 1;
+  bool passed = 2;
+  string output = 3;
 }
 
 message OutputFile {
@@ -53,12 +72,18 @@ message ArtifactSpec {
   string type = 2;
 }
 
+message DimensionRubric {
+  string key = 1;
+  string prompt = 2;
+}
+
 message JudgeConfig {
   string model = 1;
   string provider = 2;
   string api_key = 3;
   repeated RubricDimension rubric = 4;
   int32 judge_rounds = 5;
+  repeated DimensionRubric rubrics = 6;
 }
 
 message RubricDimension {
@@ -74,6 +99,7 @@ message GradeRunResponse {
   JudgeGradeResult judge = 3;
   SpecAdherenceResult adherence = 4;
   float composite_score = 5;
+  string judge_user_prompt = 6;  // the actual user message sent to the judge model
 }
 
 message CodeGradeResult {
@@ -107,13 +133,10 @@ message ProcessGradeResult {
 }
 
 message JudgeGradeResult {
-  float correctness = 1;
-  float maintainability = 2;
-  float completeness = 3;
-  float best_practices = 4;
-  float error_handling = 5;
-  float irr_alpha = 6;
-  repeated string raw_responses = 7;
+  map<string, double> scores = 1;
+  map<string, string> rationales = 2;
+  double irr_alpha = 3;
+  repeated string raw_responses = 4;
 }
 
 message SpecAdherenceResult {

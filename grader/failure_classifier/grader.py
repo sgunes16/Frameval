@@ -1,9 +1,9 @@
 """Failure-classifier callable — the only LLM stage in AgentDx.
 
-Wraps Anthropic's Claude Haiku 4.5 with `instructor` so the response is
-guaranteed to satisfy the Pydantic `FailureClassification` schema (with
-retries on validation failures). On hard failure, returns the
-`unclassified()` sentinel so the orchestrator never crashes mid-pipeline.
+Uses the shared llm_client factory so the classifier honours the same
+provider/model env vars as the rest of the grader. On hard failure,
+returns the `unclassified()` sentinel so the orchestrator never crashes
+mid-pipeline.
 
 The classify() top-level function is the simple entry point used by the
 gRPC handler (Story #23); FailureClassifier is the instantiable class
@@ -13,7 +13,6 @@ with a different model id).
 from __future__ import annotations
 
 import logging
-import os
 from typing import Mapping, Protocol
 
 from grader.failure_classifier.prompts import SYSTEM_PROMPT, render_user_prompt
@@ -21,9 +20,6 @@ from grader.failure_classifier.taxonomy import (
     FailureClassification,
     FailureCode,
 )
-
-# Default model id; pinned to Haiku 4.5 per spec §4.7.4.
-DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 
 # Hard upper bound on retries the instructor wrapper performs internally.
 # Each retry costs an API call, so 2 is the sweet spot — see the
@@ -70,7 +66,7 @@ class FailureClassifier:
     def __init__(
         self,
         *,
-        model: str = DEFAULT_MODEL,
+        model: str = "",  # empty = "use shared client's default resolution"
         client: _ClassifierClient | None = None,
     ) -> None:
         self.model = model
@@ -80,17 +76,15 @@ class FailureClassifier:
         if self._client is not None:
             return self._client
         # Lazy import so test fixtures using injected clients don't need
-        # ANTHROPIC_API_KEY or the anthropic SDK installed at import time.
-        import instructor
-        from anthropic import Anthropic
+        # an LLM SDK installed at import time.
+        from grader.llm_client import build_client, load_config
 
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "ANTHROPIC_API_KEY is not set — cannot construct default classifier client. "
-                "Set the env var or pass a client= kwarg explicitly."
-            )
-        self._client = instructor.from_anthropic(Anthropic(api_key=api_key)).messages
+        override = None
+        if self.model:
+            from types import SimpleNamespace
+            override = SimpleNamespace(provider="", model=self.model, api_key="")
+        cfg = load_config(override)
+        self._client = build_client(cfg)
         return self._client
 
     def classify(
@@ -114,6 +108,11 @@ class FailureClassifier:
             logger.warning("classifier client init failed: %s", exc)
             return unclassified(str(exc))
 
+        from grader.llm_client import load_config
+        effective_model = self.model
+        if not effective_model:
+            effective_model = load_config().model
+
         user_prompt = render_user_prompt(
             symptoms=symptoms,
             task_description=task_description,
@@ -121,7 +120,7 @@ class FailureClassifier:
         )
         try:
             return client.create(
-                model=self.model,
+                model=effective_model,
                 max_tokens=RESPONSE_MAX_TOKENS,
                 response_model=FailureClassification,
                 max_retries=INSTRUCTOR_MAX_RETRIES,

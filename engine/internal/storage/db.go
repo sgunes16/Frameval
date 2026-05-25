@@ -104,7 +104,10 @@ func unmarshalJSON[T any](raw string, fallback T) T {
 }
 
 func splitSQLStatements(contents string) []string {
-	// Strip line comments first so semicolons inside comments don't confuse the splitter.
+	// Strip full-line comments so they don't interfere with splitting.
+	// NOTE: we cannot strip all comment characters because '--' may appear
+	// inside single-quoted string literals (e.g. in rubric prompt text).
+	// We only strip lines whose first non-whitespace token is '--'.
 	var stripped strings.Builder
 	for _, line := range strings.Split(contents, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -114,14 +117,45 @@ func splitSQLStatements(contents string) []string {
 		stripped.WriteString(line)
 		stripped.WriteString("\n")
 	}
-	parts := strings.Split(stripped.String(), ";")
-	statements := make([]string, 0, len(parts))
-	for _, part := range parts {
-		statement := strings.TrimSpace(part)
-		if statement == "" {
-			continue
+
+	// Scan character-by-character to split on ';' outside of single-quoted
+	// string literals.  SQLite uses '' to escape a single quote inside a
+	// string, so we handle that as well.
+	input := stripped.String()
+	statements := make([]string, 0)
+	var current strings.Builder
+	inString := false
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		if inString {
+			current.WriteByte(ch)
+			if ch == '\'' {
+				// Check for escaped quote: '' means a literal quote, not end-of-string.
+				if i+1 < len(input) && input[i+1] == '\'' {
+					i++ // consume the second quote as part of the literal
+					current.WriteByte(input[i])
+				} else {
+					inString = false
+				}
+			}
+		} else {
+			if ch == '\'' {
+				inString = true
+				current.WriteByte(ch)
+			} else if ch == ';' {
+				stmt := strings.TrimSpace(current.String())
+				if stmt != "" {
+					statements = append(statements, stmt)
+				}
+				current.Reset()
+			} else {
+				current.WriteByte(ch)
+			}
 		}
-		statements = append(statements, statement)
+	}
+	// Capture any trailing statement that wasn't terminated by ';'.
+	if stmt := strings.TrimSpace(current.String()); stmt != "" {
+		statements = append(statements, stmt)
 	}
 	return statements
 }

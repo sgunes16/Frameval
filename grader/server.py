@@ -34,14 +34,48 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
             "test_cases": [{"name": tc.name, "command": tc.command, "expected_result": tc.expected_result} for tc in request.task.test_cases],
         }
         code = grade_code(task, output_files)
+        # If the engine pre-verified tests in the sandbox (which has the
+        # actual test files), it sends the results in verified_test_results.
+        # Use them instead of grade_code's own subprocess run — that one
+        # operates on output_files in a tempdir which lacks the test files,
+        # so it always reports 0/N for brownfield tasks. Lint / type_check /
+        # file_state_valid stay from grade_code (they only need the files).
+        if request.HasField("verified_test_results") and len(request.verified_test_results.results) > 0:
+            v = request.verified_test_results
+            code["test_pass_count"] = int(v.pass_count)
+            code["test_fail_count"] = int(v.fail_count)
+            total = max(int(v.pass_count) + int(v.fail_count), 1)
+            code["test_pass_rate"] = round(int(v.pass_count) / total, 4)
+            code["test_results"] = [
+                {"name": r.name, "passed": bool(r.passed), "output": r.output}
+                for r in v.results
+            ]
         process = process_grade(request.transcript_json)
-        judge = judge_grade(code, process) if settings.enable_llm_judge else disabled_judge_result()
+        judge_cfg = request.judge_config if request.HasField("judge_config") else None
+        if settings.enable_llm_judge or judge_cfg is not None:
+            judge = judge_grade(
+                code,
+                process,
+                task=task,
+                output_files=output_files,
+                transcript_json=request.transcript_json.encode(),
+                config_override=judge_cfg,
+            )
+        else:
+            judge = disabled_judge_result()
         adherence = disabled_adherence_result()
+        judge_active = settings.enable_llm_judge or judge_cfg is not None
         composite = compute_composite(
             code,
             process,
-            judge if settings.enable_llm_judge else None,
+            judge if judge_active else None,
             None,
+        )
+        judge_pb = grader_pb2.JudgeGradeResult(
+            scores=judge["scores"],
+            rationales=judge["rationales"],
+            irr_alpha=judge["irr_alpha"],
+            raw_responses=judge["raw_responses"],
         )
         return grader_pb2.GradeRunResponse(
             code=grader_pb2.CodeGradeResult(
@@ -54,7 +88,7 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
                 test_results=[grader_pb2.TestResult(name=item["name"], passed=item["passed"], output=item["output"]) for item in code["test_results"]],
             ),
             process=grader_pb2.ProcessGradeResult(**process),
-            judge=grader_pb2.JudgeGradeResult(**judge),
+            judge=judge_pb,
             adherence=grader_pb2.SpecAdherenceResult(
                 instruction_compliance=adherence["instruction_compliance"],
                 constraint_violations=adherence["constraint_violations"],
@@ -62,6 +96,7 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
                 per_instruction=[grader_pb2.InstructionResult(**item) for item in adherence["per_instruction"]],
             ),
             composite_score=composite,
+            judge_user_prompt=judge.get("user_prompt", ""),
         )
 
     def ComputeStats(self, request: grader_pb2.ComputeStatsRequest, context: grpc.ServicerContext) -> grader_pb2.ComputeStatsResponse:
@@ -158,15 +193,13 @@ def serve() -> None:
     server.wait_for_termination()
 
 
-def disabled_judge_result() -> dict[str, float | list[str]]:
+def disabled_judge_result() -> dict:
     return {
-        "correctness": 0.0,
-        "maintainability": 0.0,
-        "completeness": 0.0,
-        "best_practices": 0.0,
-        "error_handling": 0.0,
+        "scores": {},
+        "rationales": {},
         "irr_alpha": 0.0,
         "raw_responses": ["llm_judge_disabled"],
+        "user_prompt": "",
     }
 
 

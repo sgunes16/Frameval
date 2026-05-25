@@ -2,10 +2,13 @@ package experiment
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"math"
+	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -13,6 +16,7 @@ import (
 	"github.com/sony/gobreaker/v2"
 
 	"github.com/mustafaselman/frameval/engine/internal/models"
+	"github.com/mustafaselman/frameval/engine/internal/storage"
 	"github.com/mustafaselman/frameval/engine/pkg/diagnostic"
 	graderpb "github.com/mustafaselman/frameval/engine/proto"
 	"google.golang.org/grpc"
@@ -30,10 +34,11 @@ import (
 // contract that callers can construct a GraderClient unconditionally,
 // whether the addr is empty, unreachable, or wrong-formatted.
 type GraderClient struct {
-	conn    *grpc.ClientConn
-	client  graderpb.GraderServiceClient
-	breaker *gobreaker.CircuitBreaker[any]
-	logger  *slog.Logger
+	conn     *grpc.ClientConn
+	client   graderpb.GraderServiceClient
+	breaker  *gobreaker.CircuitBreaker[any]
+	logger   *slog.Logger
+	settings SettingsStore
 	// Logged-once latch for the grader-unavailable warning. Without
 	// it the orchestrator floods the log with one WARN line per run
 	// while the grader is offline (the common dev case: nobody
@@ -43,29 +48,38 @@ type GraderClient struct {
 	graderDownLogged atomic.Bool
 }
 
+// SettingsStore is the minimal store interface buildJudgeConfig needs.
+// Defined here so tests can pass a fake. *storage.Store satisfies it.
+type SettingsStore interface {
+	GetSettingsByPrefix(ctx context.Context, prefix string) (map[string]string, error)
+	GetDecryptedAPIKey(ctx context.Context, provider string) (string, error)
+	ListRubrics(ctx context.Context) ([]storage.Rubric, error)
+}
+
 // NewGraderClient dials the grader at addr and stores the resulting
 // connection + client stub. Errors during dial are logged on the supplied
 // logger (or slog.Default() when nil) and the resulting client falls back
 // to "no grader configured" behavior, so the engine still starts even if
 // the grader is unreachable at startup time. grpc.NewClient is lazy — the
 // underlying TCP connection is not established until the first RPC call.
-func NewGraderClient(addr string, logger *slog.Logger) *GraderClient {
+func NewGraderClient(addr string, logger *slog.Logger, settings SettingsStore) *GraderClient {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	if addr == "" {
-		return &GraderClient{logger: logger, breaker: newGraderBreaker()}
+		return &GraderClient{logger: logger, breaker: newGraderBreaker(), settings: settings}
 	}
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Warn("grader dial failed (will fall back to local grading)", "err", err, "addr", addr)
-		return &GraderClient{logger: logger, breaker: newGraderBreaker()}
+		return &GraderClient{logger: logger, breaker: newGraderBreaker(), settings: settings}
 	}
 	return &GraderClient{
-		conn:    conn,
-		client:  graderpb.NewGraderServiceClient(conn),
-		breaker: newGraderBreaker(),
-		logger:  logger,
+		conn:     conn,
+		client:   graderpb.NewGraderServiceClient(conn),
+		breaker:  newGraderBreaker(),
+		logger:   logger,
+		settings: settings,
 	}
 }
 
@@ -87,6 +101,22 @@ func (c *GraderClient) Close() error {
 // label. The classifier is expected to return in ~3-5s on Haiku; the cap
 // is generous to absorb Anthropic API hiccups without losing diagnostic.
 const classifyFailureTimeout = 30 * time.Second
+
+// gradeRunTimeout caps the end-to-end GradeRun gRPC call. Real LLM judge
+// calls on free-tier providers regularly take 30-90s; cumulative grading
+// with multiple stages can push past 2 minutes. 600s is generous but
+// finite so a hung run cannot pin a worker forever. Override with
+// FRAMEVAL_GRADER_TIMEOUT_SECONDS for slower providers or larger prompts.
+var gradeRunTimeout = resolveGradeRunTimeout()
+
+func resolveGradeRunTimeout() time.Duration {
+	if raw := os.Getenv("FRAMEVAL_GRADER_TIMEOUT_SECONDS"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return 600 * time.Second
+}
 
 // ClassifyFailureResult bundles the verdict + transport latency the grader
 // reports back. The orchestrator persists both into the `diagnostic` row.
@@ -178,33 +208,28 @@ func failureClassificationFromProto(p *graderpb.FailureClassificationProto) diag
 	}
 }
 
-// defaultJudgeModel is the cross-model judge baseline per CLAUDE.md.
-// Used when the experiment row doesn't specify one explicitly.
-const defaultJudgeModel = "gpt-4o"
-
-// GradeRun calls the Python grader's GradeRun RPC. The judgeModel arg
-// controls which model the grader uses for its LLM-as-judge stage —
-// passing "" falls back to defaultJudgeModel. The returned grade
-// always has Source set: GradeSourceGrader on a real round-trip,
-// GradeSourceFallback on any error (no grader configured, breaker
-// open, RPC failure, retry exhaustion). Callers that need to surface
-// "grading actually happened" — e.g. the regrade HTTP handler — should
-// branch on grade.Source rather than assuming a non-empty grade is real.
-func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript, judgeModel string) (models.Grade, error) {
-	if judgeModel == "" {
-		judgeModel = defaultJudgeModel
-	}
+// GradeRun calls the Python grader's GradeRun RPC. JudgeConfig is
+// populated from SQLite settings via buildJudgeConfig; sending nil
+// (proto-absent) tells the grader to use its own env defaults or return
+// a disabled_judge_result. The returned grade always has Source set:
+// GradeSourceGrader on a real round-trip, GradeSourceFallback on any
+// error (no grader configured, breaker open, RPC failure, retry
+// exhaustion). Callers that need to surface "grading actually happened"
+// — e.g. the regrade HTTP handler — should branch on grade.Source
+// rather than assuming a non-empty grade is real.
+func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript, verifiedTests []models.TestResult) (models.Grade, error) {
 	if c.client == nil {
 		return fallbackGrade(transcript), nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, gradeRunTimeout)
 	defer cancel()
 	request := &graderpb.GradeRunRequest{
-		RunId:          transcript.RunID,
-		TranscriptJson: transcript.RawOutput,
-		FilesystemDiff: transcript.FilesystemDiff,
-		Task:           &graderpb.TaskSpec{Id: task.ID, Prompt: task.TaskPrompt, CodebaseType: task.CodebaseType, SetupScript: task.SetupScript},
-		JudgeConfig:    &graderpb.JudgeConfig{Model: judgeModel, Provider: "openai", JudgeRounds: 1},
+		RunId:                transcript.RunID,
+		TranscriptJson:       transcript.RawOutput,
+		FilesystemDiff:       transcript.FilesystemDiff,
+		Task:                 &graderpb.TaskSpec{Id: task.ID, Prompt: task.TaskPrompt, CodebaseType: task.CodebaseType, SetupScript: task.SetupScript},
+		JudgeConfig:          c.buildJudgeConfig(ctx),
+		VerifiedTestResults:  buildVerifiedTestResults(verifiedTests),
 	}
 	for _, testCase := range task.TestCases {
 		if strings.EqualFold(strings.TrimSpace(testCase.Visibility), "hidden") || strings.TrimSpace(testCase.SetupScript) != "" {
@@ -243,6 +268,26 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 	return grade, nil
 }
 
+// buildVerifiedTestResults converts the engine's sandbox-side verification
+// results into the proto shape the grader consumes. Returning nil for an
+// empty slice keeps the field proto-absent so the grader can detect the
+// "no override; run my own tests" case via HasField().
+func buildVerifiedTestResults(results []models.TestResult) *graderpb.VerifiedTestResults {
+	if len(results) == 0 {
+		return nil
+	}
+	out := &graderpb.VerifiedTestResults{Results: make([]*graderpb.VerifiedTestResult, 0, len(results))}
+	for _, r := range results {
+		if r.Passed {
+			out.PassCount++
+		} else {
+			out.FailCount++
+		}
+		out.Results = append(out.Results, &graderpb.VerifiedTestResult{Name: r.Name, Passed: r.Passed, Output: r.Output})
+	}
+	return out
+}
+
 func fallbackGrade(transcript models.Transcript) models.Grade {
 	tokenEfficiency := 0.0
 	if transcript.TotalTokens > 0 {
@@ -264,11 +309,6 @@ func fallbackGrade(transcript models.Transcript) models.Grade {
 		CostUSD:                   transcript.CostUSD,
 		TokenEfficiency:           tokenEfficiency,
 		ContextUtilization:        contextUtilization,
-		JudgeCorrectness:          0,
-		JudgeMaintainability:      0,
-		JudgeCompleteness:         0,
-		JudgeBestPractices:        0,
-		JudgeErrorHandling:        0,
 		SpecInstructionCompliance: 0,
 		SpecConventionAdherence:   0,
 		CompositeScore:            compositeScore,
@@ -303,11 +343,14 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 		grade.ContextUtilization = float64(response.Process.ContextUtilization)
 	}
 	if response.Judge != nil {
-		grade.JudgeCorrectness = float64(response.Judge.Correctness)
-		grade.JudgeMaintainability = float64(response.Judge.Maintainability)
-		grade.JudgeCompleteness = float64(response.Judge.Completeness)
-		grade.JudgeBestPractices = float64(response.Judge.BestPractices)
-		grade.JudgeErrorHandling = float64(response.Judge.ErrorHandling)
+		grade.JudgeScores = make(map[string]float64, len(response.Judge.Scores))
+		for k, v := range response.Judge.Scores {
+			grade.JudgeScores[k] = v
+		}
+		grade.JudgeRationales = make(map[string]string, len(response.Judge.Rationales))
+		for k, v := range response.Judge.Rationales {
+			grade.JudgeRationales[k] = v
+		}
 		grade.JudgeIRRAlpha = float64(response.Judge.IrrAlpha)
 		grade.RawJudgeResponses = response.Judge.RawResponses
 	}
@@ -320,6 +363,7 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 		}
 	}
 	grade.CompositeScore = float64(response.CompositeScore)
+	grade.JudgeUserPrompt = response.JudgeUserPrompt
 	return grade
 }
 
@@ -329,3 +373,53 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 // (mean/median/stddev) and the model.ExperimentStat type were dropped
 // together; if AgentDx ever needs aggregate stats again, they belong in
 // engine/pkg/diagnostic where they can compose with the fingerprint vector.
+
+// buildJudgeConfig returns a JudgeConfig proto reflecting current SQLite
+// state. Returns nil when judge is disabled or the settings store is
+// missing — the grader treats a nil JudgeConfig as "use grader-side env
+// defaults / disabled_judge_result", preserving the legacy headless path.
+func (c *GraderClient) buildJudgeConfig(ctx context.Context) *graderpb.JudgeConfig {
+	if c.settings == nil {
+		return nil
+	}
+	settings, err := c.settings.GetSettingsByPrefix(ctx, "judge.")
+	if err != nil {
+		c.logger.Warn("buildJudgeConfig: settings lookup failed", "err", err)
+		return nil
+	}
+	if settings["judge.enabled"] != "true" {
+		return nil
+	}
+	provider := settings["judge.provider"]
+	apiKey, err := c.settings.GetDecryptedAPIKey(ctx, provider)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		// sql.ErrNoRows is the documented "no key set" path; anything else
+		// (base64 decode failure, AES-GCM open failure) signals a corrupted
+		// api_keys row that the operator needs to see in logs.
+		c.logger.Warn("buildJudgeConfig: decrypt API key failed", "provider", provider, "err", err)
+	}
+	var rubricsProto []*graderpb.DimensionRubric
+	if c.settings != nil {
+		rubricRows, _ := c.settings.ListRubrics(ctx)
+		rubricsProto = make([]*graderpb.DimensionRubric, 0, len(rubricRows))
+		for _, r := range rubricRows {
+			rubricsProto = append(rubricsProto, &graderpb.DimensionRubric{
+				Key: r.Key, Prompt: r.Prompt,
+			})
+		}
+	}
+	return &graderpb.JudgeConfig{
+		Provider:    provider,
+		Model:       settings["judge.model"],
+		ApiKey:      apiKey,
+		JudgeRounds: 1,
+		Rubrics:     rubricsProto,
+	}
+}
+
+// BuildJudgeConfigForTest exposes buildJudgeConfig for unit tests
+// without exporting the method publicly. Production callers go through GradeRun.
+func BuildJudgeConfigForTest(ctx context.Context, store SettingsStore) *graderpb.JudgeConfig {
+	c := &GraderClient{settings: store, logger: slog.Default()}
+	return c.buildJudgeConfig(ctx)
+}

@@ -11,7 +11,6 @@ from typing import Any
 import pytest
 
 from grader.failure_classifier.grader import (
-    DEFAULT_MODEL,
     FailureClassifier,
     classify,
     set_default_classifier,
@@ -78,7 +77,7 @@ def test_classifier_forwards_messages_and_model():
 
 def test_classifier_returns_unclassified_on_exception():
     fake = _RecordingFake(RuntimeError("API blew up"))
-    cls = FailureClassifier(model=DEFAULT_MODEL, client=fake)
+    cls = FailureClassifier(model="claude-haiku-4-5-20251001", client=fake)
 
     got = cls.classify(symptoms={}, task_description="x", transcript_tail="")
     assert got.primary == FailureCode.NONE
@@ -86,14 +85,23 @@ def test_classifier_returns_unclassified_on_exception():
     assert "API blew up" in got.rationale
 
 
-def test_classifier_no_api_key_returns_unclassified(monkeypatch: pytest.MonkeyPatch):
+def test_classifier_init_failure_returns_unclassified(monkeypatch: pytest.MonkeyPatch):
+    """When the shared client factory cannot construct a client (e.g., the
+    selected provider needs an API key that isn't set), classify() must
+    return the unclassified sentinel instead of raising. This preserves
+    the orchestrator's guarantee that one bad LLM config can't crash a run.
+    """
+    # Force the anthropic provider with no key — build_client raises RuntimeError.
+    monkeypatch.setenv("FRAMEVAL_LLM_PROVIDER", "anthropic")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    cls = FailureClassifier()  # no client kwarg → tries to lazy-init real one
+    cls = FailureClassifier()  # no client kwarg → lazy-init will fail
 
     got = cls.classify(symptoms={}, task_description="x", transcript_tail="")
     assert got.primary == FailureCode.NONE
     assert got.confidence == 0.0
-    assert "ANTHROPIC_API_KEY" in got.rationale
+    # Rationale starts with the documented "classifier_unavailable: " prefix
+    # and contains the underlying error message.
+    assert got.rationale.startswith("classifier_unavailable: ")
 
 
 def test_unclassified_sentinel():

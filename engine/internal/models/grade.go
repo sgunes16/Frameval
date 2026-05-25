@@ -20,11 +20,8 @@ type Grade struct {
 	ErrorRecoveryCount        int                 `json:"error_recovery_count"`
 	ToolCallAccuracy          float64             `json:"tool_call_accuracy"`
 	ContextUtilization        float64             `json:"context_utilization"`
-	JudgeCorrectness          float64             `json:"judge_correctness"`
-	JudgeMaintainability      float64             `json:"judge_maintainability"`
-	JudgeCompleteness         float64             `json:"judge_completeness"`
-	JudgeBestPractices        float64             `json:"judge_best_practices"`
-	JudgeErrorHandling        float64             `json:"judge_error_handling"`
+	JudgeScores               map[string]float64  `json:"judge_scores,omitempty"`
+	JudgeRationales           map[string]string   `json:"judge_rationales,omitempty"`
 	JudgeIRRAlpha             float64             `json:"judge_irr_alpha"`
 	RawJudgeResponses         []string            `json:"raw_judge_responses,omitempty"`
 	SpecInstructionCompliance float64             `json:"spec_instruction_compliance"`
@@ -34,6 +31,11 @@ type Grade struct {
 	CompositeScore            float64             `json:"composite_score"`
 	GradedAt                  string              `json:"graded_at"`
 	TestResults               []TestResult        `json:"test_results,omitempty"`
+	// JudgeUserPrompt is the rendered user message that was sent to the
+	// LLM judge model. Stored for transparency and debugging — the
+	// progressive grading view surfaces it alongside judge scores so
+	// users can see what context the judge evaluated.
+	JudgeUserPrompt string `json:"judge_user_prompt,omitempty"`
 	// Source records who produced this grade. "grader" means the Python
 	// grader returned a real verdict; "fallback" means the gRPC call
 	// failed (breaker open, dial error, etc.) and the engine synthesized

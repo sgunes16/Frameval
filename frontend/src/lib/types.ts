@@ -216,12 +216,11 @@ export type Grade = {
   context_utilization: number;
 
   // --- LLM-as-Judge rubric (cross-model) ---
-  judge_correctness: number;
-  judge_maintainability?: number;
-  judge_completeness?: number;
-  judge_best_practices?: number;
-  judge_error_handling?: number;
+  judge_scores?: Record<string, number>;
+  judge_rationales?: Record<string, string>;
   judge_irr_alpha?: number;
+  judge_user_prompt?: string;
+  raw_judge_responses?: string[];
 
   // --- Spec / instruction adherence ---
   spec_instruction_compliance: number;
@@ -229,6 +228,8 @@ export type Grade = {
   spec_convention_adherence?: number;
 
   graded_at?: string;
+  created_at?: string;
+  source?: 'grader' | 'fallback';
   test_results?: Array<{ name: string; passed: boolean; output: string }>;
 };
 
@@ -312,4 +313,23 @@ export type QueueStatus = {
   depth: number;
   active_workers: number;
   max_workers: number;
+};
+
+export type LLMProvider = 'openrouter' | 'zai' | 'ollama' | 'openai' | 'anthropic';
+
+export type LLMSettings = {
+  provider: LLMProvider;
+  model: string;
+  enabled: boolean;
+  api_key_present: boolean;
+};
+
+export type Rubric = {
+  key: string;
+  display_name: string;
+  prompt: string;
+  sort_order: number;
+  is_builtin: boolean;
+  created_at?: string;
+  updated_at?: string;
 };

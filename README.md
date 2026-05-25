@@ -90,6 +90,20 @@ Then click **"New diagnostic run"**, pick a task + at least one harness
 `(harness × executor × model)` cell and redirects you straight to the
 Compare page where the metrics show up side-by-side as runs complete.
 
+### Configuring the LLM judge
+
+The grader scores each agent run on five dimensions (correctness, maintainability, completeness, best_practices, error_handling) using an OpenAI-compatible LLM call. Configure provider, model, and API keys from the **Settings** page — no engine restart required.
+
+**Default:** OpenRouter free tier (`deepseek/deepseek-chat-v3-0324:free`). You'll need a free OpenRouter account and an API key; enter it via Settings → API keys.
+
+**Other supported providers:**
+- **Z.ai** (GLM-4.6 free tier)
+- **Ollama** (fully local, no API key needed; requires `ollama serve` running locally)
+- **OpenAI** (gpt-4o-mini default)
+- **Anthropic** (Claude Haiku 4.5 default)
+
+For headless / CI environments, env-var fallbacks are documented in `CLAUDE.md`. SQLite settings always win over env vars.
+
 ### Day-to-day commands
 
 ```bash

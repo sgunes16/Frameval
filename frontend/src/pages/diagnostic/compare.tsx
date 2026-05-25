@@ -619,6 +619,7 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
     });
   const headers = colOrder.map((i) => rawHeaders[i]);
   const orderedGrades = colOrder.map((i) => grades[i]);
+  const orderedRunIds = colOrder.map((i) => runIds[i]);
   const coords = colOrder.map((i) => rawCoords[i]);
   grades = orderedGrades;
 
@@ -651,11 +652,32 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
           <BoolRow label="Premature completion" headers={headers} grades={grades} pick={(g) => g.premature_completion} positive="yes" negative="no" tone="warn-positive" />
 
           <SectionHeader colSpan={headers.length + 1} label="LLM-as-Judge rubric" />
-          <BarRow label="Correctness" headers={headers} grades={grades} pick={(g) => g.judge_correctness} />
-          <BarRow label="Maintainability" headers={headers} grades={grades} pick={(g) => g.judge_maintainability ?? 0} />
-          <BarRow label="Completeness" headers={headers} grades={grades} pick={(g) => g.judge_completeness ?? 0} />
-          <BarRow label="Best practices" headers={headers} grades={grades} pick={(g) => g.judge_best_practices ?? 0} />
-          <BarRow label="Error handling" headers={headers} grades={grades} pick={(g) => g.judge_error_handling ?? 0} />
+          <tr>
+            <td className="py-1 pl-3 text-xs text-fg-muted">details:</td>
+            {orderedRunIds.map((runId, i) => (
+              <td key={i} className="py-1 text-center">
+                <Link
+                  to={`/runs/${runId}/grading`}
+                  className="text-xs text-fg-muted underline hover:text-fg"
+                  title="Open grading inspector for this run"
+                >
+                  open →
+                </Link>
+              </td>
+            ))}
+          </tr>
+          {/* dynamic: iterate the union of dim keys across selected grades */}
+          {Array.from(
+            new Set(grades.flatMap((g) => Object.keys(g?.judge_scores ?? {}))),
+          ).map((dim) => (
+            <BarRow
+              key={dim}
+              label={dim.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())}
+              headers={headers}
+              grades={grades}
+              pick={(g) => g.judge_scores?.[dim] ?? 0}
+            />
+          ))}
           <NumericRow label="Inter-rater α" headers={headers} grades={grades} format={(g) => g.judge_irr_alpha != null ? g.judge_irr_alpha.toFixed(2) : '—'} />
 
           <SectionHeader colSpan={headers.length + 1} label="Spec adherence" />

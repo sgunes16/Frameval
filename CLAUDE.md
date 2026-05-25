@@ -153,14 +153,21 @@ SQLite schema lives in `engine/internal/storage/migrations/`. Migrations are num
 |---|---|---|
 | `FRAMEVAL_DB_PATH` | engine | SQLite file path (default: `./frameval.db`) |
 | `FRAMEVAL_GRADER_ADDR` | engine | Grader gRPC address (default: `grader:50051`) |
+| `FRAMEVAL_GRADER_TIMEOUT_SECONDS` | engine | Caps the engine→grader gRPC `GradeRun` call. Default `600`. Bump higher for slow free-tier judge models. |
 | `FRAMEVAL_MAX_CONCURRENT` | engine | Max parallel sandboxes (default: `3`) |
 | `FRAMEVAL_LOG_RING_BYTES` | engine | Max bytes retained per sandbox log (default: `8388608` = 8 MiB) |
 | `FRAMEVAL_LOG_LEVEL` | engine | slog level: `debug` / `info` / `warn` / `error` (default: `info`) |
 | `FRAMEVAL_LOG_FORMAT` | engine | slog format: `json` (default) or `pretty` for human-readable text |
 | `FRAMEVAL_PORT` | engine | HTTP server port (default: `8080`) |
 | `GRADER_PORT` | grader | gRPC server port (default: `50051`) |
-| `ANTHROPIC_API_KEY` | grader, sandbox | Anthropic API key |
-| `OPENAI_API_KEY` | grader, sandbox | OpenAI API key |
+| `FRAMEVAL_LLM_PROVIDER` | grader | **Fallback only** — SQLite `app_settings['judge.provider']` is authoritative. Default: `openrouter`. |
+| `FRAMEVAL_LLM_MODEL` | grader | **Fallback only** — overridden by `app_settings['judge.model']`. |
+| `FRAMEVAL_LLM_BASE_URL` | grader | Override endpoint (Ollama self-host, etc.). Always env-only. |
+| `OPENROUTER_API_KEY` | grader | **Fallback only** — overridden by `api_keys` row for provider=openrouter. |
+| `ZAI_API_KEY` | grader | Fallback only; SQLite `api_keys` authoritative. |
+| `OPENAI_API_KEY` | grader, sandbox | Fallback for grader; primary for sandboxed agents. |
+| `ANTHROPIC_API_KEY` | grader, sandbox | Optional grader fallback; primary for Claude agent runs. |
+| `FRAMEVAL_ENABLE_LLM_JUDGE` | grader | Fallback default `true`; overridden by `app_settings['judge.enabled']`. |
 | `GOOGLE_API_KEY` | grader, sandbox | Google API key |
 
 ## Important Constraints
@@ -172,3 +179,6 @@ SQLite schema lives in `engine/internal/storage/migrations/`. Migrations are num
 - Cross-model judging is enforced by default: if the agent is Claude, the judge must be GPT-4o (or user-overridden).
 - Minimum runs per variant is 5. This is enforced in both the API and the UI.
 - All gRPC changes start in `proto/grader.proto`. Run `buf generate` to update both Go and Python stubs.
+- Judge provider, model, enable flag, and API keys are SQLite-stored (`app_settings` + `api_keys` tables) and editable from the frontend Settings page. Env vars exist only as headless fallbacks.
+- The API key flows from engine to grader via the `JudgeConfig` proto field on each `GradeRun` call. This is acceptable for the default localhost / in-container deployment. If the grader is ever split to a separate host, gRPC TLS becomes mandatory.
+- Judge dimensions (rubrics) are SQLite-stored in the `rubrics` table and editable from the `/rubrics` page. The 5 builtin dimensions can be edited but not deleted; user-added dimensions can be deleted. The grader uses whatever is in the table at run time, falling back to hardcoded defaults in `grader/llm_judge/prompts.py` only when the engine sends no rubrics (headless path).

@@ -22,6 +22,7 @@ def compute_composite(
     if judge_grade is None and adherence_grade is None:
         return round((code_score * 0.6) + (process_score * 0.4), 4)
 
-    judge_score = float((judge_grade or {}).get("correctness", 0.0))
+    scores = (judge_grade or {}).get("scores") or {}
+    judge_score = (sum(scores.values()) / len(scores)) if scores else 0.0
     adherence_score = float((adherence_grade or {}).get("instruction_compliance", 0.0))
     return round((code_score * 0.3) + (judge_score * 0.3) + (process_score * 0.2) + (adherence_score * 0.2), 4)
