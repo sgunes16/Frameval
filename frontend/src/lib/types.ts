@@ -222,6 +222,7 @@ export type Grade = {
   judge_best_practices?: number;
   judge_error_handling?: number;
   judge_irr_alpha?: number;
+  raw_judge_responses?: string[];
 
   // --- Spec / instruction adherence ---
   spec_instruction_compliance: number;
@@ -229,6 +230,8 @@ export type Grade = {
   spec_convention_adherence?: number;
 
   graded_at?: string;
+  created_at?: string;
+  source?: 'grader' | 'fallback';
   test_results?: Array<{ name: string; passed: boolean; output: string }>;
 };
 
