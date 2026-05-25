@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 
@@ -33,7 +32,17 @@ double-check that you aren't anchoring.
 - 5-6: acceptable baseline; works but has clear gaps a reviewer would
   flag.
 - 7-8: solid professional work with minor polish issues.
-- 9-10: production-ready, hard to find anything to improve."""
+- 9-10: production-ready, hard to find anything to improve.
+
+## Hard rule on facts
+
+If the CRITICAL FACTS section of the user prompt says tests passed
+(pass_count > 0 with fail_count = 0), you MUST NOT claim tests failed in
+your rationale. If TYPE CHECK is PASS, you MUST NOT claim it failed. If
+PREMATURE COMPLETION is NO, you MUST NOT claim the agent stopped early.
+The facts are authoritative — your rationale must reflect them. You may
+still penalize on substance (e.g., trivial tests that pass via a cheat),
+but you may not invent contrary metric values."""
 
 
 DIMENSION_RUBRICS: dict[str, str] = {
@@ -262,27 +271,38 @@ failure modes the inputs and runtime can throw at it?
 
 def render_user_prompt(
     *,
-    code_grade: dict[str, Any],
-    process_grade: dict[str, Any],
-    task: dict[str, Any],
-    output_files: list[dict[str, Any]],
-    transcript_json: bytes,
+    code_grade,
+    process_grade,
+    task,
+    output_files,
+    transcript_json,
 ) -> str:
-    """Shared user prompt — identical across the five per-dim calls."""
+    pass_rate = float(code_grade.get("test_pass_rate", 0.0))
+    pass_count = int(code_grade.get("test_pass_count", 0))
+    fail_count = int(code_grade.get("test_fail_count", 0))
+    total = pass_count + fail_count
+    type_check = bool(code_grade.get("type_check_pass", False))
+    lint = float(code_grade.get("lint_score", 0.0))
+    premature = bool(process_grade.get("premature_completion", False))
+
+    facts = (
+        "# CRITICAL FACTS\n\n"
+        "These are authoritative measurements taken from the actual run. "
+        "If your rationale contradicts any fact below, the fact wins — "
+        "you must reflect it in your score and rationale.\n\n"
+        f"- TESTS: {pass_count} / {total if total else '?'} passed (test_pass_rate = {pass_rate:.2f}).\n"
+        f"- TYPE CHECK: {'PASS' if type_check else 'FAIL'}.\n"
+        f"- LINT SCORE: {lint:.1f} / 10.\n"
+        f"- PREMATURE COMPLETION: {'YES (agent stopped before fully solving)' if premature else 'NO'}.\n"
+    )
     files_block = "\n\n".join(
         f"=== {f.get('path', '<unnamed>')} ===\n{_decode_content(f.get('content'))[:4000]}"
         for f in output_files[:10]
     )
     transcript_tail = _decode_content(transcript_json)[-3000:]
-    metrics = {
-        "test_pass_rate": code_grade.get("test_pass_rate"),
-        "lint_score": code_grade.get("lint_score"),
-        "type_check_pass": code_grade.get("type_check_pass"),
-        "premature_completion": process_grade.get("premature_completion"),
-    }
     return (
+        f"{facts}\n"
         f"# Task\n\n{task.get('prompt', '<no prompt>')}\n\n"
-        f"# Code metrics\n\n{json.dumps(metrics, indent=2)}\n\n"
         f"# Output files (truncated)\n\n{files_block or '(no files)'}\n\n"
         f"# Transcript tail\n\n{transcript_tail or '(empty)'}\n"
     )
