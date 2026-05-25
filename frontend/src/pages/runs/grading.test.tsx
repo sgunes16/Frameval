@@ -33,7 +33,13 @@ vi.mock('../../lib/hooks', () => ({
       judge_best_practices: 6,
       judge_error_handling: 5,
       judge_irr_alpha: 0,
-      raw_judge_responses: ['{"correctness":8,"rationale":"solid solution"}'],
+      raw_judge_responses: [
+        'dim=correctness;{"score":8.0,"rationale":"solid solution on correctness"}',
+        'dim=maintainability;{"score":7.0,"rationale":"clean names"}',
+        'dim=completeness;{"score":9.0,"rationale":"all requirements covered"}',
+        'dim=best_practices;{"score":6.0,"rationale":"sync lock in async code"}',
+        'dim=error_handling;{"score":5.0,"rationale":"happy path only"}',
+      ],
       turn_count: 5,
       total_tokens: 1200,
     },
@@ -63,7 +69,7 @@ describe('RunGradingPage', () => {
     renderPage();
     expect(screen.getByText(/Composite score: 6\.50/)).toBeInTheDocument();
     expect(screen.getByText(/Correctness/)).toBeInTheDocument();
-    expect(screen.getByText(/solid solution/)).toBeInTheDocument();
+    expect(screen.getByText(/solid solution on correctness/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Regrade/ })).toBeInTheDocument();
   });
 });
