@@ -1,0 +1,62 @@
+id: brownfield-stop-early-multi-step-migration
+name: Add verified column with model + schema + alembic migration
+description: |
+  Brownfield task. SQLAlchemy + Alembic + Pydantic project. Adding a
+  `verified` boolean to User requires three coordinated changes:
+  model, schema, and a new Alembic migration. Bare agents typically
+  do steps 1 and 2 (which makes in-memory model tests pass) and
+  declare done, missing the migration. The test fixture re-creates
+  the DB via `alembic upgrade head`, so without the migration the
+  column is absent in the real schema → tests fail. Stresses
+  STOP_EARLY: declaring victory too soon.
+category: brownfield
+template_kind: builtin
+workspace_mode: local
+complexity_score: 7.0
+codebase_type: python
+metadata:
+  primary_failure_mode: STOP_EARLY
+task_prompt: |
+  Add a `verified` boolean column to the User model (default False).
+
+  You must:
+    1. Add the column to the SQLAlchemy model in `app/models.py`.
+    2. Add the field to the Pydantic schema in `app/schemas.py` so
+       the API serializes it.
+    3. Add a new Alembic migration under `alembic/versions/` that
+       adds the column to the database (use `alembic revision` or
+       hand-author following the existing 0001_initial.py shape).
+
+  All existing tests must continue to pass. New tests verify the
+  column is present in the schema after migrations run, defaults to
+  False, and appears in API responses.
+technical_details: |
+  - workspace/tests/conftest.py creates a fresh sqlite at the start of
+    each test session and runs `alembic upgrade head` against it.
+  - test_migrations_apply.py inspects the sqlite schema post-upgrade
+    and asserts a `verified` column exists with type BOOLEAN and
+    default 0.
+  - test_user_list_response.py serializes a User through the Pydantic
+    schema and checks the dict contains 'verified'.
+  - test_user_creates.py inserts a row with verified=True and reads
+    it back.
+  - test_scope.sh allows app/models.py, app/schemas.py, and any new
+    file under alembic/versions/. Disallows changes to db.py, env.py,
+    main.py, the existing 0001_initial.py migration, alembic.ini.
+test_cases:
+  - name: User can be created with verified column
+    test_command: pytest -q tests/test_user_creates.py
+    expected_result: exit 0
+    ordering: 0
+  - name: API response includes verified
+    test_command: pytest -q tests/test_user_list_response.py
+    expected_result: exit 0
+    ordering: 1
+  - name: Alembic migration adds the column to the schema
+    test_command: pytest -q tests/test_migrations_apply.py
+    expected_result: exit 0
+    ordering: 2
+  - name: Scope discipline (model + schema + new migration only)
+    test_command: bash tests/test_scope.sh
+    expected_result: exit 0
+    ordering: 3
