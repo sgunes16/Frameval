@@ -1,0 +1,48 @@
+id: brownfield-wrong-abs-async-throttle
+name: Rate-limit an async FastAPI endpoint without blocking the loop
+description: |
+  Brownfield task. Async FastAPI endpoint needs rate limiting to 10
+  req/s. Naive bare agents reach for time.sleep, which blocks the
+  event loop and collapses throughput. Correct fix uses
+  asyncio.sleep, asyncio.Lock + a counter, or aiolimiter. Stresses
+  WRONG_ABS: picking sync sleep in an async context.
+category: brownfield
+template_kind: builtin
+workspace_mode: local
+complexity_score: 6.0
+codebase_type: python
+metadata:
+  primary_failure_mode: WRONG_ABS
+task_prompt: |
+  Add rate limiting to `app/search.py::search` so it processes at most
+  10 requests per second. Excess requests should wait, not be rejected.
+
+  Constraints:
+    - The endpoint must remain async-friendly. The function signature
+      stays `async def search(...) -> dict`.
+    - Single requests should complete in <100ms (no artificial delay
+      for low load).
+    - Tests fire 30 concurrent requests at a steady 10 req/s arrival
+      rate. Throughput must not collapse below 8 req/s under that
+      sustained load.
+technical_details: |
+  - Naive time.sleep in async code blocks the loop, queues stack up,
+    test_throttle_under_load.py times out or asserts throughput floor.
+  - Reference solution uses asyncio.Lock + monotonic timer for a
+    simple token-bucket; aiolimiter is also acceptable (added to
+    requirements.txt).
+  - Tests use httpx.AsyncClient + ASGITransport (in-process, no
+    uvicorn).
+test_cases:
+  - name: Single request still returns expected shape
+    test_command: pytest -q tests/test_search_correctness.py
+    expected_result: exit 0
+    ordering: 0
+  - name: Throughput holds under concurrent load
+    test_command: pytest -q tests/test_throttle_under_load.py
+    expected_result: exit 0
+    ordering: 1
+  - name: Only app/search.py modified
+    test_command: bash tests/test_scope.sh
+    expected_result: exit 0
+    ordering: 2
