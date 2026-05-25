@@ -17,20 +17,21 @@ func (s *Store) SaveGrade(ctx context.Context, grade models.Grade) error {
 			return fmt.Errorf("delete existing run grade: %w", err)
 		}
 	}
+	// TODO: RE Task 4 rewires to judge_scores map — the 5 hardcoded judge_* columns were
+	// dropped in migration 016; judge_scores/judge_rationales TEXT columns now hold JSON maps.
 	_, err := s.DB.ExecContext(ctx, `
 		INSERT INTO grades (
 			id, run_id, test_pass_rate, test_pass_count, test_fail_count, lint_score, type_check_pass,
 			file_state_valid, turn_count, total_tokens, cost_usd, token_efficiency, backtrack_count,
 			self_validation_rate, premature_completion, idle_turns, error_recovery_count, tool_call_accuracy,
-			context_utilization, judge_correctness, judge_maintainability, judge_completeness, judge_best_practices,
-			judge_error_handling, judge_irr_alpha, raw_judge_responses_json, spec_instruction_compliance,
+			context_utilization, judge_irr_alpha, raw_judge_responses_json, spec_instruction_compliance,
 			spec_constraint_violations, spec_convention_adherence, spec_per_instruction_json, composite_score, test_results_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, grade.ID, nullableString(grade.RunID), grade.TestPassRate, grade.TestPassCount, grade.TestFailCount, grade.LintScore,
 		boolToInt(grade.TypeCheckPass), boolToInt(grade.FileStateValid), grade.TurnCount, grade.TotalTokens, grade.CostUSD, grade.TokenEfficiency,
 		grade.BacktrackCount, grade.SelfValidationRate, boolToInt(grade.PrematureCompletion), grade.IdleTurns, grade.ErrorRecoveryCount,
-		grade.ToolCallAccuracy, grade.ContextUtilization, grade.JudgeCorrectness, grade.JudgeMaintainability, grade.JudgeCompleteness,
-		grade.JudgeBestPractices, grade.JudgeErrorHandling, grade.JudgeIRRAlpha, marshalJSON(grade.RawJudgeResponses), grade.SpecInstructionCompliance,
+		// TODO: RE Task 4 rewires to judge_scores map — replace the 5 fields below with judge_scores/judge_rationales JSON
+		grade.ToolCallAccuracy, grade.ContextUtilization, grade.JudgeIRRAlpha, marshalJSON(grade.RawJudgeResponses), grade.SpecInstructionCompliance,
 		grade.SpecConstraintViolations, grade.SpecConventionAdherence, marshalJSON(grade.SpecPerInstruction), grade.CompositeScore, marshalJSON(grade.TestResults))
 	if err != nil {
 		return fmt.Errorf("save grade: %w", err)
@@ -39,12 +40,13 @@ func (s *Store) SaveGrade(ctx context.Context, grade models.Grade) error {
 }
 
 func (s *Store) GetGradeByRun(ctx context.Context, runID string) (*models.Grade, error) {
+	// TODO: RE Task 4 rewires to judge_scores map — the 5 hardcoded judge_* columns were
+	// dropped in migration 016; replace with judge_scores/judge_rationales JSON columns.
 	row := s.DB.QueryRowContext(ctx, `
 		SELECT id, run_id, test_pass_rate, test_pass_count, test_fail_count, lint_score, type_check_pass,
 		       file_state_valid, turn_count, total_tokens, cost_usd, token_efficiency, backtrack_count,
 		       self_validation_rate, premature_completion, idle_turns, error_recovery_count, tool_call_accuracy,
-		       context_utilization, judge_correctness, judge_maintainability, judge_completeness, judge_best_practices,
-		       judge_error_handling, judge_irr_alpha, raw_judge_responses_json, spec_instruction_compliance,
+		       context_utilization, judge_irr_alpha, raw_judge_responses_json, spec_instruction_compliance,
 		       spec_constraint_violations, spec_convention_adherence, spec_per_instruction_json, composite_score, graded_at, test_results_json
 		FROM grades WHERE run_id = ?
 	`, runID)
@@ -53,9 +55,9 @@ func (s *Store) GetGradeByRun(ctx context.Context, runID string) (*models.Grade,
 	var rawJudge, perInstruction, testResults string
 	if err := row.Scan(&grade.ID, &grade.RunID, &grade.TestPassRate, &grade.TestPassCount, &grade.TestFailCount, &grade.LintScore,
 		&typeCheckPass, &fileStateValid, &grade.TurnCount, &grade.TotalTokens, &grade.CostUSD, &grade.TokenEfficiency,
+		// TODO: RE Task 4 rewires to judge_scores map — scan judge_scores/judge_rationales instead of 5 fields
 		&grade.BacktrackCount, &grade.SelfValidationRate, &prematureCompletion, &grade.IdleTurns, &grade.ErrorRecoveryCount,
-		&grade.ToolCallAccuracy, &grade.ContextUtilization, &grade.JudgeCorrectness, &grade.JudgeMaintainability,
-		&grade.JudgeCompleteness, &grade.JudgeBestPractices, &grade.JudgeErrorHandling, &grade.JudgeIRRAlpha, &rawJudge,
+		&grade.ToolCallAccuracy, &grade.ContextUtilization, &grade.JudgeIRRAlpha, &rawJudge,
 		&grade.SpecInstructionCompliance, &grade.SpecConstraintViolations, &grade.SpecConventionAdherence, &perInstruction,
 		&grade.CompositeScore, &grade.GradedAt, &testResults); err != nil {
 		return nil, fmt.Errorf("get grade: %w", err)
