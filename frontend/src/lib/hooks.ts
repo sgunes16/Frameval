@@ -17,6 +17,7 @@ import type {
   ModelConfig,
   ParsedTurn,
   QueueStatus,
+  Rubric,
   Run,
   Task,
   Transcript,
@@ -343,5 +344,46 @@ export function useDeleteAPIKey() {
       client.invalidateQueries({ queryKey: ['config', 'api-keys'] });
       client.invalidateQueries({ queryKey: ['config', 'llm-settings'] });
     },
+  });
+}
+
+export function useRubrics() {
+  return useQuery({
+    queryKey: ['config', 'rubrics'],
+    queryFn: () => api.get<Rubric[]>('/config/rubrics'),
+  });
+}
+
+export function useRubric(key?: string) {
+  return useQuery({
+    queryKey: ['config', 'rubrics', key],
+    enabled: Boolean(key),
+    queryFn: () => api.get<Rubric>(`/config/rubrics/${key}`),
+  });
+}
+
+export function useCreateRubric() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Pick<Rubric, 'key' | 'display_name' | 'prompt'>) =>
+      api.post<Rubric>('/config/rubrics', payload),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['config', 'rubrics'] }),
+  });
+}
+
+export function useUpdateRubric() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, ...payload }: Pick<Rubric, 'key' | 'display_name' | 'prompt'>) =>
+      api.put<Rubric>(`/config/rubrics/${key}`, payload),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['config', 'rubrics'] }),
+  });
+}
+
+export function useDeleteRubric() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => api.delete<void>(`/config/rubrics/${key}`),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['config', 'rubrics'] }),
   });
 }
