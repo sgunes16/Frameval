@@ -7,13 +7,13 @@ import (
 )
 
 type Rubric struct {
-	Key         string
-	DisplayName string
-	Prompt      string
-	SortOrder   int
-	IsBuiltin   bool
-	CreatedAt   string
-	UpdatedAt   string
+	Key         string `json:"key"`
+	DisplayName string `json:"display_name"`
+	Prompt      string `json:"prompt"`
+	SortOrder   int    `json:"sort_order"`
+	IsBuiltin   bool   `json:"is_builtin"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
 }
 
 func (s *Store) ListRubrics(ctx context.Context) ([]Rubric, error) {
