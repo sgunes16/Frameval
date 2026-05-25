@@ -3,6 +3,7 @@ package experiment
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/mustafaselman/frameval/engine/internal/models"
 )
@@ -49,5 +50,37 @@ func TestGraderClient_GradeRunNoGraderConfiguredReturnsFallbackSource(t *testing
 	}
 	if grade.Source != models.GradeSourceFallback {
 		t.Errorf("expected fallback source, got %q", grade.Source)
+	}
+}
+
+func TestGradeRunTimeout_Default(t *testing.T) {
+	t.Setenv("FRAMEVAL_GRADER_TIMEOUT_SECONDS", "")
+	got := resolveGradeRunTimeout()
+	if got != 600*time.Second {
+		t.Errorf("default = %v, want 600s", got)
+	}
+}
+
+func TestGradeRunTimeout_EnvOverride(t *testing.T) {
+	t.Setenv("FRAMEVAL_GRADER_TIMEOUT_SECONDS", "120")
+	got := resolveGradeRunTimeout()
+	if got != 120*time.Second {
+		t.Errorf("override = %v, want 120s", got)
+	}
+}
+
+func TestGradeRunTimeout_GarbageFallsBackToDefault(t *testing.T) {
+	t.Setenv("FRAMEVAL_GRADER_TIMEOUT_SECONDS", "not-a-number")
+	got := resolveGradeRunTimeout()
+	if got != 600*time.Second {
+		t.Errorf("garbage = %v, want default 600s", got)
+	}
+}
+
+func TestGradeRunTimeout_NegativeFallsBackToDefault(t *testing.T) {
+	t.Setenv("FRAMEVAL_GRADER_TIMEOUT_SECONDS", "-5")
+	got := resolveGradeRunTimeout()
+	if got != 600*time.Second {
+		t.Errorf("negative = %v, want default 600s", got)
 	}
 }

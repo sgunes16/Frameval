@@ -7,6 +7,8 @@ import (
 	"errors"
 	"log/slog"
 	"math"
+	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -98,11 +100,21 @@ func (c *GraderClient) Close() error {
 // is generous to absorb Anthropic API hiccups without losing diagnostic.
 const classifyFailureTimeout = 30 * time.Second
 
-// gradeRunTimeout caps the end-to-end GradeRun gRPC call. The grader runs
-// code tests + process metrics + a real LLM judge call serially; on free-
-// tier OpenRouter models the judge alone can take 30-60s. 90s leaves
-// headroom without letting a hung run pin a worker indefinitely.
-const gradeRunTimeout = 90 * time.Second
+// gradeRunTimeout caps the end-to-end GradeRun gRPC call. Real LLM judge
+// calls on free-tier providers regularly take 30-90s; cumulative grading
+// with multiple stages can push past 2 minutes. 600s is generous but
+// finite so a hung run cannot pin a worker forever. Override with
+// FRAMEVAL_GRADER_TIMEOUT_SECONDS for slower providers or larger prompts.
+var gradeRunTimeout = resolveGradeRunTimeout()
+
+func resolveGradeRunTimeout() time.Duration {
+	if raw := os.Getenv("FRAMEVAL_GRADER_TIMEOUT_SECONDS"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return 600 * time.Second
+}
 
 // ClassifyFailureResult bundles the verdict + transport latency the grader
 // reports back. The orchestrator persists both into the `diagnostic` row.
