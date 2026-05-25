@@ -441,6 +441,58 @@ func (x *ArtifactSpec) GetType() string {
 	return ""
 }
 
+type DimensionRubric struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Prompt        string                 `protobuf:"bytes,2,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DimensionRubric) Reset() {
+	*x = DimensionRubric{}
+	mi := &file_grader_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DimensionRubric) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DimensionRubric) ProtoMessage() {}
+
+func (x *DimensionRubric) ProtoReflect() protoreflect.Message {
+	mi := &file_grader_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DimensionRubric.ProtoReflect.Descriptor instead.
+func (*DimensionRubric) Descriptor() ([]byte, []int) {
+	return file_grader_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *DimensionRubric) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *DimensionRubric) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
 type JudgeConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Model         string                 `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
@@ -448,13 +500,14 @@ type JudgeConfig struct {
 	ApiKey        string                 `protobuf:"bytes,3,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
 	Rubric        []*RubricDimension     `protobuf:"bytes,4,rep,name=rubric,proto3" json:"rubric,omitempty"`
 	JudgeRounds   int32                  `protobuf:"varint,5,opt,name=judge_rounds,json=judgeRounds,proto3" json:"judge_rounds,omitempty"`
+	Rubrics       []*DimensionRubric     `protobuf:"bytes,6,rep,name=rubrics,proto3" json:"rubrics,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *JudgeConfig) Reset() {
 	*x = JudgeConfig{}
-	mi := &file_grader_proto_msgTypes[7]
+	mi := &file_grader_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -466,7 +519,7 @@ func (x *JudgeConfig) String() string {
 func (*JudgeConfig) ProtoMessage() {}
 
 func (x *JudgeConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[7]
+	mi := &file_grader_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -479,7 +532,7 @@ func (x *JudgeConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JudgeConfig.ProtoReflect.Descriptor instead.
 func (*JudgeConfig) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{7}
+	return file_grader_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *JudgeConfig) GetModel() string {
@@ -517,6 +570,13 @@ func (x *JudgeConfig) GetJudgeRounds() int32 {
 	return 0
 }
 
+func (x *JudgeConfig) GetRubrics() []*DimensionRubric {
+	if x != nil {
+		return x.Rubrics
+	}
+	return nil
+}
+
 type RubricDimension struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -529,7 +589,7 @@ type RubricDimension struct {
 
 func (x *RubricDimension) Reset() {
 	*x = RubricDimension{}
-	mi := &file_grader_proto_msgTypes[8]
+	mi := &file_grader_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -541,7 +601,7 @@ func (x *RubricDimension) String() string {
 func (*RubricDimension) ProtoMessage() {}
 
 func (x *RubricDimension) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[8]
+	mi := &file_grader_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -554,7 +614,7 @@ func (x *RubricDimension) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RubricDimension.ProtoReflect.Descriptor instead.
 func (*RubricDimension) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{8}
+	return file_grader_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RubricDimension) GetName() string {
@@ -598,7 +658,7 @@ type GradeRunResponse struct {
 
 func (x *GradeRunResponse) Reset() {
 	*x = GradeRunResponse{}
-	mi := &file_grader_proto_msgTypes[9]
+	mi := &file_grader_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -610,7 +670,7 @@ func (x *GradeRunResponse) String() string {
 func (*GradeRunResponse) ProtoMessage() {}
 
 func (x *GradeRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[9]
+	mi := &file_grader_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -623,7 +683,7 @@ func (x *GradeRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GradeRunResponse.ProtoReflect.Descriptor instead.
 func (*GradeRunResponse) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{9}
+	return file_grader_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GradeRunResponse) GetCode() *CodeGradeResult {
@@ -676,7 +736,7 @@ type CodeGradeResult struct {
 
 func (x *CodeGradeResult) Reset() {
 	*x = CodeGradeResult{}
-	mi := &file_grader_proto_msgTypes[10]
+	mi := &file_grader_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -688,7 +748,7 @@ func (x *CodeGradeResult) String() string {
 func (*CodeGradeResult) ProtoMessage() {}
 
 func (x *CodeGradeResult) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[10]
+	mi := &file_grader_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -701,7 +761,7 @@ func (x *CodeGradeResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CodeGradeResult.ProtoReflect.Descriptor instead.
 func (*CodeGradeResult) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{10}
+	return file_grader_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CodeGradeResult) GetTestPassRate() float32 {
@@ -764,7 +824,7 @@ type TestResult struct {
 
 func (x *TestResult) Reset() {
 	*x = TestResult{}
-	mi := &file_grader_proto_msgTypes[11]
+	mi := &file_grader_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -776,7 +836,7 @@ func (x *TestResult) String() string {
 func (*TestResult) ProtoMessage() {}
 
 func (x *TestResult) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[11]
+	mi := &file_grader_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -789,7 +849,7 @@ func (x *TestResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestResult.ProtoReflect.Descriptor instead.
 func (*TestResult) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{11}
+	return file_grader_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *TestResult) GetName() string {
@@ -832,7 +892,7 @@ type ProcessGradeResult struct {
 
 func (x *ProcessGradeResult) Reset() {
 	*x = ProcessGradeResult{}
-	mi := &file_grader_proto_msgTypes[12]
+	mi := &file_grader_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -844,7 +904,7 @@ func (x *ProcessGradeResult) String() string {
 func (*ProcessGradeResult) ProtoMessage() {}
 
 func (x *ProcessGradeResult) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[12]
+	mi := &file_grader_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -857,7 +917,7 @@ func (x *ProcessGradeResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessGradeResult.ProtoReflect.Descriptor instead.
 func (*ProcessGradeResult) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{12}
+	return file_grader_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ProcessGradeResult) GetTurnCount() int32 {
@@ -938,21 +998,18 @@ func (x *ProcessGradeResult) GetContextUtilization() float32 {
 }
 
 type JudgeGradeResult struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Correctness     float32                `protobuf:"fixed32,1,opt,name=correctness,proto3" json:"correctness,omitempty"`
-	Maintainability float32                `protobuf:"fixed32,2,opt,name=maintainability,proto3" json:"maintainability,omitempty"`
-	Completeness    float32                `protobuf:"fixed32,3,opt,name=completeness,proto3" json:"completeness,omitempty"`
-	BestPractices   float32                `protobuf:"fixed32,4,opt,name=best_practices,json=bestPractices,proto3" json:"best_practices,omitempty"`
-	ErrorHandling   float32                `protobuf:"fixed32,5,opt,name=error_handling,json=errorHandling,proto3" json:"error_handling,omitempty"`
-	IrrAlpha        float32                `protobuf:"fixed32,6,opt,name=irr_alpha,json=irrAlpha,proto3" json:"irr_alpha,omitempty"`
-	RawResponses    []string               `protobuf:"bytes,7,rep,name=raw_responses,json=rawResponses,proto3" json:"raw_responses,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scores        map[string]float64     `protobuf:"bytes,1,rep,name=scores,proto3" json:"scores,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	Rationales    map[string]string      `protobuf:"bytes,2,rep,name=rationales,proto3" json:"rationales,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	IrrAlpha      float64                `protobuf:"fixed64,3,opt,name=irr_alpha,json=irrAlpha,proto3" json:"irr_alpha,omitempty"`
+	RawResponses  []string               `protobuf:"bytes,4,rep,name=raw_responses,json=rawResponses,proto3" json:"raw_responses,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *JudgeGradeResult) Reset() {
 	*x = JudgeGradeResult{}
-	mi := &file_grader_proto_msgTypes[13]
+	mi := &file_grader_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -964,7 +1021,7 @@ func (x *JudgeGradeResult) String() string {
 func (*JudgeGradeResult) ProtoMessage() {}
 
 func (x *JudgeGradeResult) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[13]
+	mi := &file_grader_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -977,45 +1034,24 @@ func (x *JudgeGradeResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JudgeGradeResult.ProtoReflect.Descriptor instead.
 func (*JudgeGradeResult) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{13}
+	return file_grader_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *JudgeGradeResult) GetCorrectness() float32 {
+func (x *JudgeGradeResult) GetScores() map[string]float64 {
 	if x != nil {
-		return x.Correctness
+		return x.Scores
 	}
-	return 0
+	return nil
 }
 
-func (x *JudgeGradeResult) GetMaintainability() float32 {
+func (x *JudgeGradeResult) GetRationales() map[string]string {
 	if x != nil {
-		return x.Maintainability
+		return x.Rationales
 	}
-	return 0
+	return nil
 }
 
-func (x *JudgeGradeResult) GetCompleteness() float32 {
-	if x != nil {
-		return x.Completeness
-	}
-	return 0
-}
-
-func (x *JudgeGradeResult) GetBestPractices() float32 {
-	if x != nil {
-		return x.BestPractices
-	}
-	return 0
-}
-
-func (x *JudgeGradeResult) GetErrorHandling() float32 {
-	if x != nil {
-		return x.ErrorHandling
-	}
-	return 0
-}
-
-func (x *JudgeGradeResult) GetIrrAlpha() float32 {
+func (x *JudgeGradeResult) GetIrrAlpha() float64 {
 	if x != nil {
 		return x.IrrAlpha
 	}
@@ -1041,7 +1077,7 @@ type SpecAdherenceResult struct {
 
 func (x *SpecAdherenceResult) Reset() {
 	*x = SpecAdherenceResult{}
-	mi := &file_grader_proto_msgTypes[14]
+	mi := &file_grader_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1053,7 +1089,7 @@ func (x *SpecAdherenceResult) String() string {
 func (*SpecAdherenceResult) ProtoMessage() {}
 
 func (x *SpecAdherenceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[14]
+	mi := &file_grader_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1066,7 +1102,7 @@ func (x *SpecAdherenceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpecAdherenceResult.ProtoReflect.Descriptor instead.
 func (*SpecAdherenceResult) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{14}
+	return file_grader_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SpecAdherenceResult) GetInstructionCompliance() float32 {
@@ -1108,7 +1144,7 @@ type InstructionResult struct {
 
 func (x *InstructionResult) Reset() {
 	*x = InstructionResult{}
-	mi := &file_grader_proto_msgTypes[15]
+	mi := &file_grader_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1120,7 +1156,7 @@ func (x *InstructionResult) String() string {
 func (*InstructionResult) ProtoMessage() {}
 
 func (x *InstructionResult) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[15]
+	mi := &file_grader_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1133,7 +1169,7 @@ func (x *InstructionResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InstructionResult.ProtoReflect.Descriptor instead.
 func (*InstructionResult) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{15}
+	return file_grader_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *InstructionResult) GetInstruction() string {
@@ -1167,7 +1203,7 @@ type ComputeStatsRequest struct {
 
 func (x *ComputeStatsRequest) Reset() {
 	*x = ComputeStatsRequest{}
-	mi := &file_grader_proto_msgTypes[16]
+	mi := &file_grader_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1179,7 +1215,7 @@ func (x *ComputeStatsRequest) String() string {
 func (*ComputeStatsRequest) ProtoMessage() {}
 
 func (x *ComputeStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[16]
+	mi := &file_grader_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1192,7 +1228,7 @@ func (x *ComputeStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComputeStatsRequest.ProtoReflect.Descriptor instead.
 func (*ComputeStatsRequest) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{16}
+	return file_grader_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ComputeStatsRequest) GetExperimentId() string {
@@ -1219,7 +1255,7 @@ type VariantGrades struct {
 
 func (x *VariantGrades) Reset() {
 	*x = VariantGrades{}
-	mi := &file_grader_proto_msgTypes[17]
+	mi := &file_grader_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1231,7 +1267,7 @@ func (x *VariantGrades) String() string {
 func (*VariantGrades) ProtoMessage() {}
 
 func (x *VariantGrades) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[17]
+	mi := &file_grader_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1244,7 +1280,7 @@ func (x *VariantGrades) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VariantGrades.ProtoReflect.Descriptor instead.
 func (*VariantGrades) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{17}
+	return file_grader_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *VariantGrades) GetVariantId() string {
@@ -1270,7 +1306,7 @@ type ComputeStatsResponse struct {
 
 func (x *ComputeStatsResponse) Reset() {
 	*x = ComputeStatsResponse{}
-	mi := &file_grader_proto_msgTypes[18]
+	mi := &file_grader_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1282,7 +1318,7 @@ func (x *ComputeStatsResponse) String() string {
 func (*ComputeStatsResponse) ProtoMessage() {}
 
 func (x *ComputeStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[18]
+	mi := &file_grader_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1295,7 +1331,7 @@ func (x *ComputeStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComputeStatsResponse.ProtoReflect.Descriptor instead.
 func (*ComputeStatsResponse) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{18}
+	return file_grader_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ComputeStatsResponse) GetStats() []*PairwiseStat {
@@ -1329,7 +1365,7 @@ type PairwiseStat struct {
 
 func (x *PairwiseStat) Reset() {
 	*x = PairwiseStat{}
-	mi := &file_grader_proto_msgTypes[19]
+	mi := &file_grader_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1341,7 +1377,7 @@ func (x *PairwiseStat) String() string {
 func (*PairwiseStat) ProtoMessage() {}
 
 func (x *PairwiseStat) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[19]
+	mi := &file_grader_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1354,7 +1390,7 @@ func (x *PairwiseStat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairwiseStat.ProtoReflect.Descriptor instead.
 func (*PairwiseStat) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{19}
+	return file_grader_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PairwiseStat) GetVariantAId() string {
@@ -1481,7 +1517,7 @@ type ClassifyDimensionsRequest struct {
 
 func (x *ClassifyDimensionsRequest) Reset() {
 	*x = ClassifyDimensionsRequest{}
-	mi := &file_grader_proto_msgTypes[20]
+	mi := &file_grader_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1493,7 +1529,7 @@ func (x *ClassifyDimensionsRequest) String() string {
 func (*ClassifyDimensionsRequest) ProtoMessage() {}
 
 func (x *ClassifyDimensionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[20]
+	mi := &file_grader_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1506,7 +1542,7 @@ func (x *ClassifyDimensionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClassifyDimensionsRequest.ProtoReflect.Descriptor instead.
 func (*ClassifyDimensionsRequest) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{20}
+	return file_grader_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ClassifyDimensionsRequest) GetContent() string {
@@ -1555,7 +1591,7 @@ type ClassifyDimensionsResponse struct {
 
 func (x *ClassifyDimensionsResponse) Reset() {
 	*x = ClassifyDimensionsResponse{}
-	mi := &file_grader_proto_msgTypes[21]
+	mi := &file_grader_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1567,7 +1603,7 @@ func (x *ClassifyDimensionsResponse) String() string {
 func (*ClassifyDimensionsResponse) ProtoMessage() {}
 
 func (x *ClassifyDimensionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[21]
+	mi := &file_grader_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1580,7 +1616,7 @@ func (x *ClassifyDimensionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClassifyDimensionsResponse.ProtoReflect.Descriptor instead.
 func (*ClassifyDimensionsResponse) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{21}
+	return file_grader_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ClassifyDimensionsResponse) GetFraming() string {
@@ -1674,7 +1710,7 @@ type ClassifyFailureRequest struct {
 
 func (x *ClassifyFailureRequest) Reset() {
 	*x = ClassifyFailureRequest{}
-	mi := &file_grader_proto_msgTypes[22]
+	mi := &file_grader_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1686,7 +1722,7 @@ func (x *ClassifyFailureRequest) String() string {
 func (*ClassifyFailureRequest) ProtoMessage() {}
 
 func (x *ClassifyFailureRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[22]
+	mi := &file_grader_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1699,7 +1735,7 @@ func (x *ClassifyFailureRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClassifyFailureRequest.ProtoReflect.Descriptor instead.
 func (*ClassifyFailureRequest) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{22}
+	return file_grader_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ClassifyFailureRequest) GetRunId() string {
@@ -1749,7 +1785,7 @@ type ClassifyFailureResponse struct {
 
 func (x *ClassifyFailureResponse) Reset() {
 	*x = ClassifyFailureResponse{}
-	mi := &file_grader_proto_msgTypes[23]
+	mi := &file_grader_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1761,7 +1797,7 @@ func (x *ClassifyFailureResponse) String() string {
 func (*ClassifyFailureResponse) ProtoMessage() {}
 
 func (x *ClassifyFailureResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[23]
+	mi := &file_grader_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1774,7 +1810,7 @@ func (x *ClassifyFailureResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClassifyFailureResponse.ProtoReflect.Descriptor instead.
 func (*ClassifyFailureResponse) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{23}
+	return file_grader_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ClassifyFailureResponse) GetClassification() *FailureClassificationProto {
@@ -1806,7 +1842,7 @@ type FailureClassificationProto struct {
 
 func (x *FailureClassificationProto) Reset() {
 	*x = FailureClassificationProto{}
-	mi := &file_grader_proto_msgTypes[24]
+	mi := &file_grader_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1818,7 +1854,7 @@ func (x *FailureClassificationProto) String() string {
 func (*FailureClassificationProto) ProtoMessage() {}
 
 func (x *FailureClassificationProto) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[24]
+	mi := &file_grader_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1831,7 +1867,7 @@ func (x *FailureClassificationProto) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FailureClassificationProto.ProtoReflect.Descriptor instead.
 func (*FailureClassificationProto) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{24}
+	return file_grader_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *FailureClassificationProto) GetPrimary() string {
@@ -1880,7 +1916,7 @@ type EvidenceSpanProto struct {
 
 func (x *EvidenceSpanProto) Reset() {
 	*x = EvidenceSpanProto{}
-	mi := &file_grader_proto_msgTypes[25]
+	mi := &file_grader_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1892,7 +1928,7 @@ func (x *EvidenceSpanProto) String() string {
 func (*EvidenceSpanProto) ProtoMessage() {}
 
 func (x *EvidenceSpanProto) ProtoReflect() protoreflect.Message {
-	mi := &file_grader_proto_msgTypes[25]
+	mi := &file_grader_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1905,7 +1941,7 @@ func (x *EvidenceSpanProto) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvidenceSpanProto.ProtoReflect.Descriptor instead.
 func (*EvidenceSpanProto) Descriptor() ([]byte, []int) {
-	return file_grader_proto_rawDescGZIP(), []int{25}
+	return file_grader_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *EvidenceSpanProto) GetCode() string {
@@ -1963,13 +1999,17 @@ const file_grader_proto_rawDesc = "" +
 	"\x0fexpected_result\x18\x03 \x01(\tR\x0eexpectedResult\"<\n" +
 	"\fArtifactSpec\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\"\xb5\x01\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\";\n" +
+	"\x0fDimensionRubric\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x16\n" +
+	"\x06prompt\x18\x02 \x01(\tR\x06prompt\"\xf1\x01\n" +
 	"\vJudgeConfig\x12\x14\n" +
 	"\x05model\x18\x01 \x01(\tR\x05model\x12\x1a\n" +
 	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x17\n" +
 	"\aapi_key\x18\x03 \x01(\tR\x06apiKey\x128\n" +
 	"\x06rubric\x18\x04 \x03(\v2 .frameval.grader.RubricDimensionR\x06rubric\x12!\n" +
-	"\fjudge_rounds\x18\x05 \x01(\x05R\vjudgeRounds\"{\n" +
+	"\fjudge_rounds\x18\x05 \x01(\x05R\vjudgeRounds\x12:\n" +
+	"\arubrics\x18\x06 \x03(\v2 .frameval.grader.DimensionRubricR\arubrics\"{\n" +
 	"\x0fRubricDimension\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bcriteria\x18\x02 \x01(\tR\bcriteria\x12\x1b\n" +
@@ -2009,15 +2049,20 @@ const file_grader_proto_rawDesc = "" +
 	"\x14error_recovery_count\x18\t \x01(\x05R\x12errorRecoveryCount\x12,\n" +
 	"\x12tool_call_accuracy\x18\n" +
 	" \x01(\x02R\x10toolCallAccuracy\x12/\n" +
-	"\x13context_utilization\x18\v \x01(\x02R\x12contextUtilization\"\x92\x02\n" +
-	"\x10JudgeGradeResult\x12 \n" +
-	"\vcorrectness\x18\x01 \x01(\x02R\vcorrectness\x12(\n" +
-	"\x0fmaintainability\x18\x02 \x01(\x02R\x0fmaintainability\x12\"\n" +
-	"\fcompleteness\x18\x03 \x01(\x02R\fcompleteness\x12%\n" +
-	"\x0ebest_practices\x18\x04 \x01(\x02R\rbestPractices\x12%\n" +
-	"\x0eerror_handling\x18\x05 \x01(\x02R\rerrorHandling\x12\x1b\n" +
-	"\tirr_alpha\x18\x06 \x01(\x02R\birrAlpha\x12#\n" +
-	"\rraw_responses\x18\a \x03(\tR\frawResponses\"\x81\x02\n" +
+	"\x13context_utilization\x18\v \x01(\x02R\x12contextUtilization\"\xe8\x02\n" +
+	"\x10JudgeGradeResult\x12E\n" +
+	"\x06scores\x18\x01 \x03(\v2-.frameval.grader.JudgeGradeResult.ScoresEntryR\x06scores\x12Q\n" +
+	"\n" +
+	"rationales\x18\x02 \x03(\v21.frameval.grader.JudgeGradeResult.RationalesEntryR\n" +
+	"rationales\x12\x1b\n" +
+	"\tirr_alpha\x18\x03 \x01(\x01R\birrAlpha\x12#\n" +
+	"\rraw_responses\x18\x04 \x03(\tR\frawResponses\x1a9\n" +
+	"\vScoresEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a=\n" +
+	"\x0fRationalesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x81\x02\n" +
 	"\x13SpecAdherenceResult\x125\n" +
 	"\x16instruction_compliance\x18\x01 \x01(\x02R\x15instructionCompliance\x123\n" +
 	"\x15constraint_violations\x18\x02 \x01(\x05R\x14constraintViolations\x121\n" +
@@ -2116,7 +2161,7 @@ func file_grader_proto_rawDescGZIP() []byte {
 	return file_grader_proto_rawDescData
 }
 
-var file_grader_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_grader_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_grader_proto_goTypes = []any{
 	(*Empty)(nil),                      // 0: frameval.grader.Empty
 	(*HealthResponse)(nil),             // 1: frameval.grader.HealthResponse
@@ -2125,59 +2170,65 @@ var file_grader_proto_goTypes = []any{
 	(*TaskSpec)(nil),                   // 4: frameval.grader.TaskSpec
 	(*TestCase)(nil),                   // 5: frameval.grader.TestCase
 	(*ArtifactSpec)(nil),               // 6: frameval.grader.ArtifactSpec
-	(*JudgeConfig)(nil),                // 7: frameval.grader.JudgeConfig
-	(*RubricDimension)(nil),            // 8: frameval.grader.RubricDimension
-	(*GradeRunResponse)(nil),           // 9: frameval.grader.GradeRunResponse
-	(*CodeGradeResult)(nil),            // 10: frameval.grader.CodeGradeResult
-	(*TestResult)(nil),                 // 11: frameval.grader.TestResult
-	(*ProcessGradeResult)(nil),         // 12: frameval.grader.ProcessGradeResult
-	(*JudgeGradeResult)(nil),           // 13: frameval.grader.JudgeGradeResult
-	(*SpecAdherenceResult)(nil),        // 14: frameval.grader.SpecAdherenceResult
-	(*InstructionResult)(nil),          // 15: frameval.grader.InstructionResult
-	(*ComputeStatsRequest)(nil),        // 16: frameval.grader.ComputeStatsRequest
-	(*VariantGrades)(nil),              // 17: frameval.grader.VariantGrades
-	(*ComputeStatsResponse)(nil),       // 18: frameval.grader.ComputeStatsResponse
-	(*PairwiseStat)(nil),               // 19: frameval.grader.PairwiseStat
-	(*ClassifyDimensionsRequest)(nil),  // 20: frameval.grader.ClassifyDimensionsRequest
-	(*ClassifyDimensionsResponse)(nil), // 21: frameval.grader.ClassifyDimensionsResponse
-	(*ClassifyFailureRequest)(nil),     // 22: frameval.grader.ClassifyFailureRequest
-	(*ClassifyFailureResponse)(nil),    // 23: frameval.grader.ClassifyFailureResponse
-	(*FailureClassificationProto)(nil), // 24: frameval.grader.FailureClassificationProto
-	(*EvidenceSpanProto)(nil),          // 25: frameval.grader.EvidenceSpanProto
+	(*DimensionRubric)(nil),            // 7: frameval.grader.DimensionRubric
+	(*JudgeConfig)(nil),                // 8: frameval.grader.JudgeConfig
+	(*RubricDimension)(nil),            // 9: frameval.grader.RubricDimension
+	(*GradeRunResponse)(nil),           // 10: frameval.grader.GradeRunResponse
+	(*CodeGradeResult)(nil),            // 11: frameval.grader.CodeGradeResult
+	(*TestResult)(nil),                 // 12: frameval.grader.TestResult
+	(*ProcessGradeResult)(nil),         // 13: frameval.grader.ProcessGradeResult
+	(*JudgeGradeResult)(nil),           // 14: frameval.grader.JudgeGradeResult
+	(*SpecAdherenceResult)(nil),        // 15: frameval.grader.SpecAdherenceResult
+	(*InstructionResult)(nil),          // 16: frameval.grader.InstructionResult
+	(*ComputeStatsRequest)(nil),        // 17: frameval.grader.ComputeStatsRequest
+	(*VariantGrades)(nil),              // 18: frameval.grader.VariantGrades
+	(*ComputeStatsResponse)(nil),       // 19: frameval.grader.ComputeStatsResponse
+	(*PairwiseStat)(nil),               // 20: frameval.grader.PairwiseStat
+	(*ClassifyDimensionsRequest)(nil),  // 21: frameval.grader.ClassifyDimensionsRequest
+	(*ClassifyDimensionsResponse)(nil), // 22: frameval.grader.ClassifyDimensionsResponse
+	(*ClassifyFailureRequest)(nil),     // 23: frameval.grader.ClassifyFailureRequest
+	(*ClassifyFailureResponse)(nil),    // 24: frameval.grader.ClassifyFailureResponse
+	(*FailureClassificationProto)(nil), // 25: frameval.grader.FailureClassificationProto
+	(*EvidenceSpanProto)(nil),          // 26: frameval.grader.EvidenceSpanProto
+	nil,                                // 27: frameval.grader.JudgeGradeResult.ScoresEntry
+	nil,                                // 28: frameval.grader.JudgeGradeResult.RationalesEntry
 }
 var file_grader_proto_depIdxs = []int32{
 	3,  // 0: frameval.grader.GradeRunRequest.output_files:type_name -> frameval.grader.OutputFile
 	4,  // 1: frameval.grader.GradeRunRequest.task:type_name -> frameval.grader.TaskSpec
 	6,  // 2: frameval.grader.GradeRunRequest.artifact:type_name -> frameval.grader.ArtifactSpec
-	7,  // 3: frameval.grader.GradeRunRequest.judge_config:type_name -> frameval.grader.JudgeConfig
+	8,  // 3: frameval.grader.GradeRunRequest.judge_config:type_name -> frameval.grader.JudgeConfig
 	5,  // 4: frameval.grader.TaskSpec.test_cases:type_name -> frameval.grader.TestCase
-	8,  // 5: frameval.grader.JudgeConfig.rubric:type_name -> frameval.grader.RubricDimension
-	10, // 6: frameval.grader.GradeRunResponse.code:type_name -> frameval.grader.CodeGradeResult
-	12, // 7: frameval.grader.GradeRunResponse.process:type_name -> frameval.grader.ProcessGradeResult
-	13, // 8: frameval.grader.GradeRunResponse.judge:type_name -> frameval.grader.JudgeGradeResult
-	14, // 9: frameval.grader.GradeRunResponse.adherence:type_name -> frameval.grader.SpecAdherenceResult
-	11, // 10: frameval.grader.CodeGradeResult.test_results:type_name -> frameval.grader.TestResult
-	15, // 11: frameval.grader.SpecAdherenceResult.per_instruction:type_name -> frameval.grader.InstructionResult
-	17, // 12: frameval.grader.ComputeStatsRequest.variant_grades:type_name -> frameval.grader.VariantGrades
-	9,  // 13: frameval.grader.VariantGrades.grades:type_name -> frameval.grader.GradeRunResponse
-	19, // 14: frameval.grader.ComputeStatsResponse.stats:type_name -> frameval.grader.PairwiseStat
-	24, // 15: frameval.grader.ClassifyFailureResponse.classification:type_name -> frameval.grader.FailureClassificationProto
-	25, // 16: frameval.grader.FailureClassificationProto.evidence:type_name -> frameval.grader.EvidenceSpanProto
-	2,  // 17: frameval.grader.GraderService.GradeRun:input_type -> frameval.grader.GradeRunRequest
-	16, // 18: frameval.grader.GraderService.ComputeStats:input_type -> frameval.grader.ComputeStatsRequest
-	20, // 19: frameval.grader.GraderService.ClassifyDimensions:input_type -> frameval.grader.ClassifyDimensionsRequest
-	22, // 20: frameval.grader.GraderService.ClassifyFailure:input_type -> frameval.grader.ClassifyFailureRequest
-	0,  // 21: frameval.grader.GraderService.HealthCheck:input_type -> frameval.grader.Empty
-	9,  // 22: frameval.grader.GraderService.GradeRun:output_type -> frameval.grader.GradeRunResponse
-	18, // 23: frameval.grader.GraderService.ComputeStats:output_type -> frameval.grader.ComputeStatsResponse
-	21, // 24: frameval.grader.GraderService.ClassifyDimensions:output_type -> frameval.grader.ClassifyDimensionsResponse
-	23, // 25: frameval.grader.GraderService.ClassifyFailure:output_type -> frameval.grader.ClassifyFailureResponse
-	1,  // 26: frameval.grader.GraderService.HealthCheck:output_type -> frameval.grader.HealthResponse
-	22, // [22:27] is the sub-list for method output_type
-	17, // [17:22] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	9,  // 5: frameval.grader.JudgeConfig.rubric:type_name -> frameval.grader.RubricDimension
+	7,  // 6: frameval.grader.JudgeConfig.rubrics:type_name -> frameval.grader.DimensionRubric
+	11, // 7: frameval.grader.GradeRunResponse.code:type_name -> frameval.grader.CodeGradeResult
+	13, // 8: frameval.grader.GradeRunResponse.process:type_name -> frameval.grader.ProcessGradeResult
+	14, // 9: frameval.grader.GradeRunResponse.judge:type_name -> frameval.grader.JudgeGradeResult
+	15, // 10: frameval.grader.GradeRunResponse.adherence:type_name -> frameval.grader.SpecAdherenceResult
+	12, // 11: frameval.grader.CodeGradeResult.test_results:type_name -> frameval.grader.TestResult
+	27, // 12: frameval.grader.JudgeGradeResult.scores:type_name -> frameval.grader.JudgeGradeResult.ScoresEntry
+	28, // 13: frameval.grader.JudgeGradeResult.rationales:type_name -> frameval.grader.JudgeGradeResult.RationalesEntry
+	16, // 14: frameval.grader.SpecAdherenceResult.per_instruction:type_name -> frameval.grader.InstructionResult
+	18, // 15: frameval.grader.ComputeStatsRequest.variant_grades:type_name -> frameval.grader.VariantGrades
+	10, // 16: frameval.grader.VariantGrades.grades:type_name -> frameval.grader.GradeRunResponse
+	20, // 17: frameval.grader.ComputeStatsResponse.stats:type_name -> frameval.grader.PairwiseStat
+	25, // 18: frameval.grader.ClassifyFailureResponse.classification:type_name -> frameval.grader.FailureClassificationProto
+	26, // 19: frameval.grader.FailureClassificationProto.evidence:type_name -> frameval.grader.EvidenceSpanProto
+	2,  // 20: frameval.grader.GraderService.GradeRun:input_type -> frameval.grader.GradeRunRequest
+	17, // 21: frameval.grader.GraderService.ComputeStats:input_type -> frameval.grader.ComputeStatsRequest
+	21, // 22: frameval.grader.GraderService.ClassifyDimensions:input_type -> frameval.grader.ClassifyDimensionsRequest
+	23, // 23: frameval.grader.GraderService.ClassifyFailure:input_type -> frameval.grader.ClassifyFailureRequest
+	0,  // 24: frameval.grader.GraderService.HealthCheck:input_type -> frameval.grader.Empty
+	10, // 25: frameval.grader.GraderService.GradeRun:output_type -> frameval.grader.GradeRunResponse
+	19, // 26: frameval.grader.GraderService.ComputeStats:output_type -> frameval.grader.ComputeStatsResponse
+	22, // 27: frameval.grader.GraderService.ClassifyDimensions:output_type -> frameval.grader.ClassifyDimensionsResponse
+	24, // 28: frameval.grader.GraderService.ClassifyFailure:output_type -> frameval.grader.ClassifyFailureResponse
+	1,  // 29: frameval.grader.GraderService.HealthCheck:output_type -> frameval.grader.HealthResponse
+	25, // [25:30] is the sub-list for method output_type
+	20, // [20:25] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_grader_proto_init() }
@@ -2191,7 +2242,7 @@ func file_grader_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grader_proto_rawDesc), len(file_grader_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -53,12 +53,18 @@ message ArtifactSpec {
   string type = 2;
 }
 
+message DimensionRubric {
+  string key = 1;
+  string prompt = 2;
+}
+
 message JudgeConfig {
   string model = 1;
   string provider = 2;
   string api_key = 3;
   repeated RubricDimension rubric = 4;
   int32 judge_rounds = 5;
+  repeated DimensionRubric rubrics = 6;
 }
 
 message RubricDimension {
@@ -107,13 +113,10 @@ message ProcessGradeResult {
 }
 
 message JudgeGradeResult {
-  float correctness = 1;
-  float maintainability = 2;
-  float completeness = 3;
-  float best_practices = 4;
-  float error_handling = 5;
-  float irr_alpha = 6;
-  repeated string raw_responses = 7;
+  map<string, double> scores = 1;
+  map<string, string> rationales = 2;
+  double irr_alpha = 3;
+  repeated string raw_responses = 4;
 }
 
 message SpecAdherenceResult {
