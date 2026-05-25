@@ -81,7 +81,20 @@ export function useExperimentsForIds(experimentIds: string[]) {
 }
 
 export function useRun(runId?: string) {
-  return useQuery({ queryKey: ['run', runId], enabled: Boolean(runId), queryFn: () => api.get<Run>(`/runs/${runId}`) });
+  return useQuery({
+    queryKey: ['run', runId],
+    enabled: Boolean(runId),
+    queryFn: () => api.get<Run>(`/runs/${runId}`),
+    // While the run is non-terminal, refetch every 3s so callers (notably
+    // useGrade's polling, which keys off run.status) see status flips
+    // without manual invalidation.
+    refetchInterval: (query) => {
+      const data = query.state.data as Run | undefined;
+      if (!data) return false;
+      const terminal = data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled';
+      return terminal ? false : 3000;
+    },
+  });
 }
 
 export function useTranscript(runId?: string) {
@@ -154,12 +167,25 @@ export function useGrade(runId?: string, runStatus?: string) {
     queryFn: () => api.get<Grade>(`/runs/${runId}/grade`),
     // Poll while the LLM judge is still in flight. The backend persists a
     // partial grade row immediately after sandbox verifications; the judge
-    // adds judge_scores when it returns 30-90s later.
+    // adds judge_scores when it returns 30-90s later. Stop polling when:
+    //  - judge_scores has any entries (judge ran successfully), OR
+    //  - raw_judge_responses contains the "llm_judge_disabled" sentinel
+    //    (server-side disabled_judge_result() — judge_scores stays empty
+    //    forever in that case, so we'd otherwise poll until the run
+    //    transitions to a terminal state — and if the run never does,
+    //    forever), OR
+    //  - the run reached a terminal status, OR
+    //  - we've polled 300 times (10 min hard ceiling — safety net against
+    //    a hung run that never reaches "completed").
     refetchInterval: (query) => {
       const data = query.state.data as Grade | undefined;
-      const judgeDone = data && data.judge_scores && Object.keys(data.judge_scores).length > 0;
-      const runTerminal = runStatus === 'completed' || runStatus === 'failed' || runStatus === 'cancelled';
-      if (judgeDone || runTerminal) return false;
+      if (data) {
+        if (data.judge_scores && Object.keys(data.judge_scores).length > 0) return false;
+        const firstRaw = data.raw_judge_responses?.[0];
+        if (firstRaw && firstRaw.startsWith('llm_judge_disabled')) return false;
+      }
+      if (runStatus === 'completed' || runStatus === 'failed' || runStatus === 'cancelled') return false;
+      if ((query.state.dataUpdateCount ?? 0) > 300) return false;
       return 2000;
     },
   });

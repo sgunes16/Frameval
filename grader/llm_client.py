@@ -58,13 +58,33 @@ def load_config(override: Any = None) -> LLMClientConfig:
     )
 
 
+async def _noop_aclose() -> None:
+    """No-op coroutine returned by build_client for sync clients (which
+    don't need explicit teardown). Lets async callers always
+    `await aclose()` without branching on the client kind."""
+
+
 def build_client(cfg: LLMClientConfig, *, async_client: bool = False):
     """Return an instructor-wrapped chat completions surface.
 
-    When async_client=True, the returned `.create(...)` is awaitable —
-    required for per-dimension judge calls run concurrently via
-    asyncio.gather. The default (sync) surface preserves single-call
-    callers (failure_classifier) without changes.
+    Back-compat wrapper around build_client_with_cleanup that discards
+    the close handle. Sync callers (failure_classifier) keep their
+    existing single-return contract. Async callers should prefer
+    build_client_with_cleanup so they can release the underlying httpx
+    AsyncClient when the per-call event loop tears down.
+    """
+    surface, _ = build_client_with_cleanup(cfg, async_client=async_client)
+    return surface
+
+
+def build_client_with_cleanup(cfg: LLMClientConfig, *, async_client: bool = False):
+    """Return (surface, aclose).
+
+    `surface` is the instructor-wrapped `.create(...)` target. `aclose`
+    is an awaitable that releases the underlying httpx AsyncClient pool
+    when the caller is done — REQUIRED for async clients to avoid
+    accumulating dangling sockets across per-call asyncio.run loops.
+    Sync clients get _noop_aclose for API uniformity.
     """
     if cfg.provider == "anthropic":
         import instructor
@@ -72,9 +92,11 @@ def build_client(cfg: LLMClientConfig, *, async_client: bool = False):
             raise RuntimeError("anthropic provider needs api_key")
         if async_client:
             from anthropic import AsyncAnthropic
-            return instructor.from_anthropic(AsyncAnthropic(api_key=cfg.api_key)).messages
+            raw = AsyncAnthropic(api_key=cfg.api_key)
+            return instructor.from_anthropic(raw).messages, raw.close
         from anthropic import Anthropic
-        return instructor.from_anthropic(Anthropic(api_key=cfg.api_key)).messages
+        raw = Anthropic(api_key=cfg.api_key)
+        return instructor.from_anthropic(raw).messages, _noop_aclose
 
     import instructor
     client_kwargs: dict[str, object] = {}
@@ -84,6 +106,8 @@ def build_client(cfg: LLMClientConfig, *, async_client: bool = False):
     client_kwargs["api_key"] = cfg.api_key or "not-needed"
     if async_client:
         from openai import AsyncOpenAI
-        return instructor.from_openai(AsyncOpenAI(**client_kwargs)).chat.completions
+        raw = AsyncOpenAI(**client_kwargs)
+        return instructor.from_openai(raw).chat.completions, raw.close
     from openai import OpenAI
-    return instructor.from_openai(OpenAI(**client_kwargs)).chat.completions
+    raw = OpenAI(**client_kwargs)
+    return instructor.from_openai(raw).chat.completions, _noop_aclose

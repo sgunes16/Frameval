@@ -13,14 +13,24 @@ func (s *Store) SaveGrade(ctx context.Context, grade models.Grade) error {
 	if grade.ID == "" {
 		grade.ID = uuid.NewString()
 	}
+	judgeScoresJSON, _ := json.Marshal(grade.JudgeScores)
+	judgeRationalesJSON, _ := json.Marshal(grade.JudgeRationales)
+	// Wrap DELETE+INSERT in a transaction so a concurrent GetGradeByRun
+	// (e.g. the progressive-grading-view poller) never sees the empty
+	// window between the two statements. Without this, the two-phase save
+	// in orchestrator.executeRun (partial row → full row after the judge
+	// returns) hands out a brief 404 every time it transitions.
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin save grade tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after successful Commit
 	if grade.RunID != "" {
-		if _, err := s.DB.ExecContext(ctx, `DELETE FROM grades WHERE run_id = ?`, grade.RunID); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM grades WHERE run_id = ?`, grade.RunID); err != nil {
 			return fmt.Errorf("delete existing run grade: %w", err)
 		}
 	}
-	judgeScoresJSON, _ := json.Marshal(grade.JudgeScores)
-	judgeRationalesJSON, _ := json.Marshal(grade.JudgeRationales)
-	_, err := s.DB.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO grades (
 			id, run_id, test_pass_rate, test_pass_count, test_fail_count, lint_score, type_check_pass,
 			file_state_valid, turn_count, total_tokens, cost_usd, token_efficiency, backtrack_count,
@@ -38,6 +48,9 @@ func (s *Store) SaveGrade(ctx context.Context, grade models.Grade) error {
 		grade.CompositeScore, marshalJSON(grade.TestResults), grade.JudgeUserPrompt)
 	if err != nil {
 		return fmt.Errorf("save grade: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit save grade: %w", err)
 	}
 	return nil
 }

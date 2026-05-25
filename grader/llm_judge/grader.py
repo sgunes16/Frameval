@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from grader.llm_client import build_client, load_config
+from grader.llm_client import build_client_with_cleanup, load_config
 from grader.llm_judge.prompts import DIMENSION_RUBRICS, render_user_prompt
 
 logger = logging.getLogger(__name__)
@@ -78,34 +78,43 @@ async def _grade_async(
     rubrics: list[tuple[str, str]],
 ) -> dict[str, Any]:
     try:
-        client = build_client(cfg, async_client=True)
+        client, aclose = build_client_with_cleanup(cfg, async_client=True)
     except Exception as exc:
         logger.warning("judge async client init failed: %s", exc)
         return _all_dims_failed(str(exc), rubrics)
 
-    user_prompt = render_user_prompt(
-        code_grade=code_grade,
-        process_grade=process_grade,
-        task=task or {},
-        output_files=output_files or [],
-        transcript_json=transcript_json or b"",
-    )
+    try:
+        user_prompt = render_user_prompt(
+            code_grade=code_grade,
+            process_grade=process_grade,
+            task=task or {},
+            output_files=output_files or [],
+            transcript_json=transcript_json or b"",
+        )
 
-    tasks = [_score_one_dim(client, cfg.model, key, prompt, user_prompt) for key, prompt in rubrics]
-    # return_exceptions=False because _score_one_dim already catches
-    # everything internally and never raises out.
-    results = await asyncio.gather(*tasks, return_exceptions=False)
+        tasks = [_score_one_dim(client, cfg.model, key, prompt, user_prompt) for key, prompt in rubrics]
+        # return_exceptions=False because _score_one_dim already catches
+        # everything internally and never raises out.
+        results = await asyncio.gather(*tasks, return_exceptions=False)
 
-    scores = {rubrics[i][0]: results[i][0] for i in range(len(rubrics))}
-    rationales = {rubrics[i][0]: results[i][1] for i in range(len(rubrics))}
-    raw_responses = [results[i][2] for i in range(len(rubrics))]
-    return {
-        "scores": scores,
-        "rationales": rationales,
-        "irr_alpha": 0.0,
-        "raw_responses": raw_responses,
-        "user_prompt": user_prompt,
-    }
+        scores = {rubrics[i][0]: results[i][0] for i in range(len(rubrics))}
+        rationales = {rubrics[i][0]: results[i][1] for i in range(len(rubrics))}
+        raw_responses = [results[i][2] for i in range(len(rubrics))]
+        return {
+            "scores": scores,
+            "rationales": rationales,
+            "irr_alpha": 0.0,
+            "raw_responses": raw_responses,
+            "user_prompt": user_prompt,
+        }
+    finally:
+        # Release the AsyncOpenAI/AsyncAnthropic httpx pool. Without this,
+        # each GradeRun thread leaks a connection pool when asyncio.run
+        # tears down its event loop. Best-effort: log but don't raise.
+        try:
+            await aclose()
+        except Exception as exc:
+            logger.warning("judge client aclose failed: %s", exc)
 
 
 async def _score_one_dim(
