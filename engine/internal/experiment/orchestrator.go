@@ -310,6 +310,31 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	_ = o.store.UpdateRunStatus(ctx, run.ID, "grading", "")
 	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "grading", "variant_id": run.VariantID})
 	o.broadcast("grading.progress", map[string]any{"run_id": run.ID, "grader": "composite", "status": "running"})
+	// Phase 1: persist deterministic grade fields immediately so the frontend
+	// can render the grading page without waiting for the LLM judge (which
+	// can take 30-90s on free-tier models). The full grade (Phase 2) will
+	// replace this row via SaveGrade's DELETE-then-INSERT semantics.
+	partialTotal := passed + failed
+	partialPassRate := 0.0
+	if partialTotal > 0 {
+		partialPassRate = float64(passed) / float64(partialTotal)
+	}
+	partial := models.Grade{
+		ID:             uuid.NewString(),
+		RunID:          run.ID,
+		TestResults:    testResults,
+		TestPassCount:  passed,
+		TestFailCount:  failed,
+		TestPassRate:   partialPassRate,
+		FileStateValid: len(outputFiles) > 0,
+		LintScore:      10.0,
+		TypeCheckPass:  true,
+		Source:         models.GradeSourceGrader,
+		GradedAt:       time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := o.store.SaveGrade(ctx, partial); err != nil {
+		slog.Warn("partial grade save failed; continuing to full grade", "run_id", run.ID, "err", err)
+	}
 	gradeStart := time.Now()
 	slog.Info("grader.start", "run_id", run.ID, "experiment_id", experiment.ID)
 	// Pass the sandbox-side verification results so the judge sees the

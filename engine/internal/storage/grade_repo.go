@@ -27,15 +27,15 @@ func (s *Store) SaveGrade(ctx context.Context, grade models.Grade) error {
 			self_validation_rate, premature_completion, idle_turns, error_recovery_count, tool_call_accuracy,
 			context_utilization, judge_scores, judge_rationales, judge_irr_alpha, raw_judge_responses_json,
 			spec_instruction_compliance, spec_constraint_violations, spec_convention_adherence,
-			spec_per_instruction_json, composite_score, test_results_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			spec_per_instruction_json, composite_score, test_results_json, judge_user_prompt
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, grade.ID, nullableString(grade.RunID), grade.TestPassRate, grade.TestPassCount, grade.TestFailCount, grade.LintScore,
 		boolToInt(grade.TypeCheckPass), boolToInt(grade.FileStateValid), grade.TurnCount, grade.TotalTokens, grade.CostUSD, grade.TokenEfficiency,
 		grade.BacktrackCount, grade.SelfValidationRate, boolToInt(grade.PrematureCompletion), grade.IdleTurns, grade.ErrorRecoveryCount,
 		grade.ToolCallAccuracy, grade.ContextUtilization, string(judgeScoresJSON), string(judgeRationalesJSON),
 		grade.JudgeIRRAlpha, marshalJSON(grade.RawJudgeResponses), grade.SpecInstructionCompliance,
 		grade.SpecConstraintViolations, grade.SpecConventionAdherence, marshalJSON(grade.SpecPerInstruction),
-		grade.CompositeScore, marshalJSON(grade.TestResults))
+		grade.CompositeScore, marshalJSON(grade.TestResults), grade.JudgeUserPrompt)
 	if err != nil {
 		return fmt.Errorf("save grade: %w", err)
 	}
@@ -49,7 +49,8 @@ func (s *Store) GetGradeByRun(ctx context.Context, runID string) (*models.Grade,
 		       self_validation_rate, premature_completion, idle_turns, error_recovery_count, tool_call_accuracy,
 		       context_utilization, judge_scores, judge_rationales, judge_irr_alpha, raw_judge_responses_json,
 		       spec_instruction_compliance, spec_constraint_violations, spec_convention_adherence,
-		       spec_per_instruction_json, composite_score, graded_at, test_results_json
+		       spec_per_instruction_json, composite_score, graded_at, test_results_json,
+		       COALESCE(judge_user_prompt, '')
 		FROM grades WHERE run_id = ?
 	`, runID)
 	var grade models.Grade
@@ -60,7 +61,7 @@ func (s *Store) GetGradeByRun(ctx context.Context, runID string) (*models.Grade,
 		&grade.BacktrackCount, &grade.SelfValidationRate, &prematureCompletion, &grade.IdleTurns, &grade.ErrorRecoveryCount,
 		&grade.ToolCallAccuracy, &grade.ContextUtilization, &judgeScores, &judgeRationales, &grade.JudgeIRRAlpha, &rawJudge,
 		&grade.SpecInstructionCompliance, &grade.SpecConstraintViolations, &grade.SpecConventionAdherence, &perInstruction,
-		&grade.CompositeScore, &grade.GradedAt, &testResults); err != nil {
+		&grade.CompositeScore, &grade.GradedAt, &testResults, &grade.JudgeUserPrompt); err != nil {
 		return nil, fmt.Errorf("get grade: %w", err)
 	}
 	grade.TypeCheckPass = typeCheckPass == 1

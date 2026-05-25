@@ -780,14 +780,15 @@ func (x *RubricDimension) GetMaxScore() int32 {
 }
 
 type GradeRunResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Code           *CodeGradeResult       `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
-	Process        *ProcessGradeResult    `protobuf:"bytes,2,opt,name=process,proto3" json:"process,omitempty"`
-	Judge          *JudgeGradeResult      `protobuf:"bytes,3,opt,name=judge,proto3" json:"judge,omitempty"`
-	Adherence      *SpecAdherenceResult   `protobuf:"bytes,4,opt,name=adherence,proto3" json:"adherence,omitempty"`
-	CompositeScore float32                `protobuf:"fixed32,5,opt,name=composite_score,json=compositeScore,proto3" json:"composite_score,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Code            *CodeGradeResult       `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	Process         *ProcessGradeResult    `protobuf:"bytes,2,opt,name=process,proto3" json:"process,omitempty"`
+	Judge           *JudgeGradeResult      `protobuf:"bytes,3,opt,name=judge,proto3" json:"judge,omitempty"`
+	Adherence       *SpecAdherenceResult   `protobuf:"bytes,4,opt,name=adherence,proto3" json:"adherence,omitempty"`
+	CompositeScore  float32                `protobuf:"fixed32,5,opt,name=composite_score,json=compositeScore,proto3" json:"composite_score,omitempty"`
+	JudgeUserPrompt string                 `protobuf:"bytes,6,opt,name=judge_user_prompt,json=judgeUserPrompt,proto3" json:"judge_user_prompt,omitempty"` // the actual user message sent to the judge model
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GradeRunResponse) Reset() {
@@ -853,6 +854,13 @@ func (x *GradeRunResponse) GetCompositeScore() float32 {
 		return x.CompositeScore
 	}
 	return 0
+}
+
+func (x *GradeRunResponse) GetJudgeUserPrompt() string {
+	if x != nil {
+		return x.JudgeUserPrompt
+	}
+	return ""
 }
 
 type CodeGradeResult struct {
@@ -2159,13 +2167,14 @@ const file_grader_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bcriteria\x18\x02 \x01(\tR\bcriteria\x12\x1b\n" +
 	"\tmin_score\x18\x03 \x01(\x05R\bminScore\x12\x1b\n" +
-	"\tmax_score\x18\x04 \x01(\x05R\bmaxScore\"\xad\x02\n" +
+	"\tmax_score\x18\x04 \x01(\x05R\bmaxScore\"\xd9\x02\n" +
 	"\x10GradeRunResponse\x124\n" +
 	"\x04code\x18\x01 \x01(\v2 .frameval.grader.CodeGradeResultR\x04code\x12=\n" +
 	"\aprocess\x18\x02 \x01(\v2#.frameval.grader.ProcessGradeResultR\aprocess\x127\n" +
 	"\x05judge\x18\x03 \x01(\v2!.frameval.grader.JudgeGradeResultR\x05judge\x12B\n" +
 	"\tadherence\x18\x04 \x01(\v2$.frameval.grader.SpecAdherenceResultR\tadherence\x12'\n" +
-	"\x0fcomposite_score\x18\x05 \x01(\x02R\x0ecompositeScore\"\xb8\x02\n" +
+	"\x0fcomposite_score\x18\x05 \x01(\x02R\x0ecompositeScore\x12*\n" +
+	"\x11judge_user_prompt\x18\x06 \x01(\tR\x0fjudgeUserPrompt\"\xb8\x02\n" +
 	"\x0fCodeGradeResult\x12$\n" +
 	"\x0etest_pass_rate\x18\x01 \x01(\x02R\ftestPassRate\x12&\n" +
 	"\x0ftest_pass_count\x18\x02 \x01(\x05R\rtestPassCount\x12&\n" +

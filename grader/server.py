@@ -96,6 +96,7 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
                 per_instruction=[grader_pb2.InstructionResult(**item) for item in adherence["per_instruction"]],
             ),
             composite_score=composite,
+            judge_user_prompt=judge.get("user_prompt", ""),
         )
 
     def ComputeStats(self, request: grader_pb2.ComputeStatsRequest, context: grpc.ServicerContext) -> grader_pb2.ComputeStatsResponse:
@@ -198,6 +199,7 @@ def disabled_judge_result() -> dict:
         "rationales": {},
         "irr_alpha": 0.0,
         "raw_responses": ["llm_judge_disabled"],
+        "user_prompt": "",
     }
 
 

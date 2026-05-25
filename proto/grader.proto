@@ -99,6 +99,7 @@ message GradeRunResponse {
   JudgeGradeResult judge = 3;
   SpecAdherenceResult adherence = 4;
   float composite_score = 5;
+  string judge_user_prompt = 6;  // the actual user message sent to the judge model
 }
 
 message CodeGradeResult {

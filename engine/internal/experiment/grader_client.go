@@ -363,6 +363,7 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 		}
 	}
 	grade.CompositeScore = float64(response.CompositeScore)
+	grade.JudgeUserPrompt = response.JudgeUserPrompt
 	return grade
 }
 
