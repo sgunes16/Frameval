@@ -619,6 +619,7 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
     });
   const headers = colOrder.map((i) => rawHeaders[i]);
   const orderedGrades = colOrder.map((i) => grades[i]);
+  const orderedRunIds = colOrder.map((i) => runIds[i]);
   const coords = colOrder.map((i) => rawCoords[i]);
   grades = orderedGrades;
 
@@ -651,6 +652,20 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
           <BoolRow label="Premature completion" headers={headers} grades={grades} pick={(g) => g.premature_completion} positive="yes" negative="no" tone="warn-positive" />
 
           <SectionHeader colSpan={headers.length + 1} label="LLM-as-Judge rubric" />
+          <tr>
+            <td className="py-1 pl-3 text-xs text-fg-muted">details:</td>
+            {orderedRunIds.map((runId, i) => (
+              <td key={i} className="py-1 text-center">
+                <Link
+                  to={`/runs/${runId}/grading`}
+                  className="text-xs text-fg-muted underline hover:text-fg"
+                  title="Open grading inspector for this run"
+                >
+                  open →
+                </Link>
+              </td>
+            ))}
+          </tr>
           <BarRow label="Correctness" headers={headers} grades={grades} pick={(g) => g.judge_correctness} />
           <BarRow label="Maintainability" headers={headers} grades={grades} pick={(g) => g.judge_maintainability ?? 0} />
           <BarRow label="Completeness" headers={headers} grades={grades} pick={(g) => g.judge_completeness ?? 0} />
