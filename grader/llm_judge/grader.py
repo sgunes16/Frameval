@@ -90,6 +90,10 @@ async def _grade_async(
         output_files=output_files or [],
         transcript_json=transcript_json or b"",
     )
+    # DEBUG TEMP (hallucination diagnostic): emit the first ~400 chars of the
+    # rendered user prompt so we can compare what the judge actually saw
+    # against what the DB stored.
+    print(f"[judge_debug] rendered user_prompt head:\n{user_prompt[:400]}\n---", flush=True)
 
     tasks = [_score_one_dim(client, cfg.model, key, prompt, user_prompt) for key, prompt in rubrics]
     # return_exceptions=False because _score_one_dim already catches

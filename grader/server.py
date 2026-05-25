@@ -34,6 +34,8 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
             "test_cases": [{"name": tc.name, "command": tc.command, "expected_result": tc.expected_result} for tc in request.task.test_cases],
         }
         code = grade_code(task, output_files)
+        # DEBUG TEMP (hallucination diagnostic): log the exact dict the judge will see.
+        print(f"[grade_debug] run_id={request.run_id} test_pass_rate={code.get('test_pass_rate')} pass_count={code.get('test_pass_count')} fail_count={code.get('test_fail_count')} type_check={code.get('type_check_pass')} lint={code.get('lint_score')}", flush=True)
         process = process_grade(request.transcript_json)
         judge_cfg = request.judge_config if request.HasField("judge_config") else None
         if settings.enable_llm_judge or judge_cfg is not None:
