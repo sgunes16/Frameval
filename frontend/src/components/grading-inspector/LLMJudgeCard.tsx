@@ -4,7 +4,7 @@ import { Card, CardHeader } from '../ui/card';
 
 export function LLMJudgeCard({ grade }: { grade: Grade }) {
   const [showRaw, setShowRaw] = useState(false);
-  const rationale = extractRationale(grade.raw_judge_responses);
+  const rationales = extractRationalesByDim(grade.raw_judge_responses);
   const dims = [
     { label: 'Correctness', value: grade.judge_correctness },
     { label: 'Maintainability', value: grade.judge_maintainability ?? 0 },
@@ -28,10 +28,15 @@ export function LLMJudgeCard({ grade }: { grade: Grade }) {
           Inter-rater α: <span className="font-mono">{grade.judge_irr_alpha.toFixed(2)}</span>
         </div>
       )}
-      {rationale && (
-        <div className="mt-3 border-t border-border pt-3">
-          <div className="mb-1 text-xs uppercase tracking-wider text-fg-muted">Rationale</div>
-          <p className="text-sm text-fg">{rationale}</p>
+      {Object.keys(rationales).length > 0 && (
+        <div className="mt-3 space-y-2 border-t border-border pt-3">
+          <div className="text-xs uppercase tracking-wider text-fg-muted">Per-dimension rationale</div>
+          {Object.entries(rationales).map(([dim, text]) => (
+            <div key={dim}>
+              <div className="text-xs font-medium capitalize text-fg-muted">{dim.replace(/_/g, ' ')}</div>
+              <p className="text-sm text-fg">{text}</p>
+            </div>
+          ))}
         </div>
       )}
       {(grade.raw_judge_responses?.length ?? 0) > 0 && (
@@ -66,17 +71,24 @@ function DimRow({ label, value }: { label: string; value: number }) {
   );
 }
 
-function extractRationale(raw: string[] | undefined): string | null {
-  if (!raw || raw.length === 0) return null;
-  for (const entry of raw) {
+// Map raw_judge_responses (5 entries, each tagged "dim=<name>;<payload>") to
+// {dim: rationale}. Skips sentinels (judge_unavailable: ...) and unparseable
+// entries silently — the dim's bar still shows; only the rationale block is
+// suppressed for that dim.
+function extractRationalesByDim(raw: string[] | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const entry of raw ?? []) {
+    const match = /^dim=([^;]+);([\s\S]*)$/.exec(entry);
+    if (!match) continue;
+    const [, dim, payload] = match;
     try {
-      const parsed = JSON.parse(entry);
+      const parsed = JSON.parse(payload);
       if (typeof parsed?.rationale === 'string' && parsed.rationale.length > 0) {
-        return parsed.rationale;
+        out[dim] = parsed.rationale;
       }
     } catch {
-      // not JSON (probably a sentinel like "judge_unavailable: ..."); skip
+      /* sentinel or non-JSON; skip */
     }
   }
-  return null;
+  return out;
 }
