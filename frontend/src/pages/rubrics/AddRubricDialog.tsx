@@ -83,7 +83,7 @@ export function AddRubricDialog({ onClose }: { onClose: () => void }) {
             className="w-full rounded-md border border-border bg-bg-elev-1 p-2 font-mono text-xs text-fg"
           />
         </div>
-        {error && <div className="text-xs text-red-500">{error}</div>}
+        {error && <div className="text-xs text-danger">{error}</div>}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
