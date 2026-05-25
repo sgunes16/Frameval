@@ -1,23 +1,30 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from grader.llm_client import build_client, load_config
-from grader.llm_judge.prompts import SYSTEM_PROMPT, render_user_prompt
+from grader.llm_judge.prompts import DIMENSION_RUBRICS, render_user_prompt
 
 logger = logging.getLogger(__name__)
 
 
-class JudgeResult(BaseModel):
-    correctness: float = Field(ge=0.0, le=10.0)
-    maintainability: float = Field(ge=0.0, le=10.0)
-    completeness: float = Field(ge=0.0, le=10.0)
-    best_practices: float = Field(ge=0.0, le=10.0)
-    error_handling: float = Field(ge=0.0, le=10.0)
+class DimensionVerdict(BaseModel):
+    """One per-dimension LLM call's structured output."""
+    score: float = Field(ge=0.0, le=10.0)
     rationale: str = Field(max_length=600)
+
+
+_DIMENSIONS: tuple[str, ...] = (
+    "correctness",
+    "maintainability",
+    "completeness",
+    "best_practices",
+    "error_handling",
+)
 
 
 def grade(
@@ -28,64 +35,99 @@ def grade(
     transcript_json: bytes | None = None,
     config_override: Any = None,
 ) -> dict[str, Any]:
-    """Score one run on five dimensions via a single LLM call.
+    """Score one run on five dimensions via FIVE concurrent LLM calls.
 
-    Returns the dict shape grader_pb2.JudgeGradeResult expects. On any
-    hard failure (network, validation, no key) returns a sentinel result
-    with all dims at 0.0 and a `judge_unavailable: <reason>` raw_responses
-    entry, so the orchestrator never crashes mid-pipeline.
-
-    config_override is the request-time JudgeConfig proto (or any object
-    with .provider / .model / .api_key string attrs). Falsy fields fall
-    through to env-var defaults inside load_config.
+    Public API and return shape are unchanged from the prior single-call
+    implementation. raw_responses now contains five entries, each tagged
+    'dim=<name>;<payload>' where payload is either a JSON-encoded
+    DimensionVerdict or a 'judge_unavailable: <reason>' sentinel.
     """
     try:
         cfg = load_config(config_override)
-        client = build_client(cfg)
     except Exception as exc:
-        logger.warning("judge client init failed: %s", exc)
-        return _failed_judge_result(str(exc))
+        logger.warning("judge config load failed: %s", exc)
+        return _all_dims_failed(str(exc))
+    return asyncio.run(
+        _grade_async(cfg, code_grade, process_grade, task, output_files, transcript_json)
+    )
 
-    prompt = render_user_prompt(
+
+async def _grade_async(
+    cfg,
+    code_grade: dict[str, Any],
+    process_grade: dict[str, Any],
+    task: dict[str, Any] | None,
+    output_files: list[dict[str, Any]] | None,
+    transcript_json: bytes | None,
+) -> dict[str, Any]:
+    try:
+        client = build_client(cfg, async_client=True)
+    except Exception as exc:
+        logger.warning("judge async client init failed: %s", exc)
+        return _all_dims_failed(str(exc))
+
+    user_prompt = render_user_prompt(
         code_grade=code_grade,
         process_grade=process_grade,
         task=task or {},
         output_files=output_files or [],
         transcript_json=transcript_json or b"",
     )
-    try:
-        verdict: JudgeResult = client.create(
-            model=cfg.model,
-            response_model=JudgeResult,
-            max_retries=2,
-            max_tokens=1024,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-        )
-    except Exception as exc:
-        logger.warning("judge call failed: %s", exc)
-        return _failed_judge_result(str(exc))
 
+    tasks = [_score_one_dim(client, cfg.model, dim, user_prompt) for dim in _DIMENSIONS]
+    # return_exceptions=False because _score_one_dim already catches
+    # everything internally and never raises out.
+    results = await asyncio.gather(*tasks, return_exceptions=False)
+
+    scores = {dim: results[i][0] for i, dim in enumerate(_DIMENSIONS)}
+    raw_responses = [results[i][1] for i in range(len(_DIMENSIONS))]
     return {
-        "correctness": verdict.correctness,
-        "maintainability": verdict.maintainability,
-        "completeness": verdict.completeness,
-        "best_practices": verdict.best_practices,
-        "error_handling": verdict.error_handling,
-        "irr_alpha": 0.0,  # single-model run — no IRR by definition
-        "raw_responses": [verdict.model_dump_json()],
+        **scores,
+        "irr_alpha": 0.0,
+        "raw_responses": raw_responses,
     }
 
 
-def _failed_judge_result(reason: str) -> dict[str, Any]:
+async def _score_one_dim(
+    client, model: str, dim: str, user_prompt: str,
+) -> tuple[float, str]:
+    """Run one dim's LLM call. Returns (score, raw_response_or_sentinel).
+    Never raises — failures become 0.0 + a judge_unavailable sentinel so
+    one failing dim doesn't take down the whole grade.
+    """
+    try:
+        verdict: DimensionVerdict = await client.create(
+            model=model,
+            response_model=DimensionVerdict,
+            max_retries=2,
+            max_tokens=512,
+            messages=[
+                {"role": "system", "content": DIMENSION_RUBRICS[dim]},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return verdict.score, _tag_response(dim, verdict.model_dump_json())
+    except Exception as exc:
+        logger.warning("judge dim=%s call failed: %s", dim, exc)
+        return 0.0, _tag_response(dim, f"judge_unavailable: {str(exc)[:300]}")
+
+
+def _tag_response(dim: str, payload: str) -> str:
+    """Prefix each raw_response with its dim so the UI can group them.
+
+    Format: 'dim=<name>;<payload>'. Frontend's extractRationalesByDim
+    parses this prefix to map rationales to their dimension.
+    """
+    return f"dim={dim};{payload}"
+
+
+def _all_dims_failed(reason: str) -> dict[str, Any]:
+    """Sentinel when the whole pipeline fails (config / client init) —
+    every dim is zero and every raw_response carries the same reason.
+    """
+    short = reason[:300]
     return {
-        "correctness": 0.0,
-        "maintainability": 0.0,
-        "completeness": 0.0,
-        "best_practices": 0.0,
-        "error_handling": 0.0,
+        **{dim: 0.0 for dim in _DIMENSIONS},
         "irr_alpha": 0.0,
-        "raw_responses": [f"judge_unavailable: {reason[:300]}"],
+        "raw_responses": [f"dim={dim};judge_unavailable: {short}" for dim in _DIMENSIONS],
     }
