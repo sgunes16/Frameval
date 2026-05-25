@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
 from types import SimpleNamespace
 
 import pytest
 
-from grader.llm_client import LLMClientConfig, load_config
+from grader.llm_client import load_config
 
 
 def test_load_config_default_is_openrouter(monkeypatch):
