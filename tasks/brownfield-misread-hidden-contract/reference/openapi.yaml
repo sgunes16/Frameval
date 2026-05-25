@@ -1,0 +1,26 @@
+openapi: 3.0.3
+info:
+  title: user-service
+  version: 0.1.0
+paths:
+  /users/{user_id}:
+    get:
+      operationId: get_user
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema: {type: integer}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, name, email, created_at]
+                properties:
+                  id: {type: integer}
+                  name: {type: string}
+                  email: {type: string}
+                  created_at: {type: string}
