@@ -1,10 +1,10 @@
 # pricing-engine
 
-Toy pricing/discount module used by the checkout flow.
+Checkout pricing/discount module. Loyalty tier discount, coupon
+amount, and shipping rates compose into the final order total.
 
-`compute_total` has a known bug: when a discount exceeds the subtotal
-it returns a negative total. The fix should clamp at 0.
+The module has accumulated some DEPRECATED helpers and TODO markers
+that future cleanup PRs will address. Active code lives below the
+"Active helpers" banner.
 
-The module also contains DEPRECATED helpers and rough code marked
-TODO. Do NOT touch them in this fix — separate cleanup PRs handle
-deprecations.
+Tests live under `tests/`. Run `pytest -q` from the workspace root.

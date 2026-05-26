@@ -1,9 +1,25 @@
 # user-service
 
-Tiny FastAPI app exposing `GET /users/{id}`.
+Tiny FastAPI app exposing `GET /users/{user_id}`. Seeded users live in
+`app/users.py` (id 1 = Alice, id 2 = Bob).
 
-The response schema lives in `openapi.yaml`. Spec/impl alignment is
-enforced by `tests/test_spec_compliance.py` so any field added to the
-response must also be reflected in the spec.
+## Layout
 
-Seeded users: id 1 (Alice), id 2 (Bob).
+```
+app/         FastAPI application code
+configs/     Runtime configuration (logging, feature flags)
+docs/        Service docs (contracts, ADRs, runbooks)
+requirements.txt
+```
+
+## Running
+
+```
+uvicorn app.main:app
+```
+
+## Tests
+
+CI runs the full `tests/` suite; locally `pytest -q` is enough. The
+suite includes a few cross-cutting checks beyond the unit tests, so
+glance at `tests/` if something fails unexpectedly.

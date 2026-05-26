@@ -142,13 +142,11 @@ def compute_total(
 ) -> float:
     """Compute the final order total.
 
-    Applies loyalty-tier discount first, then subtracts any coupon amount.
-
-    BUG: when coupon_amount > after_loyalty, this returns a negative number.
-    Fix: clamp the result at 0.
+    Applies the loyalty-tier discount to the subtotal, then subtracts
+    any coupon amount. Totals are expressed in the store's base currency.
     """
     subtotal = _compute_subtotal(items)
     after_loyalty = _apply_loyalty_tier(subtotal, customer)
-    # TODO: refactor this mess
+    # TODO(PRICE-91): straighten out the order/clamp semantics here
     total = after_loyalty - coupon_amount
     return total

@@ -1,13 +1,15 @@
 id: brownfield-misread-hidden-contract
-name: Add created_at to user response (and the OpenAPI spec)
+name: Add created_at to user response
 description: |
-  Brownfield task. FastAPI endpoint GET /users/{id} returns user data;
-  the request adds a `created_at` field. An openapi.yaml in the
-  workspace pins the response schema and a spec-compliance test
-  validates real responses against it. The task prompt mentions the
-  endpoint but NOT the spec — agents that miss reading openapi.yaml
-  fail the spec test. Stresses MISREAD (implicit contract in a
-  sibling file).
+  Brownfield task. FastAPI endpoint GET /users/{user_id} returns user
+  data; the request adds a `created_at` field. A versioned contract
+  file lives at docs/api/contract.v1.yaml and pins the response
+  schema; a contract test validates live responses against it. The
+  task prompt names only the endpoint — the contract is never
+  mentioned and the README only refers to docs/ generically.
+  Workspace also includes decoy configs/ yamls so naive yaml-greps
+  hit noise. Stresses MISREAD (the agent must read the docs/ tree
+  before editing a public response shape).
 category: brownfield
 template_kind: builtin
 workspace_mode: local
@@ -16,7 +18,7 @@ codebase_type: python
 metadata:
   primary_failure_mode: MISREAD
 task_prompt: |
-  Add a `created_at` field to the response of GET /users/{id}. The
+  Add a `created_at` field to the response of GET /users/{user_id}. The
   field should be an ISO 8601 timestamp string. For the seeded users
   (id 1 and id 2), return "2024-01-01T00:00:00Z".
 
@@ -24,22 +26,23 @@ task_prompt: |
     - Function signature of get_user() may not change.
     - Existing response fields (id, name, email) remain.
 technical_details: |
-  - workspace/openapi.yaml defines the canonical response schema.
-  - tests/test_spec_compliance.py loads openapi.yaml and validates
-    real responses against it via openapi-spec-validator + jsonschema.
+  - workspace/docs/api/contract.v1.yaml is the response contract.
+  - tests/test_response_contract.py loads the contract and validates
+    live responses against it via jsonschema (additionalProperties
+    tightened to False).
   - The agent must update BOTH workspace/app/users.py and
-    workspace/openapi.yaml.
-  - test_scope.sh allows only those two files in the diff.
+    workspace/docs/api/contract.v1.yaml.
+  - test_scope.sh allows only those two paths in the diff.
 test_cases:
-  - name: GET /users/{id} returns created_at
+  - name: GET /users/{user_id} returns created_at
     test_command: pytest -q tests/test_users_basic.py
     expected_result: exit 0
     ordering: 0
-  - name: Response matches openapi.yaml schema
-    test_command: pytest -q tests/test_spec_compliance.py
+  - name: Response matches contract.v1.yaml schema
+    test_command: pytest -q tests/test_response_contract.py
     expected_result: exit 0
     ordering: 1
-  - name: Only users.py and openapi.yaml are modified
+  - name: Only users.py and contract.v1.yaml are modified
     test_command: bash tests/test_scope.sh
     expected_result: exit 0
     ordering: 2
