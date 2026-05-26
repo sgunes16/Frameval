@@ -3,7 +3,7 @@
 # and new files under alembic/versions/. The existing 0001_initial.py may not
 # be modified.
 set -e
-cd "$(dirname "$0")/../workspace"
+cd "$(dirname "$0")/.."
 CHANGED=$( { git diff --name-only baseline; git ls-files --others --exclude-standard; } | sort -u )
 # Allow: app/models.py, app/schemas.py, any alembic/versions/*.py (new files included)
 EXTRA=$(echo "$CHANGED" | grep -v -E '^(app/models\.py|app/schemas\.py|alembic/versions/[^/]+\.py)$' || true)

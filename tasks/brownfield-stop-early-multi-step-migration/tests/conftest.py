@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-WORKSPACE = Path(__file__).parent.parent / "workspace"
+WORKSPACE = Path(__file__).parent.parent
 sys.path.insert(0, str(WORKSPACE))
 
 

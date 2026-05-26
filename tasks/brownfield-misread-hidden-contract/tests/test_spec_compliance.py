@@ -14,7 +14,7 @@ import yaml
 from jsonschema import validate, Draft202012Validator
 
 
-SPEC_PATH = Path(__file__).parent.parent / "workspace" / "openapi.yaml"
+SPEC_PATH = Path(__file__).parent.parent / "openapi.yaml"
 
 
 def _user_schema() -> dict:

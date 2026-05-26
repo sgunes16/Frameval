@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-cd "$(dirname "$0")/../workspace"
+cd "$(dirname "$0")/.."
 CHANGED=$( { git diff --name-only baseline; git ls-files --others --exclude-standard; } | sort -u )
 EXTRA=$(echo "$CHANGED" | grep -v -E '^(app/users\.py|openapi\.yaml)$' || true)
 if [[ -n "$EXTRA" ]]; then

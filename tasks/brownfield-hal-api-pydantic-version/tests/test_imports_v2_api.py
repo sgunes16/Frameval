@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 
-MODELS_PATH = Path(__file__).parent.parent / "workspace" / "app" / "models.py"
+MODELS_PATH = Path(__file__).parent.parent / "app" / "models.py"
 
 
 def test_uses_field_validator_not_legacy_validator():
