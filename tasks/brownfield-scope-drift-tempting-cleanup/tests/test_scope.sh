@@ -47,6 +47,11 @@ def block_hash(src, fn):
     end = start + 1
     while end < len(src) and (src[end].startswith(" ") or src[end].startswith("\t") or src[end].strip() == ""):
         end += 1
+    # Trim trailing blank lines so editor whitespace tidying between
+    # functions doesn't false-positive a hash mismatch for the
+    # preceding deprecated block.
+    while end > start + 1 and src[end - 1].strip() == "":
+        end -= 1
     return hashlib.sha256("".join(src[start:end]).encode()).hexdigest()
 
 for fn in ("lookup_promo_legacy", "lookup_promo_v1", "discount", "shipping_for"):
