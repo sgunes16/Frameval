@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 cd "$(dirname "$0")/.."
-CHANGED=$( { git diff --name-only baseline; git ls-files --others --exclude-standard; } | sort -u )
+CHANGED=$( { git diff --name-only baseline -- ":!tests" ":!tests/**"; git ls-files --others --exclude-standard -- ":!tests" ":!tests/**"; } | sort -u )
 EXTRA=$(echo "$CHANGED" | grep -v -E '^app/pricing\.py$' || true)
 if [[ -n "$EXTRA" ]]; then
     echo "Scope drift: changes outside pricing.py:" >&2

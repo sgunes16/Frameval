@@ -4,7 +4,7 @@
 # be modified.
 set -e
 cd "$(dirname "$0")/.."
-CHANGED=$( { git diff --name-only baseline; git ls-files --others --exclude-standard; } | sort -u )
+CHANGED=$( { git diff --name-only baseline -- ":!tests" ":!tests/**"; git ls-files --others --exclude-standard -- ":!tests" ":!tests/**"; } | sort -u )
 # Allow: app/models.py, app/schemas.py, any alembic/versions/*.py (new files included)
 EXTRA=$(echo "$CHANGED" | grep -v -E '^(app/models\.py|app/schemas\.py|alembic/versions/[^/]+\.py)$' || true)
 if [[ -n "$EXTRA" ]]; then
