@@ -119,26 +119,28 @@ export function ExperimentsPage() {
                 <th className="px-4 py-2 text-right font-medium">Created</th>
               </tr>
             </thead>
-            <tbody>
-              {grouped.map((unit) => {
-                if (unit.kind === 'solo') {
-                  return <ExperimentRow key={unit.experiment.id} experiment={unit.experiment} />;
-                }
-                const expanded = expandedBatches[unit.batchId] ?? false;
-                const counts = countByStatus(unit.experiments);
+            {grouped.map((unit) => {
+              if (unit.kind === 'solo') {
                 return (
-                  <GroupBlock
-                    key={unit.batchId}
-                    unit={unit}
-                    expanded={expanded}
-                    counts={counts}
-                    onToggle={() =>
-                      setExpandedBatches((prev) => ({ ...prev, [unit.batchId]: !expanded }))
-                    }
-                  />
+                  <tbody key={unit.experiment.id}>
+                    <ExperimentRow experiment={unit.experiment} />
+                  </tbody>
                 );
-              })}
-            </tbody>
+              }
+              const expanded = expandedBatches[unit.batchId] ?? false;
+              const counts = countByStatus(unit.experiments);
+              return (
+                <GroupBlock
+                  key={unit.batchId}
+                  unit={unit}
+                  expanded={expanded}
+                  counts={counts}
+                  onToggle={() =>
+                    setExpandedBatches((prev) => ({ ...prev, [unit.batchId]: !expanded }))
+                  }
+                />
+              );
+            })}
           </table>
         </Card>
       )}
@@ -204,7 +206,15 @@ function ExperimentRow({ experiment, nested = false }: { experiment: Experiment;
   const cost = experiment.estimated_cost_usd ?? 0;
   return (
     <tr className={`border-t border-border ${nested ? 'bg-bg-elev-1/60' : 'bg-bg-elev-1'} hover:bg-bg-elev-2/60`}>
-      <td className={`px-4 py-3 ${nested ? 'pl-6' : ''}`}>
+      <td
+        className={
+          `px-4 py-3 ${
+            nested
+              ? 'border-l-4 border-l-fg-muted/40 pl-6'
+              : ''
+          }`
+        }
+      >
         <div className="font-medium text-fg">{experiment.name}</div>
         {experiment.description && (
           <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{experiment.description}</div>
@@ -247,10 +257,15 @@ function GroupBlock({
 }) {
   const summary = statusSummary(counts, unit.experiments.length);
   const newest = unit.experiments[0];
+  // One <tbody> per group so the browser renders natural vertical
+  // separation between adjacent units. Combined with the strong top
+  // border on the group header + a left accent on each child row, a
+  // solo experiment that happens to sit between two groups can no
+  // longer read as part of either of them.
   return (
-    <>
+    <tbody className="border-t-2 border-border-strong">
       <tr
-        className="border-t border-border bg-bg-elev-2 hover:bg-bg-elev-2/80"
+        className="bg-bg-elev-2 hover:bg-bg-elev-2/80"
         data-batch-id={unit.batchId}
       >
         <td colSpan={5} className="px-4 py-2">
@@ -275,6 +290,6 @@ function GroupBlock({
         unit.experiments.map((experiment) => (
           <ExperimentRow key={experiment.id} experiment={experiment} nested />
         ))}
-    </>
+    </tbody>
   );
 }
