@@ -175,3 +175,87 @@ func TestLaunchDiagnosticSuiteRejectsEmptyTaskIDs(t *testing.T) {
 		t.Fatalf("status: got %d body=%s want 400", rec.Code, rec.Body.String())
 	}
 }
+
+// TestLaunchDiagnosticPersistsHarnessConfig verifies that harness_configs
+// supplied on a launch request are persisted onto every spawned variant for
+// both the single-task and multi-task (suite) endpoints.
+func TestLaunchDiagnosticPersistsHarnessConfig(t *testing.T) {
+	cfg := map[string]any{
+		"agent_instructions": "follow the rules",
+	}
+
+	t.Run("single endpoint", func(t *testing.T) {
+		svc := newLaunchTestService(t)
+
+		body, _ := json.Marshal(map[string]any{
+			"task_id":         "t-launch",
+			"executor_id":     "opencode",
+			"harness_ids":     []string{"bare"},
+			"model":           "anything",
+			"harness_configs": cfg,
+		})
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/diagnostic/launch", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		svc.LaunchDiagnostic(rec, req)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("status: got %d body=%s", rec.Code, rec.Body.String())
+		}
+
+		var resp LaunchDiagnosticResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		exp, err := svc.store.GetExperiment(context.Background(), resp.ExperimentID)
+		if err != nil {
+			t.Fatalf("fetch experiment: %v", err)
+		}
+		if len(exp.Variants) == 0 {
+			t.Fatal("no variants returned")
+		}
+		got, ok := exp.Variants[0].HarnessConfig["agent_instructions"].(string)
+		if !ok || got != "follow the rules" {
+			t.Fatalf("HarnessConfig: got %v want {agent_instructions: follow the rules}", exp.Variants[0].HarnessConfig)
+		}
+	})
+
+	t.Run("suite endpoint", func(t *testing.T) {
+		svc := newLaunchTestService(t)
+
+		body, _ := json.Marshal(map[string]any{
+			"task_ids":        []string{"t-launch"},
+			"executor_id":     "opencode",
+			"harness_ids":     []string{"bare"},
+			"model":           "anything",
+			"harness_configs": cfg,
+		})
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/diagnostic/launch-suite", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		svc.LaunchDiagnosticSuite(rec, req)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("status: got %d body=%s", rec.Code, rec.Body.String())
+		}
+
+		var resp LaunchDiagnosticSuiteResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if len(resp.ExperimentIDs) == 0 {
+			t.Fatal("no experiment IDs returned")
+		}
+		exp, err := svc.store.GetExperiment(context.Background(), resp.ExperimentIDs[0])
+		if err != nil {
+			t.Fatalf("fetch experiment: %v", err)
+		}
+		if len(exp.Variants) == 0 {
+			t.Fatal("no variants returned")
+		}
+		got, ok := exp.Variants[0].HarnessConfig["agent_instructions"].(string)
+		if !ok || got != "follow the rules" {
+			t.Fatalf("HarnessConfig: got %v want {agent_instructions: follow the rules}", exp.Variants[0].HarnessConfig)
+		}
+	})
+}

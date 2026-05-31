@@ -17,15 +17,16 @@ import (
 // Defaults match the AgentDx demo profile: 5 runs per variant (matches the
 // minimum enforced in storage), 600s timeout, 1 max concurrent.
 type LaunchDiagnosticRequest struct {
-	TaskID         string   `json:"task_id"`
-	ExecutorID     string   `json:"executor_id"`
-	HarnessIDs     []string `json:"harness_ids"`
-	Model          string   `json:"model"`
-	RunsPerVariant int      `json:"runs_per_variant"`
-	TimeoutSeconds int      `json:"timeout_seconds"`
-	Name           string   `json:"name"`
-	BatchID        string   `json:"batch_id"`
-	BatchLabel     string   `json:"batch_label"`
+	TaskID          string         `json:"task_id"`
+	ExecutorID      string         `json:"executor_id"`
+	HarnessIDs      []string       `json:"harness_ids"`
+	Model           string         `json:"model"`
+	RunsPerVariant  int            `json:"runs_per_variant"`
+	TimeoutSeconds  int            `json:"timeout_seconds"`
+	Name            string         `json:"name"`
+	BatchID         string         `json:"batch_id"`
+	BatchLabel      string         `json:"batch_label"`
+	HarnessConfigs  map[string]any `json:"harness_configs,omitempty"`
 }
 
 // LaunchDiagnosticResponse returns the IDs the frontend needs to navigate
@@ -88,11 +89,12 @@ func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 	variants := make([]models.VariantRequest, 0, len(req.HarnessIDs))
 	for idx, hid := range req.HarnessIDs {
 		variants = append(variants, models.VariantRequest{
-			Name:        hid,
-			Description: fmt.Sprintf("Harness: %s", hid),
-			IsControl:   idx == 0,
-			Ordering:    idx,
-			HarnessID:   hid,
+			Name:          hid,
+			Description:   fmt.Sprintf("Harness: %s", hid),
+			IsControl:     idx == 0,
+			Ordering:      idx,
+			HarnessID:     hid,
+			HarnessConfig: req.HarnessConfigs,
 		})
 	}
 
@@ -131,13 +133,14 @@ func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 // all sharing a server-minted batch_id. Display-only batch_label
 // helps the Experiments list show a readable group title.
 type LaunchDiagnosticSuiteRequest struct {
-	TaskIDs        []string `json:"task_ids"`
-	ExecutorID     string   `json:"executor_id"`
-	HarnessIDs     []string `json:"harness_ids"`
-	Model          string   `json:"model"`
-	RunsPerVariant int      `json:"runs_per_variant"`
-	TimeoutSeconds int      `json:"timeout_seconds"`
-	BatchLabel     string   `json:"batch_label"`
+	TaskIDs         []string       `json:"task_ids"`
+	ExecutorID      string         `json:"executor_id"`
+	HarnessIDs      []string       `json:"harness_ids"`
+	Model           string         `json:"model"`
+	RunsPerVariant  int            `json:"runs_per_variant"`
+	TimeoutSeconds  int            `json:"timeout_seconds"`
+	BatchLabel      string         `json:"batch_label"`
+	HarnessConfigs  map[string]any `json:"harness_configs,omitempty"`
 }
 
 // LaunchDiagnosticSuiteResponse returns the new batch identity and
@@ -214,11 +217,12 @@ func (s *Service) LaunchDiagnosticSuite(w http.ResponseWriter, r *http.Request) 
 		variants := make([]models.VariantRequest, 0, len(req.HarnessIDs))
 		for idx, hid := range req.HarnessIDs {
 			variants = append(variants, models.VariantRequest{
-				Name:        hid,
-				Description: fmt.Sprintf("Harness: %s", hid),
-				IsControl:   idx == 0,
-				Ordering:    idx,
-				HarnessID:   hid,
+				Name:          hid,
+				Description:   fmt.Sprintf("Harness: %s", hid),
+				IsControl:     idx == 0,
+				Ordering:      idx,
+				HarnessID:     hid,
+				HarnessConfig: req.HarnessConfigs,
 			})
 		}
 
