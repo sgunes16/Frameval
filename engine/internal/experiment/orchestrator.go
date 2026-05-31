@@ -305,7 +305,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	})
 	// Run the task's verification commands inside the sandbox (which has the
 	// compilers/interpreters), not in the grader container.
-	testResults, passed, failed := o.runTaskVerifications(ctx, *experiment, *run, workspace, *task)
+	testResults, passed, failed := o.runTaskVerifications(ctx, *experiment, *run, workspace, *task, harnessID)
 	slog.Info("grader.verifications", "run_id", run.ID, "experiment_id", experiment.ID, "passed", passed, "failed", failed)
 	_ = o.store.UpdateRunStatus(ctx, run.ID, "grading", "")
 	o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "grading", "variant_id": run.VariantID})
@@ -700,7 +700,7 @@ func (o *Orchestrator) broadcast(eventType string, payload any) {
 // sandbox (so compilers/interpreters are available) and returns the per-test
 // results plus pass/fail totals. Commands that time out or exit non-zero are
 // recorded as failures without aborting the run.
-func (o *Orchestrator) runTaskVerifications(ctx context.Context, experiment models.Experiment, run models.Run, workspace string, task models.Task) ([]models.TestResult, int, int) {
+func (o *Orchestrator) runTaskVerifications(ctx context.Context, experiment models.Experiment, run models.Run, workspace string, task models.Task, harnessID string) ([]models.TestResult, int, int) {
 	if err := materializeHiddenFiles(workspace, task.Metadata); err != nil {
 		return []models.TestResult{{Name: "hidden test setup", Passed: false, Output: err.Error()}}, 0, 1
 	}
@@ -730,7 +730,7 @@ func (o *Orchestrator) runTaskVerifications(ctx context.Context, experiment mode
 		}
 		caseCtx, cancel := context.WithTimeout(ctx, timeout)
 		if strings.TrimSpace(testCase.SetupScript) != "" {
-			setupOutput, setupErr := o.sandbox.RunShell(caseCtx, workspace, verificationEnvironment(task.ID), testCase.SetupScript)
+			setupOutput, setupErr := o.sandbox.RunShell(caseCtx, workspace, verificationEnvironment(task.ID, harnessID), testCase.SetupScript)
 			if !hidden {
 				o.broadcastLogBlock(experiment, run, "verification", setupOutput)
 			}
@@ -752,7 +752,7 @@ func (o *Orchestrator) runTaskVerifications(ctx context.Context, experiment mode
 				continue
 			}
 		}
-		output, err := o.sandbox.RunShell(caseCtx, workspace, verificationEnvironment(task.ID), testCase.TestCommand)
+		output, err := o.sandbox.RunShell(caseCtx, workspace, verificationEnvironment(task.ID, harnessID), testCase.TestCommand)
 		cancel()
 		if !hidden {
 			o.broadcastLogBlock(experiment, run, "verification", output)
@@ -877,6 +877,43 @@ func runEnvironment(taskID string) map[string]string {
 	}
 }
 
-func verificationEnvironment(taskID string) map[string]string {
-	return runEnvironment(taskID)
+// verificationEnvironment builds the env each test_command sees. The
+// harnessID-keyed FRAMEVAL_HARNESS_EXCLUDES var is consumed by per-task
+// test_scope.sh scripts so harness-scaffolded files (CLAUDE.md,
+// .specify/, specs/, …) don't read as agent drift when the harness
+// genuinely wrote them.
+func verificationEnvironment(taskID, harnessID string) map[string]string {
+	env := runEnvironment(taskID)
+	if excludes := harnessExcludePathspecs(harnessID); len(excludes) > 0 {
+		env["FRAMEVAL_HARNESS_EXCLUDES"] = strings.Join(excludes, "\n")
+	}
+	return env
+}
+
+// harnessExcludePathspecs returns the git pathspec exclude patterns
+// (each prefixed with `:!`) that the named harness writes to during
+// Setup or Invoke. A scope-discipline test for a brownfield task
+// should treat these paths as harness-owned, not agent-authored, so
+// scaffolding doesn't inflate the diff.
+//
+// Returns nil for harnesses that leave no on-disk artifact (bare,
+// ralph, multiagent) and for unknown ids, so adding a new harness is
+// no-op safe.
+func harnessExcludePathspecs(harnessID string) []string {
+	switch harnessID {
+	case "agent_instructions":
+		return []string{":!CLAUDE.md"}
+	case "speckit":
+		// spec-kit lays down .specify/memory/constitution.md at Setup
+		// and writes specs/<NNN>-<slug>/{spec,plan,tasks}.md and a
+		// memory/ folder during the workflow's specify/plan/tasks
+		// stages. All are workflow scaffolding, not agent intent.
+		return []string{
+			":!.specify", ":!.specify/**",
+			":!specs", ":!specs/**",
+			":!memory", ":!memory/**",
+		}
+	default:
+		return nil
+	}
 }
