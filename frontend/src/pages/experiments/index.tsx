@@ -34,6 +34,7 @@ export function ExperimentsPage() {
 
   return (
     <div className="space-y-4">
+      <SummaryChips experiments={experiments} />
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -125,6 +126,30 @@ export function ExperimentsPage() {
           </table>
         </Card>
       )}
+    </div>
+  );
+}
+
+function SummaryChips({ experiments }: { experiments: ReturnType<typeof useExperiments>['data'] }) {
+  const list = experiments ?? [];
+  const total = list.length;
+  const running = list.filter((e) => e.status === 'running').length;
+  const queued = list.filter((e) => e.status === 'draft' || e.status === 'queued').length;
+  const completed = list.filter((e) => e.status === 'completed').length;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-fg-muted">
+      <span className="font-medium text-fg">{total} experiments</span>
+      <span className="text-fg-subtle">·</span>
+      <span>{running} running</span>
+      {queued > 0 && (
+        <>
+          <span className="text-fg-subtle">·</span>
+          <span>{queued} queued</span>
+        </>
+      )}
+      <span className="text-fg-subtle">·</span>
+      <span>{completed} completed</span>
     </div>
   );
 }
