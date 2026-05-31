@@ -98,57 +98,53 @@ func (h *SpecKit) Setup(_ context.Context, ws harness.Workspace, t task.Task, b 
 	}, nil
 }
 
-// speckitStages names the four executable stages in execution order. Each
-// stage's prompt embeds the task content via stagePrompt().
-var speckitStages = []string{"specify", "plan", "tasks", "implement"}
-
-func stagePrompt(stage string, t task.Task) string {
-	switch stage {
-	case "specify":
-		return "/speckit.specify\n\n" + t.TaskPrompt
-	case "plan":
-		details := strings.TrimSpace(t.TechnicalDetail)
-		if details == "" {
-			details = "(no extra technical details supplied; infer from specify output)"
-		}
-		return "/speckit.plan\n\n" + details
-	case "tasks":
-		return "/speckit.tasks"
-	case "implement":
-		return "/speckit.implement"
-	default:
-		return "/speckit." + stage
-	}
-}
-
 func (h *SpecKit) Invoke(ctx context.Context, run harness.HarnessRun, exec executor.AgentExecutor) (*executor.RunResult, error) {
-	var stageResults []*executor.RunResult
+	ext, ok := run.Metadata[metadataKeySpecKitExtension].(speckit.SpecKitExtension)
+	if !ok {
+		return nil, ErrSpecKitExtensionMissing
+	}
+	stageNames := make([]string, 0, len(ext.Stages))
+	stageResults := make([]*executor.RunResult, 0, len(ext.Stages))
 	var stageErr error
 stages:
-	for _, stage := range speckitStages {
-		// `break stages` (labeled) exits the for loop; a plain `break` inside
-		// the select would only break the select.
+	for _, stage := range ext.Stages {
 		select {
 		case <-ctx.Done():
 			stageErr = ctx.Err()
 			break stages
 		default:
 		}
+		prompt := expandSpecKitPrompt(stage.PromptTemplate, map[string]string{
+			"TASK":              run.Task.TaskPrompt,
+			"TECHNICAL_DETAILS": run.Task.TechnicalDetail,
+		})
 		result, err := exec.Execute(ctx, harness.MergeConfig(run.BaseRunConfig, executor.RunConfig{
-			Prompt:        stagePrompt(stage, run.Task),
+			Prompt:        prompt,
 			WorkspacePath: run.Workspace.Path,
-			Stage:         stage,
+			Stage:         stage.Name,
+			Role:          stage.Role,
 		}))
 		if result == nil {
 			result = &executor.RunResult{}
 		}
+		stageNames = append(stageNames, stage.Name)
 		stageResults = append(stageResults, result)
 		if err != nil {
-			stageErr = fmt.Errorf("speckit: stage %s: %w", stage, err)
+			stageErr = fmt.Errorf("speckit: stage %s: %w", stage.Name, err)
 			break stages
 		}
 	}
-	return mergeStageTranscripts(speckitStages, stageResults), stageErr
+	return mergeStageTranscripts(stageNames, stageResults), stageErr
+}
+
+// expandSpecKitPrompt replaces {{TASK}} and {{TECHNICAL_DETAILS}}
+// literally; unknown tokens are preserved (a stage might genuinely
+// want to emit literal {{X}}).
+func expandSpecKitPrompt(template string, vars map[string]string) string {
+	out := template
+	out = strings.ReplaceAll(out, "{{TASK}}", vars["TASK"])
+	out = strings.ReplaceAll(out, "{{TECHNICAL_DETAILS}}", vars["TECHNICAL_DETAILS"])
+	return out
 }
 
 // mergeStageTranscripts concatenates per-stage RunResults into a single

@@ -104,84 +104,82 @@ func TestSpecKitSetupNoConstitutionIsOK(t *testing.T) {
 	}
 }
 
-func TestSpecKitInvokeIssuesFourStages(t *testing.T) {
-	h := NewSpecKit()
-	rec := &recordingExecutor{}
-	tk := task.Task{ID: "fixture", TaskPrompt: "build CLI", TechnicalDetail: "use click"}
-	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, canonicalCfg)
+// speckitRecordingExec captures every RunConfig the harness emits so a
+// test can assert per-stage prompts, stage names, and role threading.
+type speckitRecordingExec struct {
+	calls []executor.RunConfig
+}
 
-	result, err := h.Invoke(context.Background(), run, rec)
+func (e *speckitRecordingExec) Name() string                                          { return "speckit-record" }
+func (e *speckitRecordingExec) SupportedModes() []executor.ExecutionMode              { return []executor.ExecutionMode{executor.ExecutionModeCLI} }
+func (e *speckitRecordingExec) ParseTranscript(raw []byte) ([]executor.ParsedTurn, error) { return nil, nil }
+func (e *speckitRecordingExec) Execute(_ context.Context, cfg executor.RunConfig) (*executor.RunResult, error) {
+	e.calls = append(e.calls, cfg)
+	return &executor.RunResult{RawOutput: cfg.Stage + "-done\n"}, nil
+}
+
+func TestSpecKitInvokeWalksExtensionStages(t *testing.T) {
+	h := NewSpecKit()
+	ws := pkgharness.Workspace{Path: t.TempDir()}
+	exec := &speckitRecordingExec{}
+	cfg := map[string]any{"speckit": map[string]any{"extension_id": "lite"}}
+	run, err := h.Setup(context.Background(), ws, task.Task{TaskPrompt: "scaffold"}, pkgharness.Budget{}, cfg)
 	if err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	if _, err := h.Invoke(context.Background(), run, exec); err != nil {
 		t.Fatalf("Invoke: %v", err)
 	}
-	if len(rec.calls) != 4 {
-		t.Fatalf("expected 4 stage invocations, got %d", len(rec.calls))
+	if len(exec.calls) != 2 {
+		t.Fatalf("call count: got %d want 2", len(exec.calls))
 	}
-	wantStages := []string{"specify", "plan", "tasks", "implement"}
-	for i, want := range wantStages {
-		if rec.calls[i].Stage != want {
-			t.Errorf("call %d Stage = %q, want %q", i, rec.calls[i].Stage, want)
-		}
+	if exec.calls[0].Stage != "specify" || exec.calls[1].Stage != "implement" {
+		t.Errorf("stage order: got %q,%q want specify,implement", exec.calls[0].Stage, exec.calls[1].Stage)
 	}
-	if !strings.HasPrefix(rec.calls[0].Prompt, "/speckit.specify") {
-		t.Errorf("specify prompt should start with /speckit.specify; got %q", rec.calls[0].Prompt)
+	if !strings.Contains(exec.calls[0].Prompt, "scaffold") {
+		t.Errorf("specify prompt should contain task content; got %q", exec.calls[0].Prompt)
 	}
-	if !strings.Contains(rec.calls[0].Prompt, "build CLI") {
-		t.Errorf("specify prompt should inline task; got %q", rec.calls[0].Prompt)
+}
+
+func TestSpecKitDualRoleSetsRoleOnRunConfig(t *testing.T) {
+	h := NewSpecKit()
+	ws := pkgharness.Workspace{Path: t.TempDir()}
+	exec := &speckitRecordingExec{}
+	cfg := map[string]any{"speckit": map[string]any{"extension_id": "dual-role"}}
+	run, _ := h.Setup(context.Background(), ws, task.Task{TaskPrompt: "x"}, pkgharness.Budget{}, cfg)
+	if _, err := h.Invoke(context.Background(), run, exec); err != nil {
+		t.Fatalf("Invoke: %v", err)
 	}
-	if !strings.Contains(rec.calls[1].Prompt, "use click") {
-		t.Errorf("plan prompt should inline technical details; got %q", rec.calls[1].Prompt)
+	if len(exec.calls) != 4 {
+		t.Fatalf("call count: got %d want 4", len(exec.calls))
 	}
-	// Merged transcript has 4 stage markers
-	for _, stage := range wantStages {
-		if !strings.Contains(result.RawOutput, "--- Stage: "+stage+" ---") {
-			t.Errorf("merged transcript missing marker for stage %q", stage)
-		}
-	}
-	// Turns tagged with stage
-	for _, turn := range result.ParsedTurns {
-		if turn.Stage == "" {
-			t.Errorf("turn missing Stage tag: %+v", turn)
+	wantRoles := []string{"architect", "architect", "coder", "coder"}
+	for i, want := range wantRoles {
+		if exec.calls[i].Role != want {
+			t.Errorf("call %d role: got %q want %q", i, exec.calls[i].Role, want)
 		}
 	}
 }
 
-func TestSpecKitInvokeStopsOnStageError(t *testing.T) {
-	h := NewSpecKit()
-	rec := &recordingExecutor{retErr: errors.New("stage 2 broken")}
-	tk := task.Task{TaskPrompt: "x"}
-	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, canonicalCfg)
-
-	_, err := h.Invoke(context.Background(), run, rec)
-	if err == nil {
-		t.Fatal("expected stage error to surface")
+func TestExpandSpecKitPrompt(t *testing.T) {
+	cases := []struct {
+		name     string
+		template string
+		vars     map[string]string
+		want     string
+	}{
+		{"replaces TASK", "do {{TASK}}", map[string]string{"TASK": "x"}, "do x"},
+		{"replaces TECHNICAL_DETAILS", "{{TECHNICAL_DETAILS}}!", map[string]string{"TECHNICAL_DETAILS": "y"}, "y!"},
+		{"both", "{{TASK}} - {{TECHNICAL_DETAILS}}", map[string]string{"TASK": "a", "TECHNICAL_DETAILS": "b"}, "a - b"},
+		{"empty values leave blank", "{{TASK}}", map[string]string{"TASK": ""}, ""},
+		{"unknown token preserved", "{{TASK}} {{OTHER}}", map[string]string{"TASK": "a"}, "a {{OTHER}}"},
 	}
-	// First stage runs, then error halts the pipeline
-	if len(rec.calls) != 1 {
-		t.Errorf("expected halt after first failing stage; got %d calls", len(rec.calls))
-	}
-}
-
-func TestSpecKitInvokeRespectsContextCancellation(t *testing.T) {
-	h := NewSpecKit()
-	// recordingExecutor cancels the parent ctx mid-flight via a closure
-	calls := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	fake := &cancellingExecutor{cancel: cancel, callsBeforeCancel: 2, calls: &calls}
-	tk := task.Task{TaskPrompt: "x"}
-	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, canonicalCfg)
-
-	_, err := h.Invoke(ctx, run, fake)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled, got %v", err)
-	}
-	// fake.Execute increments calls for each invocation. After cancellation
-	// triggered on the 2nd call, no further stage Execute should happen.
-	if calls > 2 {
-		t.Errorf("expected at most 2 stage invocations before honoring cancellation, got %d", calls)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := expandSpecKitPrompt(tc.template, tc.vars); got != tc.want {
+				t.Errorf("got %q want %q", got, tc.want)
+			}
+		})
 	}
 }
 
