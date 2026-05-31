@@ -370,3 +370,24 @@ export type MultiAgentRole = {
 export type MultiAgentConfig = {
   roles: MultiAgentRole[];
 };
+
+export type SpecKitStagePublic = {
+  name: string;
+  slash_command: string;
+  role?: string;
+};
+
+export type SpecKitExtensionPublic = {
+  id: string;
+  name: string;
+  description: string;
+  stages: SpecKitStagePublic[];
+  multi_agent: boolean;
+  source_url?: string;
+};
+
+export type SpecKitConfig = {
+  // Per-cell wire shape. Launcher state holds a multi-id list; matrix
+  // expansion narrows it to one id per cell before posting.
+  extension_id: string;
+};

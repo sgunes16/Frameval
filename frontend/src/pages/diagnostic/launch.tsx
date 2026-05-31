@@ -135,15 +135,6 @@ export function DiagnosticLaunchPage() {
     return out;
   }, [selectedHarnesses, selectedExecutors, selectedModels, models]);
 
-  // Experiments span the (task × executor × model) cross-product. Harnesses
-  // are intra-experiment variants — they don't multiply the experiment count.
-  const totalExperiments = countExperiments({
-    taskIds: taskIDs,
-    executorIds: selectedExecutors,
-    modelIds: selectedModels,
-  });
-  const totalRuns = totalExperiments * Math.max(selectedHarnesses.length, 1) * runsPerVariant;
-
   const toggleHarness = (id: string) =>
     setSelectedHarnesses((prev) =>
       prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id],
@@ -166,11 +157,32 @@ export function DiagnosticLaunchPage() {
   const multiagentConfig = harnessConfigs.multiagent as MultiAgentConfig | undefined;
   const multiagentReady = !needsMultiAgent || validateMultiAgentConfig(multiagentConfig);
 
+  const needsSpecKit = selectedHarnesses.includes('speckit');
+  // Filter empty-string ids once and reuse — matches the same narrowing
+  // handleLaunch applies, so the preview count, the submit gate, and
+  // the actual launch all agree on whatever an empty entry would mean.
+  const validSpecKitExtensions = needsSpecKit
+    ? ((harnessConfigs.speckit as { extension_ids?: string[] } | undefined)?.extension_ids ?? [])
+        .filter((id) => id.length > 0)
+    : [];
+  const speckitReady = !needsSpecKit || validSpecKitExtensions.length > 0;
+
+  // Experiments span the (task × executor × model × speckit-extension) cross-product.
+  // Harnesses are intra-experiment variants — they don't multiply the experiment count.
+  const totalExperiments = countExperiments({
+    taskIds: taskIDs,
+    executorIds: selectedExecutors,
+    modelIds: selectedModels,
+    speckitExtensions: validSpecKitExtensions.length > 0 ? validSpecKitExtensions : [''],
+  });
+  const totalRuns = totalExperiments * Math.max(selectedHarnesses.length, 1) * runsPerVariant;
+
   const canSubmit =
     taskIDs.length > 0
     && variants.length > 0
     && agentInstructionsReady
     && multiagentReady
+    && speckitReady
     && !launch.isPending;
 
   const handleLaunch = async () => {
@@ -188,15 +200,28 @@ export function DiagnosticLaunchPage() {
     }
     setPartialError(null);
 
+    const speckitConfig = harnessConfigs.speckit as { extension_ids?: string[] } | undefined;
+    const selectedExtensions = selectedHarnesses.includes('speckit')
+      ? (speckitConfig?.extension_ids ?? []).filter((id) => id.length > 0)
+      : [''];
+    const speckitAxis = selectedExtensions.length > 0 ? selectedExtensions : [''];
+
     const cells = expandLaunchMatrix({
       taskIds: taskIDs,
       executorIds: selectedExecutors,
       modelIds: selectedModels,
+      speckitExtensions: speckitAxis,
     });
 
     // Single cell → one experiment, no batch identity, land on Compare.
     if (cells.length === 1) {
       const cell = cells[0];
+      const cellConfigs: Record<string, unknown> = { ...harnessConfigs };
+      if (cell.speckitExtension) {
+        cellConfigs.speckit = { extension_id: cell.speckitExtension };
+      } else if ('speckit' in cellConfigs) {
+        delete cellConfigs.speckit;
+      }
       const res = await launch.mutateAsync({
         task_id: cell.taskId,
         executor_id: cell.executorId,
@@ -204,7 +229,7 @@ export function DiagnosticLaunchPage() {
         model: cell.modelId,
         runs_per_variant: runsPerVariant,
         name: name.trim() || undefined,
-        harness_configs: harnessConfigs,
+        harness_configs: cellConfigs,
       });
       navigate(`/diagnostic/compare?experiment=${res.experiment_id}`);
       return;
@@ -216,8 +241,14 @@ export function DiagnosticLaunchPage() {
     const batchId = crypto.randomUUID();
     const label = suiteLabel.trim()
       || `Diagnostic suite · ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
-    const results = await Promise.allSettled(cells.map((cell) =>
-      launch.mutateAsync({
+    const results = await Promise.allSettled(cells.map((cell) => {
+      const cellConfigs: Record<string, unknown> = { ...harnessConfigs };
+      if (cell.speckitExtension) {
+        cellConfigs.speckit = { extension_id: cell.speckitExtension };
+      } else if ('speckit' in cellConfigs) {
+        delete cellConfigs.speckit;
+      }
+      return launch.mutateAsync({
         task_id: cell.taskId,
         executor_id: cell.executorId,
         harness_ids: selectedHarnesses,
@@ -225,9 +256,9 @@ export function DiagnosticLaunchPage() {
         runs_per_variant: runsPerVariant,
         batch_id: batchId,
         batch_label: label,
-        harness_configs: harnessConfigs,
-      }),
-    ));
+        harness_configs: cellConfigs,
+      });
+    }));
     const failures = results
       .map((r, i) => r.status === 'rejected'
         ? { cell: cells[i], reason: r.reason instanceof Error ? r.reason.message : String(r.reason) }
@@ -462,9 +493,11 @@ export function DiagnosticLaunchPage() {
                 ? 'Type agent instructions'
                 : !multiagentReady
                 ? 'Configure multiagent roles'
-                : taskIDs.length === 1
-                ? `Launch · ${taskIDs.length} task`
-                : `Launch suite · ${taskIDs.length} tasks`}
+                : !speckitReady
+                ? 'Pick a spec-kit extension'
+                : totalExperiments === 1
+                ? `Launch · 1 task`
+                : `Launch suite · ${totalExperiments} experiments`}
             </Button>
           </div>
         </div>

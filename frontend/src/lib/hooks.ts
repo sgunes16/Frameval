@@ -21,6 +21,7 @@ import type {
   QueueStatus,
   Rubric,
   Run,
+  SpecKitExtensionPublic,
   Task,
   Transcript,
   Variant,
@@ -248,6 +249,14 @@ export function useAgents() {
 
 export function useHarnesses() {
   return useQuery({ queryKey: ['harnesses'], queryFn: () => api.get<HarnessInfo[]>('/config/harnesses') });
+}
+
+export function useSpecKitCatalog() {
+  return useQuery({
+    queryKey: ['speckit', 'catalog'] as const,
+    queryFn: () => api.get<SpecKitExtensionPublic[]>('/harnesses/speckit/catalog'),
+    staleTime: 24 * 60 * 60 * 1000, // catalog is static within a process
+  });
 }
 
 export function useExecutors() {
