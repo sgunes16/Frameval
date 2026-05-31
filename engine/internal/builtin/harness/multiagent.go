@@ -79,10 +79,87 @@ func (h *MultiAgent) Setup(_ context.Context, ws harness.Workspace, t task.Task,
 	}, nil
 }
 
-// Invoke is rewritten in Task 3; the placeholder below keeps the
-// build green while we land the validation + helper changes.
 func (h *MultiAgent) Invoke(ctx context.Context, run harness.HarnessRun, exec executor.AgentExecutor) (*executor.RunResult, error) {
-	return nil, errors.New("multiagent harness: Invoke not yet implemented in this task")
+	roles, ok := run.Metadata["multiagent.roles"].([]role)
+	if !ok || len(roles) == 0 {
+		return nil, ErrMultiAgentRolesMissing
+	}
+
+	merged := &executor.RunResult{}
+	var rawBuilder strings.Builder
+	var prevOutput string
+	var roleErrors []error
+
+	for i, r := range roles {
+		prompt := expandPrompt(r.Prompt, map[string]string{
+			"TASK":        run.Task.TaskPrompt,
+			"PREV_OUTPUT": prevOutput,
+		})
+		result, err := exec.Execute(ctx, harness.MergeConfig(run.BaseRunConfig, executor.RunConfig{
+			Prompt:        prompt,
+			WorkspacePath: run.Workspace.Path,
+			Role:          r.Name,
+			Stage:         r.Name,
+		}))
+		if result == nil {
+			result = &executor.RunResult{}
+		}
+
+		// Always merge whatever this role produced (raw + tagged turns)
+		// so the user has a transcript even on partial failure.
+		rawBuilder.WriteString("--- Role: ")
+		rawBuilder.WriteString(r.Name)
+		rawBuilder.WriteString(" ---\n")
+		rawBuilder.WriteString(result.RawOutput)
+		if !strings.HasSuffix(result.RawOutput, "\n") {
+			rawBuilder.WriteString("\n")
+		}
+		for _, turn := range result.ParsedTurns {
+			turn.Role = r.Name
+			turn.Stage = r.Name
+			merged.ParsedTurns = append(merged.ParsedTurns, turn)
+		}
+
+		// ctx cancellation aborts immediately — no point spinning up
+		// the next role when the user / scheduler told us to stop.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			merged.RawOutput = rawBuilder.String()
+			return merged, err
+		}
+
+		if err != nil {
+			roleErrors = append(roleErrors, fmt.Errorf("role %q: %w", r.Name, err))
+			prevOutput = fmt.Sprintf("(role %s failed; proceeding without its output)", r.Name)
+			continue
+		}
+
+		prevOutput = extractLastAssistantOutput(result)
+		_ = i // index reserved for future per-role policy
+	}
+
+	merged.RawOutput = rawBuilder.String()
+	if len(roleErrors) > 0 {
+		return merged, fmt.Errorf("multiagent: %w", errors.Join(roleErrors...))
+	}
+	return merged, nil
+}
+
+// extractLastAssistantOutput returns the last assistant turn's content
+// from a RunResult, falling back to RawOutput when no assistant turn is
+// present. Used to feed the next role's {{PREV_OUTPUT}} substitution.
+func extractLastAssistantOutput(r *executor.RunResult) string {
+	if r == nil {
+		return ""
+	}
+	for i := len(r.ParsedTurns) - 1; i >= 0; i-- {
+		if strings.EqualFold(r.ParsedTurns[i].Role, "assistant") {
+			content := strings.TrimSpace(r.ParsedTurns[i].Content)
+			if content != "" {
+				return content
+			}
+		}
+	}
+	return strings.TrimSpace(r.RawOutput)
 }
 
 func (h *MultiAgent) Teardown(_ context.Context, _ harness.HarnessRun) error { return nil }
