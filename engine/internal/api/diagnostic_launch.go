@@ -23,6 +23,8 @@ type LaunchDiagnosticRequest struct {
 	RunsPerVariant int      `json:"runs_per_variant"`
 	TimeoutSeconds int      `json:"timeout_seconds"`
 	Name           string   `json:"name"`
+	BatchID        string   `json:"batch_id"`
+	BatchLabel     string   `json:"batch_label"`
 }
 
 // LaunchDiagnosticResponse returns the IDs the frontend needs to navigate
@@ -104,6 +106,8 @@ func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 		TimeoutSeconds: timeout,
 		MaxConcurrent:  1,
 		Variants:       variants,
+		BatchID:        req.BatchID,
+		BatchLabel:     req.BatchLabel,
 	})
 	if err != nil {
 		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)

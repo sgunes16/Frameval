@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"expvar"
 	"log/slog"
 	"net/http"
@@ -9,14 +10,44 @@ import (
 	builtinharness "github.com/mustafaselman/frameval/engine/internal/builtin/harness"
 	"github.com/mustafaselman/frameval/engine/internal/executor"
 	"github.com/mustafaselman/frameval/engine/internal/experiment"
+	"github.com/mustafaselman/frameval/engine/internal/models"
 	"github.com/mustafaselman/frameval/engine/internal/storage"
+	pkgexecutor "github.com/mustafaselman/frameval/engine/pkg/executor"
+	pkgharness "github.com/mustafaselman/frameval/engine/pkg/harness"
 )
+
+// harnessLookup is the interface the API handlers need from a harness
+// registry. The real *builtinharness.Registry satisfies this automatically.
+type harnessLookup interface {
+	Get(name string) (pkgharness.Harness, error)
+	Entries() []pkgharness.Harness
+}
+
+// executorLookup is the interface the API handlers need from an
+// executor registry. The real *executor.Registry satisfies this automatically.
+type executorLookup interface {
+	Get(name string) (pkgexecutor.AgentExecutor, error)
+	Entries() []pkgexecutor.AgentExecutor
+}
+
+// orchestratorIface is the interface the API handlers need from the
+// experiment orchestrator. The real *experiment.Orchestrator satisfies this.
+type orchestratorIface interface {
+	StartExperiment(ctx context.Context, experimentID string) error
+	CancelExperiment(ctx context.Context, experimentID string) error
+	RetryRun(ctx context.Context, runID string) error
+	RegradeRun(ctx context.Context, runID string) error
+	ReparseRunTranscript(ctx context.Context, runID string) (int, error)
+	EstimateExperiment(ctx context.Context, experimentID string) (float64, error)
+	QueueSnapshot() models.QueueStatus
+	SandboxHealth(ctx context.Context) map[string]any
+}
 
 type Service struct {
 	store        *storage.Store
-	orchestrator *experiment.Orchestrator
-	harnesses    *builtinharness.Registry
-	executors    *executor.Registry
+	orchestrator orchestratorIface
+	harnesses    harnessLookup
+	executors    executorLookup
 	hub          *Hub
 }
 
