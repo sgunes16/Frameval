@@ -3,7 +3,7 @@
 //
 // AgentDx ships five built-in harnesses under engine/internal/builtin/harness:
 //   - bare:          single executor call, no setup, baseline reference
-//   - claudemd:      lays down CLAUDE.md from task harness_context, then bare invocation
+//   - agent_instructions: lays down user-supplied CLAUDE.md (typed in the launcher) into the workspace, then bare invocation
 //   - speckit:       full spec-kit workflow (constitution -> specify -> plan -> tasks -> implement)
 //   - ralph:         while-loop wrapping bare until test-pass or budget exhausted
 //   - planner_coder: two sequential role-tagged invocations (plan first, code second)
@@ -28,7 +28,7 @@
 //	func (h *Bare) Name() string        { return "my-bare" }
 //	func (h *Bare) Description() string { return "Single invocation, custom prompt prefix" }
 //
-//	func (h *Bare) Setup(ctx context.Context, ws harness.Workspace, t task.Task, b harness.Budget) (harness.HarnessRun, error) {
+//	func (h *Bare) Setup(ctx context.Context, ws harness.Workspace, t task.Task, b harness.Budget, cfg map[string]any) (harness.HarnessRun, error) {
 //	    return harness.HarnessRun{HarnessName: h.Name(), Task: t, Workspace: ws, Budget: b}, nil
 //	}
 //

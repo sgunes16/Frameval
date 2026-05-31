@@ -2,7 +2,7 @@
 //
 // Third parties should import engine/pkg/harness to implement their own
 // adapter; this package contains the reference implementations the framework
-// ships with (bare, claudemd, speckit, ralph, planner_coder).
+// ships with (bare, agent_instructions, speckit, ralph, planner_coder).
 package harness
 
 import (
