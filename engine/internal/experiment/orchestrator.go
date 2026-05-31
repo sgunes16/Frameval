@@ -492,7 +492,7 @@ func instructionFilesForHarness(harnessID string) []string {
 		return []string{"CLAUDE.md"}
 	case "speckit":
 		return []string{"AGENTS.md", "constitution.md", "spec.md"}
-	case "planner_coder":
+	case "multiagent":
 		return []string{"PLAN.md"}
 	case "ralph", "bare":
 		fallthrough

@@ -38,9 +38,9 @@ func (e *twoStageExecutor) Execute(_ context.Context, cfg executor.RunConfig) (*
 	}, e.coderErr
 }
 
-func TestPlannerCoderIdentity(t *testing.T) {
-	h := NewPlannerCoder()
-	if h.Name() != "planner_coder" {
+func TestMultiAgentIdentity(t *testing.T) {
+	h := NewMultiAgent()
+	if h.Name() != "multiagent" {
 		t.Errorf("Name = %q", h.Name())
 	}
 	if h.Description() == "" {
@@ -49,7 +49,7 @@ func TestPlannerCoderIdentity(t *testing.T) {
 }
 
 func TestPlannerCoderInvokeIssuesTwoCallsInOrder(t *testing.T) {
-	h := NewPlannerCoder()
+	h := NewMultiAgent()
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{TaskPrompt: "scaffold a CLI"}
 	exec := &twoStageExecutor{
@@ -101,7 +101,7 @@ func TestPlannerCoderInvokeIssuesTwoCallsInOrder(t *testing.T) {
 }
 
 func TestPlannerCoderPlannerErrorStillRunsCoder(t *testing.T) {
-	h := NewPlannerCoder()
+	h := NewMultiAgent()
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{TaskPrompt: "x"}
 	wantErr := errors.New("planner crashed")
@@ -124,7 +124,7 @@ func TestPlannerCoderPlannerErrorStillRunsCoder(t *testing.T) {
 }
 
 func TestPlannerCoderContextCancellationAbortsBeforeCoder(t *testing.T) {
-	h := NewPlannerCoder()
+	h := NewMultiAgent()
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{TaskPrompt: "x"}
 	exec := &twoStageExecutor{plannerErr: context.Canceled}
@@ -141,7 +141,7 @@ func TestPlannerCoderContextCancellationAbortsBeforeCoder(t *testing.T) {
 
 // Parallel to the Canceled test: DeadlineExceeded also aborts before coder.
 func TestPlannerCoderDeadlineExceededAbortsBeforeCoder(t *testing.T) {
-	h := NewPlannerCoder()
+	h := NewMultiAgent()
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{TaskPrompt: "x"}
 	exec := &twoStageExecutor{plannerErr: context.DeadlineExceeded}
@@ -159,7 +159,7 @@ func TestPlannerCoderDeadlineExceededAbortsBeforeCoder(t *testing.T) {
 // When BOTH planner and coder fail, both errors must be unwrappable so
 // downstream errors.Is checks can detect either sentinel.
 func TestPlannerCoderBothErrorsAreWrapped(t *testing.T) {
-	h := NewPlannerCoder()
+	h := NewMultiAgent()
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{TaskPrompt: "x"}
 	plannerSentinel := errors.New("planner blew up")
@@ -208,9 +208,9 @@ func TestExtractPlanFromEmpty(t *testing.T) {
 	}
 }
 
-func TestRegistryListsPlannerCoder(t *testing.T) {
+func TestRegistryListsMultiAgent(t *testing.T) {
 	r := NewRegistry()
-	if _, err := r.Get("planner_coder"); err != nil {
-		t.Errorf("expected planner_coder in default registry: %v", err)
+	if _, err := r.Get("multiagent"); err != nil {
+		t.Errorf("expected multiagent in default registry: %v", err)
 	}
 }

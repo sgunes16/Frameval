@@ -16,24 +16,24 @@ const (
 	roleCoder   = "coder"
 )
 
-// PlannerCoder is the multi-agent harness: two sequential agent invocations
+// MultiAgent is the multi-agent harness: two sequential agent invocations
 // where the first produces an implementation plan and the second implements
 // against it. Both calls go through the same executor; only the prompt and
 // the RunConfig.Role field differ. The merged transcript tags every turn
 // with its originating role so downstream AgentDx fingerprint extraction
 // can compute per-role behavioral metrics.
-type PlannerCoder struct{}
+type MultiAgent struct{}
 
-// NewPlannerCoder constructs the harness. Stateless; safe to share.
-func NewPlannerCoder() *PlannerCoder { return &PlannerCoder{} }
+// NewMultiAgent constructs the harness. Stateless; safe to share.
+func NewMultiAgent() *MultiAgent { return &MultiAgent{} }
 
-func (h *PlannerCoder) Name() string { return "planner_coder" }
+func (h *MultiAgent) Name() string { return "multiagent" }
 
-func (h *PlannerCoder) Description() string {
+func (h *MultiAgent) Description() string {
 	return "Two-role multi-agent: planner emits a written plan, coder implements against it"
 }
 
-func (h *PlannerCoder) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, _ map[string]any) (harness.HarnessRun, error) {
+func (h *MultiAgent) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, _ map[string]any) (harness.HarnessRun, error) {
 	return harness.HarnessRun{
 		HarnessName: h.Name(),
 		Task:        t,
@@ -42,7 +42,7 @@ func (h *PlannerCoder) Setup(_ context.Context, ws harness.Workspace, t task.Tas
 	}, nil
 }
 
-func (h *PlannerCoder) Invoke(ctx context.Context, run harness.HarnessRun, exec executor.AgentExecutor) (*executor.RunResult, error) {
+func (h *MultiAgent) Invoke(ctx context.Context, run harness.HarnessRun, exec executor.AgentExecutor) (*executor.RunResult, error) {
 	plannerResult, plannerErr := exec.Execute(ctx, harness.MergeConfig(run.BaseRunConfig, executor.RunConfig{
 		Prompt:        plannerPrompt(run.Task),
 		WorkspacePath: run.Workspace.Path,
@@ -90,7 +90,7 @@ func (h *PlannerCoder) Invoke(ctx context.Context, run harness.HarnessRun, exec 
 	return combined, nil
 }
 
-func (h *PlannerCoder) Teardown(_ context.Context, _ harness.HarnessRun) error { return nil }
+func (h *MultiAgent) Teardown(_ context.Context, _ harness.HarnessRun) error { return nil }
 
 // plannerPrompt instructs the agent to produce a markdown-structured plan
 // WITHOUT writing code. Structure matches typical spec-driven workflows so
