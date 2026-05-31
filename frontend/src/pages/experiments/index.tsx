@@ -69,11 +69,15 @@ export function ExperimentsPage() {
 
       {filtered.length === 0 ? (
         <EmptyState
-          title="No experiments match"
-          description="Adjust your filters or start a new diagnostic run."
+          title={experiments.length === 0 ? 'No experiments yet' : 'No experiments match'}
+          description={
+            experiments.length === 0
+              ? 'Start a diagnostic run to compare harnesses on a task.'
+              : 'Adjust your filters or clear the search to see all experiments.'
+          }
           action={
             <Link to="/diagnostic/launch">
-              <Button size="sm">Start diagnostic run</Button>
+              <Button size="sm">New diagnostic run</Button>
             </Link>
           }
         />
