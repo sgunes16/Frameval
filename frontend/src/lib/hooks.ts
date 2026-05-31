@@ -314,14 +314,6 @@ export function useEstimateExperiment() {
   return useMutation({ mutationFn: (id: string) => api.post<{ estimated_cost_usd: number }>(`/experiments/${id}/estimate`) });
 }
 
-export function useCreateArtifact() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({ variantId, payload }: { variantId: string; payload: unknown }) => api.post<ArtifactVersion>(`/variants/${variantId}/artifacts`, payload),
-    onSuccess: (_data, variables) => client.invalidateQueries({ queryKey: ['artifacts', variables.variantId] }),
-  });
-}
-
 export function useWebSocket() {
   const wsBase = import.meta.env.VITE_WS_BASE_URL || `${window.location.origin.replace(/^http/, 'ws')}/ws`;
   const nextEventID = useRef(0);
