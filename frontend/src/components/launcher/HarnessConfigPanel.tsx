@@ -1,3 +1,6 @@
+import { MultiAgentForm } from './MultiAgentForm';
+import type { MultiAgentConfig } from '../../lib/types';
+
 export type HarnessConfigValue = Record<string, unknown>;
 
 interface PanelProps {
@@ -20,6 +23,13 @@ export function HarnessConfigPanel({ harnessId, value, onChange }: PanelProps) {
         <AgentInstructionsForm
           value={value as { content?: string } | undefined}
           onChange={onChange}
+        />
+      );
+    case 'multiagent':
+      return (
+        <MultiAgentForm
+          value={value as MultiAgentConfig | undefined}
+          onChange={(next) => onChange(next as unknown as Record<string, unknown>)}
         />
       );
     default:
