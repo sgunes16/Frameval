@@ -4,6 +4,7 @@ import type { EvidenceForTurn } from '../../lib/symptom-evidence';
 import type { ParsedTurn } from '../../lib/types';
 import { renderBlock } from './blocks';
 import { cn } from '../../lib/utils';
+import { roleAccent } from './role-accent';
 
 /**
  * TurnGroupCard renders one "agent decision" — the set of ParsedTurns
@@ -122,7 +123,10 @@ export function TurnGroupCard({
         }
       }}
       aria-label={`Focus turn ${group.parentTurnIndex}`}
-      className="group/turn relative grid w-full cursor-pointer grid-cols-[28px_1fr] gap-3 px-2 py-2 text-left transition focus:outline-none hover:bg-bg-elev-1/40 focus-visible:bg-bg-elev-1/60"
+      className={cn(
+          'group/turn relative grid w-full cursor-pointer grid-cols-[28px_1fr] gap-3 border-l-4 px-2 py-2 text-left transition focus:outline-none hover:bg-bg-elev-1/40 focus-visible:bg-bg-elev-1/60',
+          roleAccent(group.role),
+        )}
     >
       {/* Rail + dot. The rail spans the full card height so adjacent
           cards visually concatenate into a continuous timeline. */}
@@ -144,6 +148,11 @@ export function TurnGroupCard({
           the failure classifier flagged this step) float at the top
           right of the body column so they don't compete with content. */}
       <div className="min-w-0 space-y-1.5">
+        {group.role && (
+          <div className="text-xs uppercase tracking-wider text-fg-muted">
+            Role: <span className="font-mono text-fg">{group.role}</span>
+          </div>
+        )}
         {glyphs.length > 0 && (
           <div
             role="group"

@@ -22,6 +22,13 @@ export interface TurnGroup {
    * when no tool_use block is present.
    */
   toolName?: string;
+  /**
+   * The role name that produced this group (e.g. "planner", "coder").
+   * Populated from the first block in the group that has a non-empty
+   * role. Empty string when the transcript has no role tagging (single-
+   * agent runs, legacy transcripts).
+   */
+  role: string;
 }
 
 // Priority list: higher index = more decisive. A group's representative
@@ -67,6 +74,7 @@ export function groupTurns(turns: ParsedTurn[]): TurnGroup[] {
       blocks: [block],
       representativeKind: '' as BlockKind,
       toolName: block.tool_name,
+      role: '',
     }));
   }
 
@@ -86,11 +94,13 @@ export function groupTurns(turns: ParsedTurn[]): TurnGroup[] {
 
   const groups: TurnGroup[] = Array.from(grouped.entries()).map(([parent, blocks]) => {
     const toolBlock = blocks.find((b) => b.block_kind === 'tool_use');
+    const role = blocks.find((b) => (b.role ?? '').length > 0)?.role ?? '';
     return {
       parentTurnIndex: parent,
       blocks,
       representativeKind: pickRepresentativeKind(blocks),
       toolName: toolBlock?.tool_name,
+      role,
     };
   });
 

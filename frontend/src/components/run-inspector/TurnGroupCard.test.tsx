@@ -26,6 +26,7 @@ const group: TurnGroup = {
   ],
   representativeKind: 'tool_use',
   toolName: 'Edit',
+  role: '',
 };
 
 describe('TurnGroupCard', () => {
@@ -85,6 +86,7 @@ describe('TurnGroupCard', () => {
       ],
       representativeKind: 'tool_use',
       toolName: 'Edit',
+      role: '',
     };
     const evidenceByTurn = new Map<number, EvidenceForTurn>([
       [
