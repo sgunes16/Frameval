@@ -9,6 +9,7 @@ import {
   useExecutors,
   useHarnesses,
   useLaunchDiagnostic,
+  useLaunchDiagnosticSuite,
   useModels,
   useTasks,
 } from '../../lib/hooks';
@@ -56,9 +57,11 @@ export function DiagnosticLaunchPage() {
   const { data: executors = [] } = useExecutors();
   const { data: models = [] } = useModels();
   const launch = useLaunchDiagnostic();
+  const launchSuite = useLaunchDiagnosticSuite();
 
   const initialTask = searchParams.get('task') ?? '';
-  const [taskID, setTaskID] = useState(initialTask);
+  const [taskIDs, setTaskIDs] = useState<string[]>(initialTask ? [initialTask] : []);
+  const [suiteLabel, setSuiteLabel] = useState('');
   const [selectedHarnesses, setSelectedHarnesses] = useState<string[]>(['bare']);
   const [selectedExecutors, setSelectedExecutors] = useState<string[]>([]);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
@@ -84,9 +87,13 @@ export function DiagnosticLaunchPage() {
     // so creates a useless dep with no observable effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executors, selectedExecutors.length]);
+  const toggleTask = (id: string) => {
+    setTaskIDs((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
+  };
+
   useEffect(() => {
-    if (!taskID && tasks.length > 0 && !initialTask) setTaskID(tasks[0].id);
-  }, [tasks, taskID, initialTask]);
+    if (taskIDs.length === 0 && tasks.length > 0 && !initialTask) setTaskIDs([tasks[0].id]);
+  }, [tasks, taskIDs.length, initialTask]);
 
   const visibleModels = useMemo<ModelConfig[]>(() => {
     if (selectedExecutors.length === 0) return [];
@@ -125,7 +132,12 @@ export function DiagnosticLaunchPage() {
     return out;
   }, [selectedHarnesses, selectedExecutors, selectedModels, models]);
 
-  const totalRuns = variants.length * runsPerVariant;
+  const totalExperiments =
+    Math.max(taskIDs.length, 1) *
+    Math.max(selectedHarnesses.length, 1) *
+    Math.max(selectedExecutors.length, 1) *
+    Math.max(selectedModels.length, 1);
+  const totalRuns = totalExperiments * runsPerVariant;
 
   const toggleHarness = (id: string) =>
     setSelectedHarnesses((prev) =>
@@ -140,50 +152,39 @@ export function DiagnosticLaunchPage() {
       prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id],
     );
 
-  const selectedTask = useMemo(() => tasks.find((t) => t.id === taskID), [tasks, taskID]);
-  const canSubmit = Boolean(taskID) && variants.length > 0 && !launch.isPending;
+  const canSubmit = taskIDs.length > 0 && variants.length > 0 && !launch.isPending && !launchSuite.isPending;
 
   const handleLaunch = async () => {
-    if (!canSubmit) return;
-    setPartialError(null);
-    const baseName = name.trim();
-    const results = await Promise.allSettled(
-      variants.map((v, i) => {
-        const variantName = baseName
-          ? `${baseName} · ${v.harness}/${v.executor}/${v.modelDisplay}`
-          : '';
-        return launch.mutateAsync({
-          task_id: taskID,
-          executor_id: v.executor,
-          harness_ids: [v.harness],
-          model: v.model,
-          runs_per_variant: runsPerVariant,
-          name: variantName || `Variant ${i + 1}`,
-        });
-      }),
-    );
-    const ok: string[] = [];
-    const errs: string[] = [];
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') ok.push(r.value.experiment_id);
-      else {
-        const v = variants[i];
-        errs.push(
-          `${v.harness}/${v.executor}/${v.modelDisplay}: ${
-            r.reason instanceof Error ? r.reason.message : 'unknown'
-          }`,
-        );
-      }
-    });
-    if (ok.length === 0) {
-      setPartialError(errs.join(' · ') || 'All variants failed to launch.');
+    if (taskIDs.length === 0) {
+      setPartialError('Pick at least one task.');
       return;
     }
-    if (errs.length > 0) {
-      setPartialError(`${errs.length} of ${variants.length} failed: ${errs.join(' · ')}`);
+    setPartialError(null);
+    const baseFields = {
+      executor_id: selectedExecutors[0],
+      harness_ids: selectedHarnesses,
+      model: selectedModels[0],
+      runs_per_variant: runsPerVariant,
+    };
+    if (taskIDs.length === 1) {
+      const res = await launch.mutateAsync({
+        ...baseFields,
+        task_id: taskIDs[0],
+        name: name.trim() || undefined,
+      });
+      navigate(`/diagnostic/compare?experiment=${res.experiment_id}`);
+      return;
     }
-    if (ok.length === 1) navigate(`/experiments/${ok[0]}/monitor`);
-    else navigate(`/diagnostic/compare?experiments=${ok.join(',')}`);
+    const res = await launchSuite.mutateAsync({
+      ...baseFields,
+      task_ids: taskIDs,
+      batch_label: suiteLabel.trim() || undefined,
+    });
+    if (res.failures && res.failures.length > 0) {
+      const summary = `Started ${res.experiment_ids.length}/${taskIDs.length}. Failures: ${res.failures.map((f) => f.task_id).join(', ')}`;
+      setPartialError(summary);
+    }
+    navigate(`/experiments?batch=${res.batch_id}`);
   };
 
   return (
@@ -212,33 +213,46 @@ export function DiagnosticLaunchPage() {
               No tasks. Add a directory under <code className="font-mono">tasks/</code> and restart.
             </div>
           ) : (
-            <ul className="space-y-1.5">
-              {tasks.map((task) => (
-                <li key={task.id}>
-                  <button
-                    type="button"
-                    onClick={() => setTaskID(task.id)}
-                    className={cn(
-                      'w-full rounded-md px-2.5 py-2 text-left text-xs transition',
-                      taskID === task.id
-                        ? 'border border-fg bg-bg-elev-2'
-                        : 'border border-border hover:border-border-strong hover:bg-bg-elev-1/50',
-                    )}
-                  >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate font-medium text-fg">{task.name}</span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-xs uppercase tracking-wider text-fg-subtle">
-                        <Badge tone="neutral">{task.category}</Badge>
-                        <span>{task.codebase_type}</span>
-                      </span>
-                    </div>
-                    <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">
-                      {task.description}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="space-y-1.5">
+                {tasks.map((task) => (
+                  <li key={task.id}>
+                    <button
+                      type="button"
+                      onClick={() => toggleTask(task.id)}
+                      className={cn(
+                        'w-full rounded-md px-2.5 py-2 text-left text-xs transition',
+                        taskIDs.includes(task.id)
+                          ? 'border border-fg bg-bg-elev-2'
+                          : 'border border-border hover:border-border-strong hover:bg-bg-elev-1/50',
+                      )}
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate font-medium text-fg">{task.name}</span>
+                        <span className="flex shrink-0 items-center gap-1.5 text-xs uppercase tracking-wider text-fg-subtle">
+                          <Badge tone="neutral">{task.category}</Badge>
+                          <span>{task.codebase_type}</span>
+                        </span>
+                      </div>
+                      <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">
+                        {task.description}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {taskIDs.length >= 2 && (
+                <div className="mt-3">
+                  <label className="block text-xs uppercase tracking-wider text-fg-muted">Suite label</label>
+                  <Input
+                    value={suiteLabel}
+                    onChange={(e) => setSuiteLabel(e.target.value)}
+                    placeholder="e.g. FMT calibration v6"
+                    className="mt-1 w-full"
+                  />
+                </div>
+              )}
+            </>
           )}
         </Card>
 
@@ -313,7 +327,7 @@ export function DiagnosticLaunchPage() {
         <Card className="lg:col-span-7">
           <CompactHeader
             title="Preview"
-            hint={`${variants.length} variant${variants.length === 1 ? '' : 's'} · ${totalRuns} total run${totalRuns === 1 ? '' : 's'}`}
+            hint={`${totalExperiments} experiment${totalExperiments === 1 ? '' : 's'} × ${runsPerVariant} runs each`}
           />
           <VariantPreview variants={variants} />
         </Card>
@@ -339,9 +353,7 @@ export function DiagnosticLaunchPage() {
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder={
-                selectedTask ? `${selectedTask.name} matrix` : 'Matrix run · auto-named'
-              }
+              placeholder="Matrix run · auto-named"
             />
             <div className="mt-1 text-xs text-fg-subtle">
               Each variant →{' '}
@@ -358,33 +370,35 @@ export function DiagnosticLaunchPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex items-baseline gap-4 text-xs text-fg-muted">
             <span>
-              <span className="font-mono text-sm font-semibold text-fg">{variants.length}</span>{' '}
-              variant{variants.length === 1 ? '' : 's'}
+              <span className="font-mono text-sm font-semibold text-fg">{totalExperiments}</span>{' '}
+              experiment{totalExperiments === 1 ? '' : 's'} to launch
             </span>
             <span className="text-fg-subtle">·</span>
             <span>
               <span className="font-mono text-sm font-semibold text-fg">{totalRuns}</span>{' '}
               total run{totalRuns === 1 ? '' : 's'}
             </span>
-            {variants.length > 8 && (
+            {totalExperiments > 8 && (
               <span className="text-warning-fg">⚠ large matrix — may queue for a while</span>
             )}
           </div>
           <div className="flex items-center gap-3">
-            {(launch.isError || partialError) && (
+            {(launch.isError || launchSuite.isError || partialError) && (
               <div className="max-w-md truncate text-right text-xs text-danger-fg">
                 {partialError ??
                   (launch.error instanceof Error ? launch.error.message : 'Launch failed')}
               </div>
             )}
             <Button onClick={handleLaunch} disabled={!canSubmit} size="lg">
-              {launch.isPending
-                ? `Launching ${variants.length}…`
+              {launch.isPending || launchSuite.isPending
+                ? `Launching…`
+                : taskIDs.length === 0
+                ? 'Pick a task'
                 : variants.length === 0
                 ? 'Pick a variant'
-                : variants.length === 1
-                ? 'Launch 1 variant'
-                : `Launch ${variants.length} variants`}
+                : taskIDs.length === 1
+                ? `Launch · ${taskIDs.length} task`
+                : `Launch suite · ${taskIDs.length} tasks`}
             </Button>
           </div>
         </div>
