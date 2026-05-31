@@ -53,7 +53,7 @@ func NewSpecKit() *SpecKit { return &SpecKit{} }
 func (h *SpecKit) Name() string { return "speckit" }
 
 func (h *SpecKit) Description() string {
-	return "Canonical spec-kit workflow: /speckit.specify → /plan → /tasks → /implement (4 sequential agent calls)"
+	return "Spec-kit workflow: runs a curated extension (canonical, lite, tdd-first, research-first, rigorous, or dual-role) selected via harness_config.speckit.extension_id."
 }
 
 func (h *SpecKit) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, cfg map[string]any) (harness.HarnessRun, error) {
