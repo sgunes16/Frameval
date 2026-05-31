@@ -85,7 +85,7 @@ function renderChip(ext: SpecKitExtensionPublic, isSelected: boolean, onClick: (
     >
       <span className="font-medium">{ext.name}</span>
       {ext.multi_agent && (
-        <span className="rounded-full border border-border bg-bg-elev-2 px-1.5 py-0.5 text-xs uppercase tracking-wider text-fg-muted">
+        <span className="rounded-full border border-border bg-bg-elev-2 px-1.5 py-0.5 text-xs uppercase tracking-wider text-fg-subtle">
           Multi-agent
         </span>
       )}
