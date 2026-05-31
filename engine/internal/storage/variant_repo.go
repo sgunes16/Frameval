@@ -25,7 +25,7 @@ func (s *Store) CreateVariant(ctx context.Context, variant models.Variant) (*mod
 	_, err := s.DB.ExecContext(ctx, `
 		INSERT INTO variants (id, experiment_id, name, description, is_control, ordering, harness_id, harness_config_json)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, variant.ID, variant.ExperimentID, variant.Name, variant.Description, boolToInt(variant.IsControl), variant.Ordering, fallbackHarnessID(variant.HarnessID), nullableString(marshalJSON(variant.HarnessConfig)))
+	`, variant.ID, variant.ExperimentID, variant.Name, variant.Description, boolToInt(variant.IsControl), variant.Ordering, fallbackHarnessID(variant.HarnessID), marshalJSONOrNull(variant.HarnessConfig))
 	if err != nil {
 		return nil, fmt.Errorf("create variant: %w", err)
 	}
@@ -74,7 +74,7 @@ func (s *Store) GetVariant(ctx context.Context, variantID string) (*models.Varia
 }
 
 func (s *Store) UpdateVariant(ctx context.Context, variantID string, variant models.Variant) (*models.Variant, error) {
-	_, err := s.DB.ExecContext(ctx, `UPDATE variants SET name = ?, description = ?, is_control = ?, ordering = ?, harness_id = ?, harness_config_json = ? WHERE id = ?`, variant.Name, variant.Description, boolToInt(variant.IsControl), variant.Ordering, fallbackHarnessID(variant.HarnessID), nullableString(marshalJSON(variant.HarnessConfig)), variantID)
+	_, err := s.DB.ExecContext(ctx, `UPDATE variants SET name = ?, description = ?, is_control = ?, ordering = ?, harness_id = ?, harness_config_json = ? WHERE id = ?`, variant.Name, variant.Description, boolToInt(variant.IsControl), variant.Ordering, fallbackHarnessID(variant.HarnessID), marshalJSONOrNull(variant.HarnessConfig), variantID)
 	if err != nil {
 		return nil, fmt.Errorf("update variant: %w", err)
 	}

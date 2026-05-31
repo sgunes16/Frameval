@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/mustafaselman/frameval/engine/internal/models"
@@ -73,6 +74,38 @@ func TestCreateExperimentNullBatchFields(t *testing.T) {
 	}
 	if created.BatchLabel != "" {
 		t.Fatalf("batch_label should be empty: got %q", created.BatchLabel)
+	}
+}
+
+func TestVariantHarnessConfigNilStoresAsNull(t *testing.T) {
+	store := support.TmpStore(t)
+	seedTaskForExperimentTest(t, store, "task-hc-null")
+
+	exp, err := store.CreateExperiment(context.Background(), models.ExperimentRequest{
+		Name:           "no-config",
+		TaskID:         "task-hc-null",
+		Model:          "claude",
+		AgentCLI:       "claude",
+		RunsPerVariant: 1,
+		Variants: []models.VariantRequest{
+			{Name: "bare", HarnessID: "bare"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateExperiment: %v", err)
+	}
+	// Assert the raw column is SQL NULL, not the literal string "null".
+	var raw sql.NullString
+	row := store.DB.QueryRowContext(context.Background(), `SELECT harness_config_json FROM variants WHERE id = ?`, exp.Variants[0].ID)
+	if err := row.Scan(&raw); err != nil {
+		t.Fatalf("raw scan: %v", err)
+	}
+	if raw.Valid {
+		t.Errorf("harness_config_json: expected NULL, got valid string %q", raw.String)
+	}
+	// And the model round-trip still produces a nil map.
+	if exp.Variants[0].HarnessConfig != nil {
+		t.Errorf("HarnessConfig: expected nil, got %v", exp.Variants[0].HarnessConfig)
 	}
 }
 

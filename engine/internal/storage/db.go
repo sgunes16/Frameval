@@ -92,6 +92,30 @@ func marshalJSON(value any) string {
 	return string(encoded)
 }
 
+// marshalJSONOrNull returns a SQL-NULL-safe value for optional JSON columns.
+// A nil map or nil slice becomes a nil any (SQLite NULL); everything else is
+// marshaled to a JSON string. This prevents the literal 3-byte string "null"
+// from being written into TEXT columns when the caller passes a nil map.
+func marshalJSONOrNull(v any) any {
+	if isNilLike(v) {
+		return nil
+	}
+	return marshalJSON(v)
+}
+
+func isNilLike(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch m := v.(type) {
+	case map[string]any:
+		return m == nil
+	case []any:
+		return m == nil
+	}
+	return false
+}
+
 func unmarshalJSON[T any](raw string, fallback T) T {
 	if strings.TrimSpace(raw) == "" {
 		return fallback

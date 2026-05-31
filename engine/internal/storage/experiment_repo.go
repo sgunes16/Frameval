@@ -49,7 +49,7 @@ func (s *Store) CreateExperiment(ctx context.Context, req models.ExperimentReque
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO variants (id, experiment_id, name, description, is_control, ordering, harness_id, harness_config_json)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		`, variantID, experimentID, variantReq.Name, variantReq.Description, boolToInt(variantReq.IsControl), maxInt(variantReq.Ordering, idx), fallbackHarnessID(variantReq.HarnessID), nullableString(marshalJSON(variantReq.HarnessConfig)))
+		`, variantID, experimentID, variantReq.Name, variantReq.Description, boolToInt(variantReq.IsControl), maxInt(variantReq.Ordering, idx), fallbackHarnessID(variantReq.HarnessID), marshalJSONOrNull(variantReq.HarnessConfig))
 		if err != nil {
 			return nil, fmt.Errorf("insert variant: %w", err)
 		}
