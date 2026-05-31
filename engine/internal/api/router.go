@@ -121,6 +121,7 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 		r.Get("/config/models", service.ListModels)
 		r.Get("/config/agents", service.ListAgents)
 		r.Get("/config/harnesses", service.ListHarnesses)
+		r.Get("/harnesses/speckit/catalog", service.ListSpecKitCatalog)
 		r.Get("/config/executors", service.ListExecutors)
 		r.Post("/diagnostic/launch", service.LaunchDiagnostic)
 		r.Post("/diagnostic/launch-suite", service.LaunchDiagnosticSuite)
