@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { HarnessConfigPanel } from '../../components/launcher/HarnessConfigPanel';
 import type { HarnessConfigValue } from '../../components/launcher/HarnessConfigPanel';
+import { validateMultiAgentConfig } from '../../components/launcher/multiagent-validate';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardHeader } from '../../components/ui/card';
@@ -14,7 +15,7 @@ import {
   useModels,
   useTasks,
 } from '../../lib/hooks';
-import type { ExecutorInfo, ModelConfig } from '../../lib/types';
+import type { ExecutorInfo, ModelConfig, MultiAgentConfig } from '../../lib/types';
 import { countExperiments, expandLaunchMatrix } from './launch-matrix';
 
 const DEFAULT_RUNS_PER_VARIANT = 5;
@@ -160,10 +161,16 @@ export function DiagnosticLaunchPage() {
   const agentInstructionsContent =
     (harnessConfigs.agent_instructions as { content?: string } | undefined)?.content?.trim() ?? '';
   const agentInstructionsReady = !needsAgentInstructions || agentInstructionsContent.length > 0;
+
+  const needsMultiAgent = selectedHarnesses.includes('multiagent');
+  const multiagentConfig = harnessConfigs.multiagent as MultiAgentConfig | undefined;
+  const multiagentReady = !needsMultiAgent || validateMultiAgentConfig(multiagentConfig);
+
   const canSubmit =
     taskIDs.length > 0
     && variants.length > 0
     && agentInstructionsReady
+    && multiagentReady
     && !launch.isPending;
 
   const handleLaunch = async () => {
@@ -453,6 +460,8 @@ export function DiagnosticLaunchPage() {
                 ? 'Pick a variant'
                 : !agentInstructionsReady
                 ? 'Type agent instructions'
+                : !multiagentReady
+                ? 'Configure multiagent roles'
                 : taskIDs.length === 1
                 ? `Launch · ${taskIDs.length} task`
                 : `Launch suite · ${taskIDs.length} tasks`}
@@ -594,6 +603,7 @@ function VariantPreview({ variants }: { variants: Variant[] }) {
 function harnessDisplayName(id: string, fallback: string): string {
   const overrides: Record<string, string> = {
     agent_instructions: 'Agent instructions',
+    multiagent: 'Multi-agent',
   };
   if (overrides[id]) return overrides[id];
   return fallback;
