@@ -131,6 +131,8 @@ export type Experiment = {
   estimated_cost_usd?: number;
   created_at: string;
   variants?: Variant[];
+  batch_id?: string;
+  batch_label?: string;
 };
 
 export type Run = {
@@ -289,10 +291,33 @@ export type LaunchDiagnosticRequest = {
   runs_per_variant?: number;
   timeout_seconds?: number;
   name?: string;
+  batch_id?: string;
+  batch_label?: string;
 };
 
 export type LaunchDiagnosticResponse = {
   experiment_id: string;
+};
+
+export type LaunchDiagnosticSuiteRequest = {
+  task_ids: string[];
+  executor_id: string;
+  harness_ids: string[];
+  model?: string;
+  runs_per_variant?: number;
+  timeout_seconds?: number;
+  batch_label?: string;
+};
+
+export type SuiteLaunchFailure = {
+  task_id: string;
+  message: string;
+};
+
+export type LaunchDiagnosticSuiteResponse = {
+  batch_id: string;
+  experiment_ids: string[];
+  failures?: SuiteLaunchFailure[];
 };
 
 export type APIKey = {

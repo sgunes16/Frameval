@@ -13,6 +13,8 @@ import type {
   HarnessInfo,
   LaunchDiagnosticRequest,
   LaunchDiagnosticResponse,
+  LaunchDiagnosticSuiteRequest,
+  LaunchDiagnosticSuiteResponse,
   LLMSettings,
   ModelConfig,
   ParsedTurn,
@@ -275,6 +277,18 @@ export function useLaunchDiagnostic() {
   return useMutation({
     mutationFn: (payload: LaunchDiagnosticRequest) =>
       api.post<LaunchDiagnosticResponse>('/diagnostic/launch', payload),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['experiments'] });
+      client.invalidateQueries({ queryKey: ['runs'] });
+    },
+  });
+}
+
+export function useLaunchDiagnosticSuite() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: LaunchDiagnosticSuiteRequest) =>
+      api.post<LaunchDiagnosticSuiteResponse>('/diagnostic/launch-suite', payload),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ['experiments'] });
       client.invalidateQueries({ queryKey: ['runs'] });
