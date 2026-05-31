@@ -1,4 +1,5 @@
 import { MultiAgentForm } from './MultiAgentForm';
+import { SpecKitForm } from './SpecKitForm';
 import type { MultiAgentConfig } from '../../lib/types';
 
 export type HarnessConfigValue = Record<string, unknown>;
@@ -29,6 +30,13 @@ export function HarnessConfigPanel({ harnessId, value, onChange }: PanelProps) {
       return (
         <MultiAgentForm
           value={value as MultiAgentConfig | undefined}
+          onChange={(next) => onChange(next as unknown as Record<string, unknown>)}
+        />
+      );
+    case 'speckit':
+      return (
+        <SpecKitForm
+          value={value as { extension_ids?: string[] } | undefined}
           onChange={(next) => onChange(next as unknown as Record<string, unknown>)}
         />
       );
