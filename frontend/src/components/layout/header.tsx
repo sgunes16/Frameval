@@ -2,14 +2,12 @@ import { useLocation } from 'react-router-dom';
 import { ThemeToggle } from './theme-toggle';
 
 const titles: Array<{ match: RegExp; title: string; description: string }> = [
-  { match: /^\/$/, title: 'Dashboard', description: 'Snapshot of your experiments and evaluation artifacts.' },
   { match: /^\/experiments\/[^/]+\/monitor/, title: 'Experiment monitor', description: 'Live progress and logs for the running experiment.' },
   { match: /^\/experiments/, title: 'Experiments', description: 'All runs and variants for this workspace.' },
   { match: /^\/runs\/[^/]+\/inspect/, title: 'Run inspector', description: 'Turn-grouped transcript with per-turn diffs.' },
   { match: /^\/tasks\/new/, title: 'New task', description: 'Add a custom task to the evaluation library.' },
   { match: /^\/tasks\//, title: 'Task detail', description: 'Prompt, tests, and workspace mode.' },
   { match: /^\/tasks/, title: 'Task library', description: 'Reusable evaluation prompts and test suites.' },
-  { match: /^\/artifacts/, title: 'Artifacts', description: 'Context files attached to each variant.' },
   { match: /^\/settings/, title: 'Settings', description: 'API keys, models, agents, and defaults.' },
 ];
 
