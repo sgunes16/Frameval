@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mustafaselman/frameval/engine/internal/builtin/speckit"
 	"github.com/mustafaselman/frameval/engine/pkg/executor"
 	"github.com/mustafaselman/frameval/engine/pkg/harness"
 	"github.com/mustafaselman/frameval/engine/pkg/task"
@@ -24,19 +25,26 @@ const speckitMemoryDir = ".specify/memory"
 // scaffold. Teardown only removes the directory when this flag is true.
 const metadataKeyOwnsSpecify = "speckit.created_by_harness"
 
-// SpecKit runs the canonical spec-kit 4-stage workflow:
-//
-//	/speckit.specify  →  /speckit.plan  →  /speckit.tasks  →  /speckit.implement
-//
-// before each agent invocation, the harness rewrites the prompt to issue the
-// stage's slash command with the task content inlined. Stage transcripts are
-// captured separately and concatenated with `--- Stage: <name> ---` markers
-// so downstream AgentDx fingerprint/symptoms extraction can distinguish them.
+// metadataKeySpecKitExtension stashes the resolved catalog entry on the
+// HarnessRun so Invoke can walk its stages without re-parsing cfg.
+const metadataKeySpecKitExtension = "speckit.extension"
+
+// ErrSpecKitExtensionMissing surfaces when cfg has no extension_id.
+// The launcher's submit gate prevents this in normal flow; the sentinel
+// catches direct API consumers.
+var ErrSpecKitExtensionMissing = errors.New("speckit harness: cfg.speckit.extension_id is empty")
+
+// ErrSpecKitExtensionNotFound surfaces when extension_id doesn't match
+// any catalog entry. Usually a stale id from a deleted entry.
+var ErrSpecKitExtensionNotFound = errors.New("speckit harness: extension_id does not match any catalog entry")
+
+// SpecKit runs a spec-kit extension workflow driven by the catalog entry
+// selected via cfg["speckit"]["extension_id"]. The canonical entry preserves
+// today's 4-stage flow; other entries walk their own stage lists.
 //
 // Setup lays down `.specify/memory/constitution.md` from the task's
 // harness_context bundle if present; if absent, the harness proceeds without
-// a constitution (spec-kit treats it as optional) and emits a hint in the
-// resulting transcript header.
+// a constitution (spec-kit treats it as optional).
 type SpecKit struct{}
 
 // NewSpecKit constructs the SpecKit harness. Stateless; safe to share.
@@ -48,7 +56,12 @@ func (h *SpecKit) Description() string {
 	return "Canonical spec-kit workflow: /speckit.specify → /plan → /tasks → /implement (4 sequential agent calls)"
 }
 
-func (h *SpecKit) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, _ map[string]any) (harness.HarnessRun, error) {
+func (h *SpecKit) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, cfg map[string]any) (harness.HarnessRun, error) {
+	ext, err := extractSpecKitExtension(cfg)
+	if err != nil {
+		return harness.HarnessRun{}, err
+	}
+
 	memoryDir := filepath.Join(ws.Path, speckitMemoryDir)
 	owned := false
 	if _, err := os.Stat(filepath.Join(ws.Path, ".specify")); errors.Is(err, os.ErrNotExist) {
@@ -78,11 +91,14 @@ func (h *SpecKit) Setup(_ context.Context, ws harness.Workspace, t task.Task, b 
 		Task:        t,
 		Workspace:   ws,
 		Budget:      b,
-		Metadata:    map[string]any{metadataKeyOwnsSpecify: owned},
+		Metadata: map[string]any{
+			metadataKeyOwnsSpecify:      owned,
+			metadataKeySpecKitExtension: ext,
+		},
 	}, nil
 }
 
-// speckitStage names the four executable stages in execution order. Each
+// speckitStages names the four executable stages in execution order. Each
 // stage's prompt embeds the task content via stagePrompt().
 var speckitStages = []string{"specify", "plan", "tasks", "implement"}
 
@@ -182,4 +198,25 @@ func (h *SpecKit) Teardown(_ context.Context, run harness.HarnessRun) error {
 		return fmt.Errorf("speckit: teardown remove %s: %w", target, err)
 	}
 	return nil
+}
+
+// extractSpecKitExtension reads and validates cfg["speckit"]["extension_id"],
+// looks up the catalog, and returns the resolved extension.
+func extractSpecKitExtension(cfg map[string]any) (speckit.SpecKitExtension, error) {
+	if cfg == nil {
+		return speckit.SpecKitExtension{}, ErrSpecKitExtensionMissing
+	}
+	sub, ok := cfg["speckit"].(map[string]any)
+	if !ok {
+		return speckit.SpecKitExtension{}, ErrSpecKitExtensionMissing
+	}
+	id, _ := sub["extension_id"].(string)
+	if id == "" {
+		return speckit.SpecKitExtension{}, ErrSpecKitExtensionMissing
+	}
+	ext, ok := speckit.Lookup(id)
+	if !ok {
+		return speckit.SpecKitExtension{}, fmt.Errorf("%w: %q", ErrSpecKitExtensionNotFound, id)
+	}
+	return ext, nil
 }

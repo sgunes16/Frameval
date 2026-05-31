@@ -8,10 +8,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mustafaselman/frameval/engine/internal/builtin/speckit"
 	"github.com/mustafaselman/frameval/engine/pkg/executor"
 	pkgharness "github.com/mustafaselman/frameval/engine/pkg/harness"
 	"github.com/mustafaselman/frameval/engine/pkg/task"
 )
+
+// canonicalCfg is a valid speckit cfg that selects the canonical extension.
+// Used by pre-existing setup/invoke tests that don't care which extension is
+// chosen — they just need Setup to succeed.
+var canonicalCfg = map[string]any{"speckit": map[string]any{"extension_id": "canonical"}}
 
 // recordingExecutor captures every Execute call so tests can assert the
 // per-stage prompt and Stage routing.
@@ -49,7 +55,7 @@ func TestSpecKitSetupCreatesSpecifyDir(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{ID: "fixture"}
 
-	run, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
+	run, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, canonicalCfg)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -75,7 +81,7 @@ func TestSpecKitSetupCopiesConstitutionWhenPresent(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{ID: "fixture", TaskRootPath: root}
 
-	_, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
+	_, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, canonicalCfg)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -93,7 +99,7 @@ func TestSpecKitSetupNoConstitutionIsOK(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{ID: "no-constitution", TaskRootPath: t.TempDir()}
 
-	if _, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil); err != nil {
+	if _, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, canonicalCfg); err != nil {
 		t.Fatalf("Setup should succeed without constitution: %v", err)
 	}
 }
@@ -103,7 +109,7 @@ func TestSpecKitInvokeIssuesFourStages(t *testing.T) {
 	rec := &recordingExecutor{}
 	tk := task.Task{ID: "fixture", TaskPrompt: "build CLI", TechnicalDetail: "use click"}
 	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, canonicalCfg)
 
 	result, err := h.Invoke(context.Background(), run, rec)
 	if err != nil {
@@ -146,7 +152,7 @@ func TestSpecKitInvokeStopsOnStageError(t *testing.T) {
 	rec := &recordingExecutor{retErr: errors.New("stage 2 broken")}
 	tk := task.Task{TaskPrompt: "x"}
 	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, canonicalCfg)
 
 	_, err := h.Invoke(context.Background(), run, rec)
 	if err == nil {
@@ -166,7 +172,7 @@ func TestSpecKitInvokeRespectsContextCancellation(t *testing.T) {
 	fake := &cancellingExecutor{cancel: cancel, callsBeforeCancel: 2, calls: &calls}
 	tk := task.Task{TaskPrompt: "x"}
 	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, canonicalCfg)
 
 	_, err := h.Invoke(ctx, run, fake)
 	if !errors.Is(err, context.Canceled) {
@@ -199,7 +205,7 @@ func (c *cancellingExecutor) Execute(_ context.Context, cfg executor.RunConfig) 
 func TestSpecKitTeardownRemovesOwnedDir(t *testing.T) {
 	h := NewSpecKit()
 	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, nil)
+	run, _ := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, canonicalCfg)
 
 	if err := h.Teardown(context.Background(), run); err != nil {
 		t.Fatalf("Teardown: %v", err)
@@ -216,7 +222,7 @@ func TestSpecKitTeardownPreservesUnownedDir(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(ws.Path, ".specify", "memory"), 0o755); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	run, err := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, nil)
+	run, err := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, canonicalCfg)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -235,5 +241,44 @@ func TestRegistryListsSpecKit(t *testing.T) {
 	r := NewRegistry()
 	if _, err := r.Get("speckit"); err != nil {
 		t.Errorf("expected speckit in default registry: %v", err)
+	}
+}
+
+func TestSpecKitSetupRejectsMissingExtensionID(t *testing.T) {
+	h := NewSpecKit()
+	ws := pkgharness.Workspace{Path: t.TempDir()}
+	cases := []map[string]any{
+		nil,
+		{},
+		{"speckit": map[string]any{}},
+		{"speckit": map[string]any{"extension_id": ""}},
+	}
+	for i, cfg := range cases {
+		if _, err := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, cfg); !errors.Is(err, ErrSpecKitExtensionMissing) {
+			t.Errorf("case %d: got %v want ErrSpecKitExtensionMissing", i, err)
+		}
+	}
+}
+
+func TestSpecKitSetupRejectsUnknownExtensionID(t *testing.T) {
+	h := NewSpecKit()
+	ws := pkgharness.Workspace{Path: t.TempDir()}
+	cfg := map[string]any{"speckit": map[string]any{"extension_id": "does-not-exist"}}
+	if _, err := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, cfg); !errors.Is(err, ErrSpecKitExtensionNotFound) {
+		t.Errorf("got %v want ErrSpecKitExtensionNotFound", err)
+	}
+}
+
+func TestSpecKitSetupAcceptsKnownExtensionID(t *testing.T) {
+	h := NewSpecKit()
+	ws := pkgharness.Workspace{Path: t.TempDir()}
+	cfg := map[string]any{"speckit": map[string]any{"extension_id": "canonical"}}
+	run, err := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, cfg)
+	if err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	ext, ok := run.Metadata["speckit.extension"].(speckit.SpecKitExtension)
+	if !ok || ext.ID != "canonical" {
+		t.Errorf("stashed extension: got %+v ok=%v", run.Metadata["speckit.extension"], ok)
 	}
 }
