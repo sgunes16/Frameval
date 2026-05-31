@@ -313,7 +313,7 @@ export function DiagnosticLaunchPage() {
               {harnesses.map((h) => (
                 <Chip
                   key={h.id}
-                  label={h.name}
+                  label={harnessDisplayName(h.id, h.name)}
                   title={h.description}
                   checked={selectedHarnesses.includes(h.id)}
                   onToggle={() => toggleHarness(h.id)}
@@ -585,4 +585,16 @@ function VariantPreview({ variants }: { variants: Variant[] }) {
       ))}
     </ul>
   );
+}
+
+// Map harness id to a user-facing chip label. The registry's name field is
+// the wire id (e.g. "agent_instructions"); render snake_case ids as Title
+// Case so the launcher chips stay readable. Falls back to the registry-
+// supplied name for harnesses we haven't customized.
+function harnessDisplayName(id: string, fallback: string): string {
+  const overrides: Record<string, string> = {
+    agent_instructions: 'Agent instructions',
+  };
+  if (overrides[id]) return overrides[id];
+  return fallback;
 }
