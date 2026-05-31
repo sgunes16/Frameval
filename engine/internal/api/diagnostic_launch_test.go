@@ -180,8 +180,11 @@ func TestLaunchDiagnosticSuiteRejectsEmptyTaskIDs(t *testing.T) {
 // supplied on a launch request are persisted onto every spawned variant for
 // both the single-task and multi-task (suite) endpoints.
 func TestLaunchDiagnosticPersistsHarnessConfig(t *testing.T) {
+	// Canonical wire shape — matches what the agent_instructions harness's
+	// extractAgentInstructionsContent helper consumes (cfg[key].(map)["content"]).
+	// A flat string at the top level would silently fail the harness at runtime.
 	cfg := map[string]any{
-		"agent_instructions": "follow the rules",
+		"agent_instructions": map[string]any{"content": "# rules\nbe concise"},
 	}
 
 	t.Run("single endpoint", func(t *testing.T) {
@@ -214,9 +217,12 @@ func TestLaunchDiagnosticPersistsHarnessConfig(t *testing.T) {
 		if len(exp.Variants) == 0 {
 			t.Fatal("no variants returned")
 		}
-		got, ok := exp.Variants[0].HarnessConfig["agent_instructions"].(string)
-		if !ok || got != "follow the rules" {
-			t.Fatalf("HarnessConfig: got %v want {agent_instructions: follow the rules}", exp.Variants[0].HarnessConfig)
+		sub, ok := exp.Variants[0].HarnessConfig["agent_instructions"].(map[string]any)
+		if !ok {
+			t.Fatalf("HarnessConfig.agent_instructions: got %v want map", exp.Variants[0].HarnessConfig)
+		}
+		if got, _ := sub["content"].(string); got != "# rules\nbe concise" {
+			t.Fatalf("HarnessConfig.agent_instructions.content: got %q want %q", got, "# rules\nbe concise")
 		}
 	})
 
@@ -253,9 +259,12 @@ func TestLaunchDiagnosticPersistsHarnessConfig(t *testing.T) {
 		if len(exp.Variants) == 0 {
 			t.Fatal("no variants returned")
 		}
-		got, ok := exp.Variants[0].HarnessConfig["agent_instructions"].(string)
-		if !ok || got != "follow the rules" {
-			t.Fatalf("HarnessConfig: got %v want {agent_instructions: follow the rules}", exp.Variants[0].HarnessConfig)
+		sub, ok := exp.Variants[0].HarnessConfig["agent_instructions"].(map[string]any)
+		if !ok {
+			t.Fatalf("HarnessConfig.agent_instructions: got %v want map", exp.Variants[0].HarnessConfig)
+		}
+		if got, _ := sub["content"].(string); got != "# rules\nbe concise" {
+			t.Fatalf("HarnessConfig.agent_instructions.content: got %q want %q", got, "# rules\nbe concise")
 		}
 	})
 }
