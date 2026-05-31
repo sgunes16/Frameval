@@ -259,9 +259,11 @@ export function RunInspectPage() {
           )}
 
           {variant?.harness_config?.agent_instructions != null && (
-            <AgentInstructionsCard
-              content={String((variant.harness_config.agent_instructions as { content?: string }).content ?? '')}
-            />
+            <div className="mt-3">
+              <AgentInstructionsCard
+                content={String((variant.harness_config.agent_instructions as { content?: string }).content ?? '')}
+              />
+            </div>
           )}
 
           <div className="border-t border-border pt-3">
