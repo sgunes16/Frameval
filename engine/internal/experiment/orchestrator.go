@@ -492,13 +492,12 @@ func instructionFilesForHarness(harnessID string) []string {
 		return []string{"CLAUDE.md"}
 	case "speckit":
 		return []string{"AGENTS.md", "constitution.md", "spec.md"}
-	case "multiagent":
-		return []string{"PLAN.md"}
-	case "ralph", "bare":
+	case "ralph", "bare", "multiagent":
 		fallthrough
 	default:
 		// No instruction file injected; the dimension scores ~zero for these,
-		// which is the correct behavior (no context to reference).
+		// which is the correct behavior (no context to reference). multiagent
+		// is a pure sequential-role loop with no on-disk artifact.
 		return nil
 	}
 }
