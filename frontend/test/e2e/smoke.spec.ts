@@ -42,20 +42,8 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('dashboard renders the empty-state CTA', async ({ page }) => {
+test('root redirects to /experiments', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText(/no experiments yet/i)).toBeVisible();
-});
-
-test('clicking "View experiments" navigates to /experiments', async ({ page }) => {
-  await page.goto('/');
-
-  // The dashboard renders three links that resolve to /experiments: the
-  // hero-card CTA at the top of the page, the "View all" link in the
-  // recent-experiments card header, and the empty-state CTA. They all
-  // route to the same place, so any one is a valid target for this nav
-  // smoke test. We pick the hero CTA explicitly (it is the most prominent
-  // user-facing entry point and the one most likely to regress visibly).
-  await page.locator('a[href="/experiments"]', { hasText: /view experiments/i }).first().click();
-  await expect(page).toHaveURL(/\/experiments$/);
+  await page.waitForURL('**/experiments');
+  expect(page.url()).toContain('/experiments');
 });
