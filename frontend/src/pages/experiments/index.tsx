@@ -59,7 +59,7 @@ export function ExperimentsPage() {
     if (el && 'scrollIntoView' in el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [focusBatch, grouped]);
+  }, [focusBatch]);
 
   return (
     <div className="space-y-4">
@@ -204,7 +204,7 @@ function ExperimentRow({ experiment, nested = false }: { experiment: Experiment;
   const cost = experiment.estimated_cost_usd ?? 0;
   return (
     <tr className={`border-t border-border ${nested ? 'bg-bg-elev-1/60' : 'bg-bg-elev-1'} hover:bg-bg-elev-2/60`}>
-      <td className={`px-4 py-3 ${nested ? 'pl-10' : ''}`}>
+      <td className={`px-4 py-3 ${nested ? 'pl-6' : ''}`}>
         <div className="font-medium text-fg">{experiment.name}</div>
         {experiment.description && (
           <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{experiment.description}</div>

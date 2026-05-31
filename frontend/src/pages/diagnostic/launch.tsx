@@ -159,6 +159,14 @@ export function DiagnosticLaunchPage() {
       setPartialError('Pick at least one task.');
       return;
     }
+    if (selectedExecutors.length === 0) {
+      setPartialError('Pick an executor.');
+      return;
+    }
+    if (selectedModels.length === 0) {
+      setPartialError('Pick a model.');
+      return;
+    }
     setPartialError(null);
     const baseFields = {
       executor_id: selectedExecutors[0],
