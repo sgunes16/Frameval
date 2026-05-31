@@ -48,7 +48,7 @@ func (h *SpecKit) Description() string {
 	return "Canonical spec-kit workflow: /speckit.specify → /plan → /tasks → /implement (4 sequential agent calls)"
 }
 
-func (h *SpecKit) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget) (harness.HarnessRun, error) {
+func (h *SpecKit) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, _ map[string]any) (harness.HarnessRun, error) {
 	memoryDir := filepath.Join(ws.Path, speckitMemoryDir)
 	owned := false
 	if _, err := os.Stat(filepath.Join(ws.Path, ".specify")); errors.Is(err, os.ErrNotExist) {

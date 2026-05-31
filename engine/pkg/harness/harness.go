@@ -97,7 +97,7 @@ func MergeConfig(base, override executor.RunConfig) executor.RunConfig {
 // Harness scaffolds an agent run.
 //
 // A Harness describes "how to invoke an executor on a task". Built-in harnesses
-// include bare, claudemd, speckit, ralph, and planner_coder. Third parties
+// include bare, agent_instructions, speckit, ralph, and planner_coder. Third parties
 // implement this interface to plug in their own harness pattern (e.g., a
 // Reflexion variant, a debate workflow, a custom skill bundle) without forking
 // the framework.
@@ -113,8 +113,10 @@ type Harness interface {
 	// Description is a one-line human-readable summary shown in selectors.
 	Description() string
 
-	// Setup prepares the workspace before agent invocation.
-	Setup(ctx context.Context, ws Workspace, t task.Task, budget Budget) (HarnessRun, error)
+	// Setup prepares the workspace before agent invocation. cfg carries
+	// per-variant configuration the launcher supplied, keyed by harness
+	// id. A harness that doesn't need config can ignore it.
+	Setup(ctx context.Context, ws Workspace, t task.Task, budget Budget, cfg map[string]any) (HarnessRun, error)
 
 	// Invoke runs the agent (possibly multiple times). Returns the merged transcript
 	// covering all sub-invocations.

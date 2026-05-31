@@ -53,7 +53,7 @@ func (h *ClaudeMd) Description() string {
 	return "Lay down task harness_context/claudemd.md into the workspace, then run agent with task prompt"
 }
 
-func (h *ClaudeMd) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget) (harness.HarnessRun, error) {
+func (h *ClaudeMd) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, _ map[string]any) (harness.HarnessRun, error) {
 	if t.TaskRootPath == "" {
 		return harness.HarnessRun{}, fmt.Errorf("%w: task has no TaskRootPath", ErrClaudemdSourceMissing)
 	}

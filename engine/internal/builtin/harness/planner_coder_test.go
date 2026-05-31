@@ -56,7 +56,7 @@ func TestPlannerCoderInvokeIssuesTwoCallsInOrder(t *testing.T) {
 		plannerOutput: "## Approach\nuse click\n## Files to change\n- main.py",
 		coderOutput:   "done",
 	}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	result, err := h.Invoke(context.Background(), run, exec)
 	if err != nil {
@@ -106,7 +106,7 @@ func TestPlannerCoderPlannerErrorStillRunsCoder(t *testing.T) {
 	tk := task.Task{TaskPrompt: "x"}
 	wantErr := errors.New("planner crashed")
 	exec := &twoStageExecutor{plannerErr: wantErr, coderOutput: "fallback completed"}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	_, err := h.Invoke(context.Background(), run, exec)
 	if err == nil {
@@ -128,7 +128,7 @@ func TestPlannerCoderContextCancellationAbortsBeforeCoder(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{TaskPrompt: "x"}
 	exec := &twoStageExecutor{plannerErr: context.Canceled}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	_, err := h.Invoke(context.Background(), run, exec)
 	if !errors.Is(err, context.Canceled) {
@@ -145,7 +145,7 @@ func TestPlannerCoderDeadlineExceededAbortsBeforeCoder(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{TaskPrompt: "x"}
 	exec := &twoStageExecutor{plannerErr: context.DeadlineExceeded}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	_, err := h.Invoke(context.Background(), run, exec)
 	if !errors.Is(err, context.DeadlineExceeded) {
@@ -165,7 +165,7 @@ func TestPlannerCoderBothErrorsAreWrapped(t *testing.T) {
 	plannerSentinel := errors.New("planner blew up")
 	coderSentinel := errors.New("coder blew up")
 	exec := &twoStageExecutor{plannerErr: plannerSentinel, coderErr: coderSentinel}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	_, err := h.Invoke(context.Background(), run, exec)
 	if err == nil {

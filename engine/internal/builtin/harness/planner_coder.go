@@ -33,7 +33,7 @@ func (h *PlannerCoder) Description() string {
 	return "Two-role multi-agent: planner emits a written plan, coder implements against it"
 }
 
-func (h *PlannerCoder) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget) (harness.HarnessRun, error) {
+func (h *PlannerCoder) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, _ map[string]any) (harness.HarnessRun, error) {
 	return harness.HarnessRun{
 		HarnessName: h.Name(),
 		Task:        t,

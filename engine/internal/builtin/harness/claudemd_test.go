@@ -44,7 +44,7 @@ func TestClaudeMdSetupCopiesSourceToWorkspace(t *testing.T) {
 	h := NewClaudeMd()
 	tk, ws, want := setupClaudeMdFixture(t, "## CLAUDE.md\nrule: be careful")
 
-	run, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestClaudeMdSetupReturnsErrorWhenSourceMissing(t *testing.T) {
 	tk := task.Task{ID: "fixture", TaskRootPath: t.TempDir()}
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 
-	_, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	_, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 	if !errors.Is(err, ErrClaudemdSourceMissing) {
 		t.Fatalf("expected ErrClaudemdSourceMissing, got %v", err)
 	}
@@ -79,7 +79,7 @@ func TestClaudeMdSetupRefusesToStompExistingFile(t *testing.T) {
 		t.Fatalf("seed existing CLAUDE.md: %v", err)
 	}
 
-	_, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	_, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 	if !errors.Is(err, ErrClaudemdWouldStompExisting) {
 		t.Fatalf("expected ErrClaudemdWouldStompExisting, got %v", err)
 	}
@@ -95,7 +95,7 @@ func TestClaudeMdInvokeForwardsPrompt(t *testing.T) {
 	tk, ws, _ := setupClaudeMdFixture(t, "rules")
 	fake := &fakeExecutor{}
 
-	run, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestClaudeMdInvokeForwardsPrompt(t *testing.T) {
 func TestClaudeMdTeardownRemovesOwnedFile(t *testing.T) {
 	h := NewClaudeMd()
 	tk, ws, _ := setupClaudeMdFixture(t, "x")
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	if err := h.Teardown(context.Background(), run); err != nil {
 		t.Fatalf("Teardown: %v", err)

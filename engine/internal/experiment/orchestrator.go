@@ -224,7 +224,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	hRun, setupErr := harnessImpl.Setup(ctx, harnessWorkspace, *task, pkgharness.Budget{
 		MaxIterations:  3,
 		MaxWallSeconds: experiment.TimeoutSeconds,
-	})
+	}, variant.HarnessConfig)
 	if setupErr != nil {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", fmt.Sprintf("harness setup: %v", setupErr))
 		return setupErr
