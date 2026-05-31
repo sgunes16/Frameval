@@ -35,10 +35,12 @@ func (s *Store) CreateExperiment(ctx context.Context, req models.ExperimentReque
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO experiments (
 			id, name, description, status, task_id, workspace_source_type, local_path, git_url, git_ref, model, agent_cli, execution_mode,
-			runs_per_variant, temperature, timeout_seconds, max_concurrent, judge_model, seed, composite_weights_json
-		) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			runs_per_variant, temperature, timeout_seconds, max_concurrent, judge_model, seed, composite_weights_json,
+			batch_id, batch_label
+		) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, experimentID, req.Name, req.Description, req.TaskID, fallbackExperimentWorkspace(req.WorkspaceSourceType), nullableString(req.LocalPath), nullableString(req.GitURL), nullableString(req.GitRef), req.Model, req.AgentCLI, req.ExecutionMode,
-		req.RunsPerVariant, req.Temperature, req.TimeoutSeconds, req.MaxConcurrent, req.JudgeModel, req.Seed, marshalJSON(weights))
+		req.RunsPerVariant, req.Temperature, req.TimeoutSeconds, req.MaxConcurrent, req.JudgeModel, req.Seed, marshalJSON(weights),
+		nullableString(req.BatchID), nullableString(req.BatchLabel))
 	if err != nil {
 		return nil, fmt.Errorf("insert experiment: %w", err)
 	}
@@ -63,7 +65,8 @@ func (s *Store) ListExperiments(ctx context.Context) ([]models.Experiment, error
 		SELECT id, name, description, status, task_id, workspace_source_type, local_path, git_url, git_ref, model, agent_cli, execution_mode,
 		       runs_per_variant, temperature, timeout_seconds, max_concurrent, judge_model,
 		       seed, estimated_cost_usd, actual_cost_usd, composite_weights_json,
-		       created_at, started_at, completed_at
+		       created_at, started_at, completed_at,
+		       batch_id, batch_label
 		FROM experiments ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -86,7 +89,8 @@ func (s *Store) GetExperiment(ctx context.Context, experimentID string) (*models
 		SELECT id, name, description, status, task_id, workspace_source_type, local_path, git_url, git_ref, model, agent_cli, execution_mode,
 		       runs_per_variant, temperature, timeout_seconds, max_concurrent, judge_model,
 		       seed, estimated_cost_usd, actual_cost_usd, composite_weights_json,
-		       created_at, started_at, completed_at
+		       created_at, started_at, completed_at,
+		       batch_id, batch_label
 		FROM experiments WHERE id = ?
 	`, experimentID)
 	experiment, err := scanExperiment(row)
@@ -199,11 +203,13 @@ func scanExperiment(scanner interface{ Scan(dest ...any) error }) (models.Experi
 	var seed sql.NullInt64
 	var estimated, actual sql.NullFloat64
 	var weightsRaw string
+	var batchID, batchLabel sql.NullString
 	if err := scanner.Scan(
 		&experiment.ID, &experiment.Name, &description, &experiment.Status, &experiment.TaskID, &workspaceSourceType, &localPath, &gitURL, &gitRef, &experiment.Model,
 		&experiment.AgentCLI, &experiment.ExecutionMode, &experiment.RunsPerVariant, &experiment.Temperature,
 		&experiment.TimeoutSeconds, &experiment.MaxConcurrent, &judgeModel, &seed, &estimated, &actual,
 		&weightsRaw, &experiment.CreatedAt, &startedAt, &completedAt,
+		&batchID, &batchLabel,
 	); err != nil {
 		return experiment, fmt.Errorf("scan experiment: %w", err)
 	}
@@ -228,6 +234,8 @@ func scanExperiment(scanner interface{ Scan(dest ...any) error }) (models.Experi
 		experiment.ActualCostUSD = &value
 	}
 	experiment.CompositeWeights = unmarshalJSON(weightsRaw, map[string]float64{"code": 0.3, "judge": 0.3, "process": 0.2, "adherence": 0.2})
+	experiment.BatchID = batchID.String
+	experiment.BatchLabel = batchLabel.String
 	return experiment, nil
 }
 
