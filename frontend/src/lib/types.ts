@@ -361,3 +361,12 @@ export type Rubric = {
   created_at?: string;
   updated_at?: string;
 };
+
+export type MultiAgentRole = {
+  name: string;
+  prompt: string;
+};
+
+export type MultiAgentConfig = {
+  roles: MultiAgentRole[];
+};
