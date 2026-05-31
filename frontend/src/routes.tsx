@@ -1,7 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
-import { DashboardPage } from './pages/dashboard';
-import { ArtifactsPage } from './pages/artifacts';
-import { ArtifactDetailPage } from './pages/artifacts/detail';
+import { Navigate, Routes, Route } from 'react-router-dom';
 import { TasksPage } from './pages/tasks';
 import { TaskDetailPage } from './pages/tasks/detail';
 import { NewTaskPage } from './pages/tasks/new';
@@ -17,9 +14,7 @@ import { RubricsPage } from './pages/rubrics';
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<DashboardPage />} />
-      <Route path="/artifacts" element={<ArtifactsPage />} />
-      <Route path="/artifacts/:id" element={<ArtifactDetailPage />} />
+      <Route path="/" element={<Navigate to="/experiments" replace />} />
       <Route path="/tasks" element={<TasksPage />} />
       <Route path="/tasks/new" element={<NewTaskPage />} />
       <Route path="/tasks/:id" element={<TaskDetailPage />} />
@@ -31,6 +26,7 @@ export function AppRoutes() {
       <Route path="/diagnostic/compare" element={<DiagnosticComparePage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/rubrics" element={<RubricsPage />} />
+      <Route path="*" element={<Navigate to="/experiments" replace />} />
     </Routes>
   );
 }
