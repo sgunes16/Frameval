@@ -25,6 +25,8 @@ type Experiment struct {
 	CreatedAt           string             `json:"created_at"`
 	StartedAt           string             `json:"started_at,omitempty"`
 	CompletedAt         string             `json:"completed_at,omitempty"`
+	BatchID             string             `json:"batch_id,omitempty"`
+	BatchLabel          string             `json:"batch_label,omitempty"`
 	Variants            []Variant          `json:"variants,omitempty"`
 }
 
@@ -72,6 +74,8 @@ type ExperimentRequest struct {
 	Seed                *int               `json:"seed"`
 	CompositeWeights    map[string]float64 `json:"composite_weights"`
 	Variants            []VariantRequest   `json:"variants" validate:"dive"`
+	BatchID             string             `json:"batch_id,omitempty"`
+	BatchLabel          string             `json:"batch_label,omitempty"`
 }
 
 type VariantRequest struct {
