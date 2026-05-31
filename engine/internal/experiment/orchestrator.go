@@ -483,12 +483,12 @@ func filenamesOfOutputs(files []models.OutputFile) []string {
 
 // instructionFilesForHarness maps a harness ID to the canonical filename
 // its Setup step lays down in the workspace. Used by the fingerprint's
-// ContextReferenceRate dimension — without this mapping, every non-claudemd
+// ContextReferenceRate dimension — without this mapping, every non-agent_instructions
 // run scores near zero on that dimension because the extractor only knew
 // to look for CLAUDE.md.
 func instructionFilesForHarness(harnessID string) []string {
 	switch harnessID {
-	case "claudemd":
+	case "agent_instructions":
 		return []string{"CLAUDE.md"}
 	case "speckit":
 		return []string{"AGENTS.md", "constitution.md", "spec.md"}
