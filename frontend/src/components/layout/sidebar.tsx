@@ -12,16 +12,6 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   {
-    to: '/',
-    label: 'Dashboard',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 10v10h14V10" />
-      </svg>
-    ),
-  },
-  {
     to: '/diagnostic/launch',
     label: 'Run diagnostic',
     icon: (
@@ -56,16 +46,6 @@ const navItems: NavItem[] = [
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
         <rect x="4" y="4" width="16" height="16" rx="3" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5" />
-      </svg>
-    ),
-  },
-  {
-    to: '/artifacts',
-    label: 'Artifacts',
-    hint: 'Preview',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7l8-4 8 4M4 7v10l8 4 8-4V7M4 7l8 4 8-4M12 11v10" />
       </svg>
     ),
   },
