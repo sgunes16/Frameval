@@ -13,7 +13,7 @@ import { TurnDiffPanel } from '../../components/run-inspector/TurnDiffPanel';
 import { ErrorState, LoadingSkeleton } from '../../components/system';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
-import { useDiagnostic, useReparseRun, useRun, useRunTurns, useTranscript, useVariants } from '../../lib/hooks';
+import { useDiagnostic, useReparseRun, useRun, useRunTurns, useSpecKitCatalog, useTranscript, useVariants } from '../../lib/hooks';
 import { buildEvidenceByTurn } from '../../lib/symptom-evidence';
 import { buildToolHistogram } from '../../lib/tool-histogram';
 import {
@@ -156,6 +156,9 @@ export function RunInspectPage() {
 
   const run = runQuery.data;
   const variant = variantsQuery.data?.find((v) => v.id === run?.variant_id);
+  const speckitExtensionId = typeof (variant?.harness_config?.speckit as { extension_id?: unknown } | undefined)?.extension_id === 'string'
+    ? (variant!.harness_config!.speckit as { extension_id: string }).extension_id
+    : undefined;
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
@@ -266,6 +269,12 @@ export function RunInspectPage() {
             </div>
           )}
 
+          {speckitExtensionId && (
+            <div className="mt-3">
+              <SpecKitExtensionCard extensionId={speckitExtensionId} />
+            </div>
+          )}
+
           <div className="border-t border-border pt-3">
             <div className="mb-2 text-xs uppercase tracking-wider text-fg-muted">
               Tool usage
@@ -300,6 +309,57 @@ function AgentInstructionsCard({ content }: { content: string }) {
         <pre className="mt-3 max-h-64 overflow-auto rounded-md border border-border bg-bg p-3 font-mono text-xs text-fg">
           {content}
         </pre>
+      )}
+    </Card>
+  );
+}
+
+function SpecKitExtensionCard({ extensionId }: { extensionId: string }) {
+  const [open, setOpen] = useState(true);
+  const query = useSpecKitCatalog();
+  const ext = query.data?.find((e) => e.id === extensionId);
+  if (!ext) {
+    return (
+      <Card>
+        <div className="text-sm font-semibold text-fg">Spec-kit extension</div>
+        <div className="text-xs text-fg-muted">
+          Loading catalog or extension <code className="font-mono">{extensionId}</code> not found.
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-fg">
+            Spec-kit extension
+            {ext.multi_agent && (
+              <span className="rounded-full border border-border bg-bg-elev-2 px-1.5 py-0.5 text-xs uppercase tracking-wider text-fg-subtle">
+                Multi-agent
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-fg-muted">{ext.name} — {ext.description}</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="text-xs text-fg-muted hover:text-fg"
+        >
+          {open ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      {open && (
+        <ol className="mt-3 space-y-1 text-xs text-fg-muted">
+          {ext.stages.map((st, i) => (
+            <li key={st.name} className="font-mono">
+              {i + 1}. {st.name}{' '}
+              <span className="text-fg-subtle">({st.slash_command})</span>
+              {st.role && <span className="ml-2 text-fg-muted">role: {st.role}</span>}
+            </li>
+          ))}
+        </ol>
       )}
     </Card>
   );
