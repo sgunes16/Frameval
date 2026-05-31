@@ -75,3 +75,35 @@ func TestCreateExperimentNullBatchFields(t *testing.T) {
 		t.Fatalf("batch_label should be empty: got %q", created.BatchLabel)
 	}
 }
+
+func TestVariantHarnessConfigRoundTrip(t *testing.T) {
+	store := support.TmpStore(t)
+	seedTaskForExperimentTest(t, store, "task-hc-1")
+
+	exp, err := store.CreateExperiment(context.Background(), models.ExperimentRequest{
+		Name:           "harness-config",
+		TaskID:         "task-hc-1",
+		Model:          "claude",
+		AgentCLI:       "claude",
+		RunsPerVariant: 1,
+		Variants: []models.VariantRequest{
+			{
+				Name:      "bare",
+				HarnessID: "bare",
+				HarnessConfig: map[string]any{
+					"agent_instructions": map[string]any{"content": "rule one"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateExperiment: %v", err)
+	}
+	if len(exp.Variants) != 1 {
+		t.Fatalf("variant count: got %d", len(exp.Variants))
+	}
+	gotCfg, _ := exp.Variants[0].HarnessConfig["agent_instructions"].(map[string]any)
+	if got, _ := gotCfg["content"].(string); got != "rule one" {
+		t.Fatalf("HarnessConfig round-trip: got %q want %q", got, "rule one")
+	}
+}
