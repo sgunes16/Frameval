@@ -27,13 +27,24 @@ if ! git rev-parse --verify --quiet baseline >/dev/null; then
     exit 2
 fi
 
+# Harness-owned files (env-supplied by Frameval orchestrator) — exclude
+# these from scope checks so harness scaffolding (CLAUDE.md, .specify/,
+# specs/, …) doesn't read as agent drift. `${HX[@]+"${HX[@]}"}` is the
+# nounset-safe expansion of a potentially-empty array.
+HX=()
+if [[ -n "${FRAMEVAL_HARNESS_EXCLUDES:-}" ]]; then
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && HX+=("$line")
+  done <<< "$FRAMEVAL_HARNESS_EXCLUDES"
+fi
+
 # Anything tracked-and-modified or staged or newly committed since the
 # baseline tag set by setup.sh. Excludes tests/ because Frameval
 # materializes the truth-set into the workspace right before verification
 # (it's not on disk during the agent's turn). Without the exclusion, the
 # scope check sees tests/* as new untracked files and blames the agent.
-CHANGED=$(git diff --name-only baseline -- ':!tests' ':!tests/**' 2>/dev/null || true)
-UNTRACKED=$(git ls-files --others --exclude-standard -- ':!tests' ':!tests/**' 2>/dev/null || true)
+CHANGED=$(git diff --name-only baseline -- ':!tests' ':!tests/**' ${HX[@]+"${HX[@]}"} 2>/dev/null || true)
+UNTRACKED=$(git ls-files --others --exclude-standard -- ':!tests' ':!tests/**' ${HX[@]+"${HX[@]}"} 2>/dev/null || true)
 ALL_TOUCHED=$(printf "%s\n%s\n" "$CHANGED" "$UNTRACKED" | sed '/^$/d' | sort -u)
 
 EXPECTED="app/user_service.py"
