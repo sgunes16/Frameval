@@ -9,11 +9,11 @@ import {
   useExecutors,
   useHarnesses,
   useLaunchDiagnostic,
-  useLaunchDiagnosticSuite,
   useModels,
   useTasks,
 } from '../../lib/hooks';
 import type { ExecutorInfo, ModelConfig } from '../../lib/types';
+import { countExperiments, expandLaunchMatrix } from './launch-matrix';
 
 const DEFAULT_RUNS_PER_VARIANT = 5;
 const MIN_RUNS_PER_VARIANT = 1;
@@ -57,7 +57,6 @@ export function DiagnosticLaunchPage() {
   const { data: executors = [] } = useExecutors();
   const { data: models = [] } = useModels();
   const launch = useLaunchDiagnostic();
-  const launchSuite = useLaunchDiagnosticSuite();
 
   const initialTask = searchParams.get('task') ?? '';
   const [taskIDs, setTaskIDs] = useState<string[]>(initialTask ? [initialTask] : []);
@@ -132,12 +131,14 @@ export function DiagnosticLaunchPage() {
     return out;
   }, [selectedHarnesses, selectedExecutors, selectedModels, models]);
 
-  const totalExperiments =
-    Math.max(taskIDs.length, 1) *
-    Math.max(selectedHarnesses.length, 1) *
-    Math.max(selectedExecutors.length, 1) *
-    Math.max(selectedModels.length, 1);
-  const totalRuns = totalExperiments * runsPerVariant;
+  // Experiments span the (task × executor × model) cross-product. Harnesses
+  // are intra-experiment variants — they don't multiply the experiment count.
+  const totalExperiments = countExperiments({
+    taskIds: taskIDs,
+    executorIds: selectedExecutors,
+    modelIds: selectedModels,
+  });
+  const totalRuns = totalExperiments * Math.max(selectedHarnesses.length, 1) * runsPerVariant;
 
   const toggleHarness = (id: string) =>
     setSelectedHarnesses((prev) =>
@@ -152,7 +153,7 @@ export function DiagnosticLaunchPage() {
       prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id],
     );
 
-  const canSubmit = taskIDs.length > 0 && variants.length > 0 && !launch.isPending && !launchSuite.isPending;
+  const canSubmit = taskIDs.length > 0 && variants.length > 0 && !launch.isPending;
 
   const handleLaunch = async () => {
     if (taskIDs.length === 0) {
@@ -168,31 +169,56 @@ export function DiagnosticLaunchPage() {
       return;
     }
     setPartialError(null);
-    const baseFields = {
-      executor_id: selectedExecutors[0],
-      harness_ids: selectedHarnesses,
-      model: selectedModels[0],
-      runs_per_variant: runsPerVariant,
-    };
-    if (taskIDs.length === 1) {
+
+    const cells = expandLaunchMatrix({
+      taskIds: taskIDs,
+      executorIds: selectedExecutors,
+      modelIds: selectedModels,
+    });
+
+    // Single cell → one experiment, no batch identity, land on Compare.
+    if (cells.length === 1) {
+      const cell = cells[0];
       const res = await launch.mutateAsync({
-        ...baseFields,
-        task_id: taskIDs[0],
+        task_id: cell.taskId,
+        executor_id: cell.executorId,
+        harness_ids: selectedHarnesses,
+        model: cell.modelId,
+        runs_per_variant: runsPerVariant,
         name: name.trim() || undefined,
       });
       navigate(`/diagnostic/compare?experiment=${res.experiment_id}`);
       return;
     }
-    const res = await launchSuite.mutateAsync({
-      ...baseFields,
-      task_ids: taskIDs,
-      batch_label: suiteLabel.trim() || undefined,
-    });
-    if (res.failures && res.failures.length > 0) {
-      const summary = `Started ${res.experiment_ids.length}/${taskIDs.length}. Failures: ${res.failures.map((f) => f.task_id).join(', ')}`;
-      setPartialError(summary);
+
+    // Multi-cell → client mints the batch identity and fires one
+    // single-launch call per cell in parallel. All cells share batch_id
+    // so the Experiments list groups them under one header.
+    const batchId = crypto.randomUUID();
+    const label = suiteLabel.trim()
+      || `Diagnostic suite · ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+    const results = await Promise.allSettled(cells.map((cell) =>
+      launch.mutateAsync({
+        task_id: cell.taskId,
+        executor_id: cell.executorId,
+        harness_ids: selectedHarnesses,
+        model: cell.modelId,
+        runs_per_variant: runsPerVariant,
+        batch_id: batchId,
+        batch_label: label,
+      }),
+    ));
+    const failures = results
+      .map((r, i) => r.status === 'rejected'
+        ? { cell: cells[i], reason: r.reason instanceof Error ? r.reason.message : String(r.reason) }
+        : null)
+      .filter((x): x is { cell: typeof cells[number]; reason: string } => x !== null);
+    if (failures.length > 0) {
+      setPartialError(
+        `Started ${cells.length - failures.length}/${cells.length}. Failed: ${failures.map((f) => `${f.cell.taskId}/${f.cell.modelId}`).join(', ')}`,
+      );
     }
-    navigate(`/experiments?batch=${res.batch_id}`);
+    navigate(`/experiments?batch=${batchId}`);
   };
 
   return (
@@ -249,7 +275,7 @@ export function DiagnosticLaunchPage() {
                   </li>
                 ))}
               </ul>
-              {taskIDs.length >= 2 && (
+              {totalExperiments >= 2 && (
                 <div className="mt-3">
                   <label className="block text-xs uppercase tracking-wider text-fg-muted">Suite label</label>
                   <Input
@@ -391,14 +417,14 @@ export function DiagnosticLaunchPage() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {(launch.isError || launchSuite.isError || partialError) && (
+            {(launch.isError || partialError) && (
               <div className="max-w-md truncate text-right text-xs text-danger-fg">
                 {partialError ??
                   (launch.error instanceof Error ? launch.error.message : 'Launch failed')}
               </div>
             )}
             <Button onClick={handleLaunch} disabled={!canSubmit} size="lg">
-              {launch.isPending || launchSuite.isPending
+              {launch.isPending
                 ? `Launching…`
                 : taskIDs.length === 0
                 ? 'Pick a task'
