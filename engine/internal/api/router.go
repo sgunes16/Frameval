@@ -123,6 +123,7 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 		r.Get("/config/harnesses", service.ListHarnesses)
 		r.Get("/config/executors", service.ListExecutors)
 		r.Post("/diagnostic/launch", service.LaunchDiagnostic)
+		r.Post("/diagnostic/launch-suite", service.LaunchDiagnosticSuite)
 		r.Get("/config/api-keys", service.ListAPIKeys)
 		r.Post("/config/api-keys", service.UpsertAPIKey)
 		r.Delete("/config/api-keys/{provider}", service.DeleteAPIKey)

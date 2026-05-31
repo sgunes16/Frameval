@@ -65,3 +65,113 @@ func TestLaunchDiagnosticAcceptsBatchPassThrough(t *testing.T) {
 	}
 	_ = models.Experiment{}
 }
+
+func TestLaunchDiagnosticSuiteHappyPath(t *testing.T) {
+	svc := newLaunchTestService(t)
+	// Seed a second task so we can launch 2 in one batch.
+	if _, err := svc.store.DB.ExecContext(context.Background(), `
+		INSERT INTO tasks (id, name, description, category, complexity_score, codebase_type, task_prompt)
+		VALUES ('t-launch-2', 'Second task', 'desc', 'greenfield', 1.0, 'fresh', 'do it')
+	`); err != nil {
+		t.Fatalf("seed second task: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"task_ids":    []string{"t-launch", "t-launch-2"},
+		"executor_id": "opencode",
+		"harness_ids": []string{"bare"},
+		"model":       "anything",
+		"batch_label": "Happy path suite",
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostic/launch-suite", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	svc.LaunchDiagnosticSuite(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status: got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp LaunchDiagnosticSuiteResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.BatchID == "" {
+		t.Fatal("BatchID empty")
+	}
+	if len(resp.ExperimentIDs) != 2 {
+		t.Fatalf("ExperimentIDs: got %d want 2", len(resp.ExperimentIDs))
+	}
+	if len(resp.Failures) != 0 {
+		t.Fatalf("Failures: got %+v want none", resp.Failures)
+	}
+
+	// Both experiments share the batch_id and label.
+	for _, eid := range resp.ExperimentIDs {
+		exp, err := svc.store.GetExperiment(context.Background(), eid)
+		if err != nil {
+			t.Fatalf("fetch %s: %v", eid, err)
+		}
+		if exp.BatchID != resp.BatchID {
+			t.Errorf("exp %s BatchID=%q want %q", eid, exp.BatchID, resp.BatchID)
+		}
+		if exp.BatchLabel != "Happy path suite" {
+			t.Errorf("exp %s BatchLabel=%q want %q", eid, exp.BatchLabel, "Happy path suite")
+		}
+	}
+}
+
+func TestLaunchDiagnosticSuitePartialFailure(t *testing.T) {
+	svc := newLaunchTestService(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"task_ids":    []string{"t-launch", "does-not-exist"},
+		"executor_id": "opencode",
+		"harness_ids": []string{"bare"},
+		"model":       "anything",
+		"batch_label": "Partial",
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostic/launch-suite", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	svc.LaunchDiagnosticSuite(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status: got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp LaunchDiagnosticSuiteResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.ExperimentIDs) != 1 {
+		t.Fatalf("ExperimentIDs: got %d want 1", len(resp.ExperimentIDs))
+	}
+	if len(resp.Failures) != 1 {
+		t.Fatalf("Failures: got %d want 1", len(resp.Failures))
+	}
+	if resp.Failures[0].TaskID != "does-not-exist" {
+		t.Errorf("failure task_id: got %q want %q", resp.Failures[0].TaskID, "does-not-exist")
+	}
+	if resp.BatchID == "" {
+		t.Fatal("BatchID empty")
+	}
+}
+
+func TestLaunchDiagnosticSuiteRejectsEmptyTaskIDs(t *testing.T) {
+	svc := newLaunchTestService(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"task_ids":    []string{},
+		"executor_id": "opencode",
+		"harness_ids": []string{"bare"},
+		"model":       "anything",
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostic/launch-suite", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	svc.LaunchDiagnosticSuite(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status: got %d body=%s want 400", rec.Code, rec.Body.String())
+	}
+}
