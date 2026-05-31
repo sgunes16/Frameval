@@ -85,43 +85,51 @@ export function ExperimentsPage() {
                 <th className="px-4 py-2 text-left font-medium">Experiment</th>
                 <th className="px-4 py-2 text-left font-medium">Status</th>
                 <th className="px-4 py-2 text-left font-medium">Agent · Model</th>
-                <th className="px-4 py-2 text-left font-medium">Variants</th>
-                <th className="px-4 py-2 text-left font-medium">Runs / variant</th>
-                <th className="px-4 py-2 text-left font-medium">Estimated cost</th>
-                <th className="px-4 py-2 text-left font-medium">Created</th>
-                <th className="px-4 py-2 text-right font-medium">Actions</th>
+                <th className="px-4 py-2 text-left font-medium">Runs</th>
+                <th className="px-4 py-2 text-right font-medium">Created</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((experiment) => (
-                <tr key={experiment.id} className="border-t border-border bg-bg-elev-1 hover:bg-bg-elev-2/60">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-fg">{experiment.name}</div>
-                    {experiment.description && (
-                      <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{experiment.description}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={statusTone(experiment.status)}>{statusLabel(experiment.status)}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-fg-muted">
-                    {experiment.agent_cli}
-                    <span className="text-fg-subtle"> · </span>
-                    {experiment.model}
-                  </td>
-                  <td className="px-4 py-3 text-fg-muted">{experiment.variants?.length ?? 0}</td>
-                  <td className="px-4 py-3 text-fg-muted">{experiment.runs_per_variant}</td>
-                  <td className="px-4 py-3 text-fg-muted">{formatCurrency(experiment.estimated_cost_usd)}</td>
-                  <td className="px-4 py-3 text-fg-muted">{formatTimeAgo(experiment.created_at)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Link to={`/experiments/${experiment.id}/monitor`}>
-                      <Button variant="outline" size="sm">
-                        Open
-                      </Button>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((experiment) => {
+                const variantCount = experiment.variants?.length ?? 0;
+                const runsLabel = `${variantCount}v × ${experiment.runs_per_variant}r`;
+                const cost = experiment.estimated_cost_usd ?? 0;
+                return (
+                  <tr key={experiment.id} className="border-t border-border bg-bg-elev-1 hover:bg-bg-elev-2/60">
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-fg">{experiment.name}</div>
+                      {experiment.description && (
+                        <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{experiment.description}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge tone={statusTone(experiment.status)}>{statusLabel(experiment.status)}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-fg-muted">
+                      {experiment.agent_cli}
+                      <span className="text-fg-subtle"> · </span>
+                      {experiment.model}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-fg">{runsLabel}</div>
+                      {cost > 0 && (
+                        <div className="text-xs text-fg-subtle">~{formatCurrency(cost)}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-fg-muted">
+                      <div className="flex items-center justify-end gap-3">
+                        <span>{formatTimeAgo(experiment.created_at)}</span>
+                        <Link
+                          to={`/experiments/${experiment.id}/monitor`}
+                          className="text-fg-muted hover:text-fg"
+                        >
+                          Open →
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </Card>
