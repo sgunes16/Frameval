@@ -16,7 +16,7 @@ type staticHarness struct{ name string }
 
 func (h *staticHarness) Name() string        { return h.name }
 func (h *staticHarness) Description() string { return "stub harness " + h.name }
-func (h *staticHarness) Setup(_ context.Context, _ pkgharness.Workspace, _ pkgtask.Task, _ pkgharness.Budget) (pkgharness.HarnessRun, error) {
+func (h *staticHarness) Setup(_ context.Context, _ pkgharness.Workspace, _ pkgtask.Task, _ pkgharness.Budget, _ map[string]any) (pkgharness.HarnessRun, error) {
 	return pkgharness.HarnessRun{}, nil
 }
 func (h *staticHarness) Invoke(_ context.Context, _ pkgharness.HarnessRun, _ pkgexecutor.AgentExecutor) (*pkgexecutor.RunResult, error) {

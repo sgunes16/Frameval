@@ -41,7 +41,7 @@ func TestBareSetupDoesNotMutateWorkspace(t *testing.T) {
 	b := NewBare()
 	ws := pkgharness.Workspace{Path: "/tmp/ws", TestsDir: "/tmp/tests"}
 	tk := task.Task{ID: "t-1", TaskPrompt: "build a CLI"}
-	run, err := b.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 1})
+	run, err := b.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 1}, nil)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestBareInvokeForwardsPrompt(t *testing.T) {
 	fake := &fakeExecutor{returnTurns: []executor.ParsedTurn{{Role: "assistant", Content: "ok"}}}
 	tk := task.Task{ID: "t-1", TaskPrompt: "do the thing"}
 	ws := pkgharness.Workspace{Path: "/sandbox/ws"}
-	run, _ := b.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := b.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	result, err := b.Invoke(context.Background(), run, fake)
 	if err != nil {
@@ -86,7 +86,7 @@ func TestBareInvokeSurfacesExecutorError(t *testing.T) {
 	wantErr := errors.New("boom")
 	fake := &fakeExecutor{returnError: wantErr}
 	tk := task.Task{TaskPrompt: "x"}
-	run, _ := b.Setup(context.Background(), pkgharness.Workspace{}, tk, pkgharness.Budget{})
+	run, _ := b.Setup(context.Background(), pkgharness.Workspace{}, tk, pkgharness.Budget{}, nil)
 
 	_, err := b.Invoke(context.Background(), run, fake)
 	if !errors.Is(err, wantErr) {
@@ -96,7 +96,7 @@ func TestBareInvokeSurfacesExecutorError(t *testing.T) {
 
 func TestBareTeardownIsNoop(t *testing.T) {
 	b := NewBare()
-	run, _ := b.Setup(context.Background(), pkgharness.Workspace{}, task.Task{}, pkgharness.Budget{})
+	run, _ := b.Setup(context.Background(), pkgharness.Workspace{}, task.Task{}, pkgharness.Budget{}, nil)
 	if err := b.Teardown(context.Background(), run); err != nil {
 		t.Errorf("Teardown should be a no-op, got error %v", err)
 	}

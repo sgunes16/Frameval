@@ -2,7 +2,7 @@
 //
 // Third parties should import engine/pkg/harness to implement their own
 // adapter; this package contains the reference implementations the framework
-// ships with (bare, claudemd, speckit, ralph, planner_coder).
+// ships with (bare, agent_instructions, speckit, ralph, planner_coder).
 package harness
 
 import (
@@ -27,7 +27,7 @@ func (h *Bare) Description() string {
 	return "Single agent invocation with task prompt only — no instruction files, no orchestration"
 }
 
-func (h *Bare) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget) (harness.HarnessRun, error) {
+func (h *Bare) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, _ map[string]any) (harness.HarnessRun, error) {
 	return harness.HarnessRun{
 		HarnessName: h.Name(),
 		Task:        t,

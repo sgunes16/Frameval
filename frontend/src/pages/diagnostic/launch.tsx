@@ -1,5 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { HarnessConfigPanel } from '../../components/launcher/HarnessConfigPanel';
+import type { HarnessConfigValue } from '../../components/launcher/HarnessConfigPanel';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardHeader } from '../../components/ui/card';
@@ -67,6 +69,7 @@ export function DiagnosticLaunchPage() {
   const [runsPerVariant, setRunsPerVariant] = useState(DEFAULT_RUNS_PER_VARIANT);
   const [name, setName] = useState('');
   const [partialError, setPartialError] = useState<string | null>(null);
+  const [harnessConfigs, setHarnessConfigs] = useState<Record<string, HarnessConfigValue>>({});
 
   // opencode is the default — it's the only executor we currently
   // exercise end-to-end (proper tool calling, structured event
@@ -153,7 +156,15 @@ export function DiagnosticLaunchPage() {
       prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id],
     );
 
-  const canSubmit = taskIDs.length > 0 && variants.length > 0 && !launch.isPending;
+  const needsAgentInstructions = selectedHarnesses.includes('agent_instructions');
+  const agentInstructionsContent =
+    (harnessConfigs.agent_instructions as { content?: string } | undefined)?.content?.trim() ?? '';
+  const agentInstructionsReady = !needsAgentInstructions || agentInstructionsContent.length > 0;
+  const canSubmit =
+    taskIDs.length > 0
+    && variants.length > 0
+    && agentInstructionsReady
+    && !launch.isPending;
 
   const handleLaunch = async () => {
     if (taskIDs.length === 0) {
@@ -186,6 +197,7 @@ export function DiagnosticLaunchPage() {
         model: cell.modelId,
         runs_per_variant: runsPerVariant,
         name: name.trim() || undefined,
+        harness_configs: harnessConfigs,
       });
       navigate(`/diagnostic/compare?experiment=${res.experiment_id}`);
       return;
@@ -206,6 +218,7 @@ export function DiagnosticLaunchPage() {
         runs_per_variant: runsPerVariant,
         batch_id: batchId,
         batch_label: label,
+        harness_configs: harnessConfigs,
       }),
     ));
     const failures = results
@@ -300,13 +313,21 @@ export function DiagnosticLaunchPage() {
               {harnesses.map((h) => (
                 <Chip
                   key={h.id}
-                  label={h.id}
+                  label={harnessDisplayName(h.id, h.name)}
                   title={h.description}
                   checked={selectedHarnesses.includes(h.id)}
                   onToggle={() => toggleHarness(h.id)}
                 />
               ))}
             </MatrixGroup>
+            {selectedHarnesses.map((hid) => (
+              <HarnessConfigPanel
+                key={hid}
+                harnessId={hid}
+                value={harnessConfigs[hid]}
+                onChange={(next) => setHarnessConfigs((prev) => ({ ...prev, [hid]: next }))}
+              />
+            ))}
             <MatrixGroup label="Executors" hint="opencode only for now · aider / cursor coming soon">
               {executors.map((e) => {
                 const disabled = isExecutorDisabled(e.id);
@@ -430,6 +451,8 @@ export function DiagnosticLaunchPage() {
                 ? 'Pick a task'
                 : variants.length === 0
                 ? 'Pick a variant'
+                : !agentInstructionsReady
+                ? 'Type agent instructions'
                 : taskIDs.length === 1
                 ? `Launch · ${taskIDs.length} task`
                 : `Launch suite · ${taskIDs.length} tasks`}
@@ -562,4 +585,16 @@ function VariantPreview({ variants }: { variants: Variant[] }) {
       ))}
     </ul>
   );
+}
+
+// Map harness id to a user-facing chip label. The registry's name field is
+// the wire id (e.g. "agent_instructions"); render snake_case ids as Title
+// Case so the launcher chips stay readable. Falls back to the registry-
+// supplied name for harnesses we haven't customized.
+function harnessDisplayName(id: string, fallback: string): string {
+  const overrides: Record<string, string> = {
+    agent_instructions: 'Agent instructions',
+  };
+  if (overrides[id]) return overrides[id];
+  return fallback;
 }

@@ -95,6 +95,7 @@ export type Variant = {
   ordering: number;
   harness_id?: string;
   artifact_versions?: ArtifactVersion[];
+  harness_config?: Record<string, unknown>;
 };
 
 export type ArtifactVersion = {
@@ -293,6 +294,7 @@ export type LaunchDiagnosticRequest = {
   name?: string;
   batch_id?: string;
   batch_label?: string;
+  harness_configs?: Record<string, unknown>;
 };
 
 export type LaunchDiagnosticResponse = {
@@ -307,6 +309,7 @@ export type LaunchDiagnosticSuiteRequest = {
   runs_per_variant?: number;
   timeout_seconds?: number;
   batch_label?: string;
+  harness_configs?: Record<string, unknown>;
 };
 
 export type SuiteLaunchFailure = {

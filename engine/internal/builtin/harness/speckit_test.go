@@ -49,7 +49,7 @@ func TestSpecKitSetupCreatesSpecifyDir(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{ID: "fixture"}
 
-	run, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestSpecKitSetupCopiesConstitutionWhenPresent(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{ID: "fixture", TaskRootPath: root}
 
-	_, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	_, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestSpecKitSetupNoConstitutionIsOK(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	tk := task.Task{ID: "no-constitution", TaskRootPath: t.TempDir()}
 
-	if _, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}); err != nil {
+	if _, err := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil); err != nil {
 		t.Fatalf("Setup should succeed without constitution: %v", err)
 	}
 }
@@ -103,7 +103,7 @@ func TestSpecKitInvokeIssuesFourStages(t *testing.T) {
 	rec := &recordingExecutor{}
 	tk := task.Task{ID: "fixture", TaskPrompt: "build CLI", TechnicalDetail: "use click"}
 	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	result, err := h.Invoke(context.Background(), run, rec)
 	if err != nil {
@@ -146,7 +146,7 @@ func TestSpecKitInvokeStopsOnStageError(t *testing.T) {
 	rec := &recordingExecutor{retErr: errors.New("stage 2 broken")}
 	tk := task.Task{TaskPrompt: "x"}
 	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	_, err := h.Invoke(context.Background(), run, rec)
 	if err == nil {
@@ -166,7 +166,7 @@ func TestSpecKitInvokeRespectsContextCancellation(t *testing.T) {
 	fake := &cancellingExecutor{cancel: cancel, callsBeforeCancel: 2, calls: &calls}
 	tk := task.Task{TaskPrompt: "x"}
 	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{}, nil)
 
 	_, err := h.Invoke(ctx, run, fake)
 	if !errors.Is(err, context.Canceled) {
@@ -199,7 +199,7 @@ func (c *cancellingExecutor) Execute(_ context.Context, cfg executor.RunConfig) 
 func TestSpecKitTeardownRemovesOwnedDir(t *testing.T) {
 	h := NewSpecKit()
 	ws := pkgharness.Workspace{Path: t.TempDir()}
-	run, _ := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{})
+	run, _ := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, nil)
 
 	if err := h.Teardown(context.Background(), run); err != nil {
 		t.Fatalf("Teardown: %v", err)
@@ -216,7 +216,7 @@ func TestSpecKitTeardownPreservesUnownedDir(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(ws.Path, ".specify", "memory"), 0o755); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	run, err := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{})
+	run, err := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, nil)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}

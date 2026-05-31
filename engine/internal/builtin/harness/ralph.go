@@ -51,7 +51,7 @@ func (h *Ralph) Description() string {
 	return "While-loop wrapper around bare invocation; halts on budget, ctx cancel, or no-progress"
 }
 
-func (h *Ralph) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget) (harness.HarnessRun, error) {
+func (h *Ralph) Setup(_ context.Context, ws harness.Workspace, t task.Task, b harness.Budget, _ map[string]any) (harness.HarnessRun, error) {
 	if b.MaxIterations <= 0 {
 		b.MaxIterations = defaultRalphMaxIterations
 	}

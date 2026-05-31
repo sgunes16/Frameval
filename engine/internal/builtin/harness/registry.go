@@ -15,15 +15,15 @@ type Registry struct {
 // NewRegistry constructs a Registry pre-populated with all built-in harnesses.
 //
 // Each AgentDx release ships at minimum the bare harness; additional built-ins
-// (claudemd, speckit, ralph, planner_coder) land in their respective stories
-// and self-register here. Built-in registration failures are programmer errors
-// (a name collision between built-ins indicates the constructor itself is
+// (agent_instructions, speckit, ralph, planner_coder) land in their respective
+// stories and self-register here. Built-in registration failures are programmer
+// errors (a name collision between built-ins indicates the constructor itself is
 // broken) and panic immediately so the engine refuses to start in an
 // inconsistent state.
 func NewRegistry() *Registry {
 	r := &Registry{adapters: map[string]pkgharness.Harness{}}
 	mustRegister(r, NewBare())
-	mustRegister(r, NewClaudeMd())
+	mustRegister(r, NewAgentInstructions())
 	mustRegister(r, NewSpecKit())
 	mustRegister(r, NewRalph())
 	mustRegister(r, NewPlannerCoder())

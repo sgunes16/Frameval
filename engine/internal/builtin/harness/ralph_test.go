@@ -26,7 +26,7 @@ func TestRalphIdentity(t *testing.T) {
 
 func TestRalphSetupAppliesDefaultMaxIterations(t *testing.T) {
 	h := NewRalph()
-	run, err := h.Setup(context.Background(), pkgharness.Workspace{Path: t.TempDir()}, task.Task{}, pkgharness.Budget{})
+	run, err := h.Setup(context.Background(), pkgharness.Workspace{Path: t.TempDir()}, task.Task{}, pkgharness.Budget{}, nil)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestRalphSetupAppliesDefaultMaxIterations(t *testing.T) {
 
 func TestRalphSetupPreservesExplicitMaxIterations(t *testing.T) {
 	h := NewRalph()
-	run, err := h.Setup(context.Background(), pkgharness.Workspace{Path: t.TempDir()}, task.Task{}, pkgharness.Budget{MaxIterations: 3})
+	run, err := h.Setup(context.Background(), pkgharness.Workspace{Path: t.TempDir()}, task.Task{}, pkgharness.Budget{MaxIterations: 3}, nil)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestRalphReachesMaxIterationsWhenProgressing(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	rec := &progressingExecutor{dir: ws.Path}
 	tk := task.Task{TaskPrompt: "fix it"}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 3})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 3}, nil)
 
 	result, err := h.Invoke(context.Background(), run, rec)
 	if err != nil {
@@ -108,7 +108,7 @@ func TestRalphHaltsOnNoProgress(t *testing.T) {
 	rec := &idleExecutor{}
 	tk := task.Task{TaskPrompt: "fix it"}
 	// Use a high MaxIterations so the no-progress detector is what halts us.
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 10})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 10}, nil)
 
 	_, err := h.Invoke(context.Background(), run, rec)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestRalphInvokeRespectsContextCancellation(t *testing.T) {
 	calls := 0
 	rec := &cancellingExecutor{cancel: cancel, callsBeforeCancel: 2, calls: &calls}
 
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 10})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 10}, nil)
 	_, err := h.Invoke(ctx, run, rec)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
@@ -163,7 +163,7 @@ func TestRalphIterationStageTagging(t *testing.T) {
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	rec := &progressingExecutor{dir: ws.Path}
 	tk := task.Task{TaskPrompt: "t"}
-	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 2})
+	run, _ := h.Setup(context.Background(), ws, tk, pkgharness.Budget{MaxIterations: 2}, nil)
 
 	result, _ := h.Invoke(context.Background(), run, rec)
 	if len(result.ParsedTurns) != 2 {

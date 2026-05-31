@@ -12,7 +12,8 @@ import { ToolHistogram } from '../../components/run-inspector/ToolHistogram';
 import { TurnDiffPanel } from '../../components/run-inspector/TurnDiffPanel';
 import { ErrorState, LoadingSkeleton } from '../../components/system';
 import { Button } from '../../components/ui/button';
-import { useDiagnostic, useReparseRun, useRun, useRunTurns, useTranscript } from '../../lib/hooks';
+import { Card } from '../../components/ui/card';
+import { useDiagnostic, useReparseRun, useRun, useRunTurns, useTranscript, useVariants } from '../../lib/hooks';
 import { buildEvidenceByTurn } from '../../lib/symptom-evidence';
 import { buildToolHistogram } from '../../lib/tool-histogram';
 import {
@@ -47,6 +48,7 @@ export function RunInspectPage() {
   const turnsQuery = useRunTurns(id);
   const transcriptQuery = useTranscript(id);
   const diagnosticQuery = useDiagnostic(id);
+  const variantsQuery = useVariants(runQuery.data?.experiment_id);
   // Live-streams run.turn events for the focused run and invalidates
   // the turns + transcript queries on each event. Re-connect on
   // socket drop reconciles missed turns via the next REST refetch.
@@ -153,6 +155,7 @@ export function RunInspectPage() {
   }
 
   const run = runQuery.data;
+  const variant = variantsQuery.data?.find((v) => v.id === run?.variant_id);
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
@@ -255,6 +258,14 @@ export function RunInspectPage() {
             </div>
           )}
 
+          {variant?.harness_config?.agent_instructions != null && (
+            <div className="mt-3">
+              <AgentInstructionsCard
+                content={String((variant.harness_config.agent_instructions as { content?: string }).content ?? '')}
+              />
+            </div>
+          )}
+
           <div className="border-t border-border pt-3">
             <div className="mb-2 text-xs uppercase tracking-wider text-fg-muted">
               Tool usage
@@ -264,5 +275,32 @@ export function RunInspectPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+function AgentInstructionsCard({ content }: { content: string }) {
+  const [open, setOpen] = useState(true);
+  if (!content.trim()) return null;
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-fg">Agent instructions used in this run</div>
+          <div className="text-xs text-fg-muted">Laid down as CLAUDE.md in the workspace before the agent ran.</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="text-xs text-fg-muted hover:text-fg"
+        >
+          {open ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      {open && (
+        <pre className="mt-3 max-h-64 overflow-auto rounded-md border border-border bg-bg p-3 font-mono text-xs text-fg">
+          {content}
+        </pre>
+      )}
+    </Card>
   );
 }
