@@ -38,6 +38,7 @@ type Variant struct {
 	IsControl        bool              `json:"is_control"`
 	Ordering         int               `json:"ordering"`
 	HarnessID        string            `json:"harness_id"`
+	HarnessConfig    map[string]any    `json:"harness_config,omitempty"`
 	ArtifactVersions []ArtifactVersion `json:"artifact_versions,omitempty"`
 }
 
@@ -79,11 +80,12 @@ type ExperimentRequest struct {
 }
 
 type VariantRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	IsControl   bool   `json:"is_control"`
-	Ordering    int    `json:"ordering"`
-	HarnessID   string `json:"harness_id"`
+	Name          string         `json:"name"`
+	Description   string         `json:"description"`
+	IsControl     bool           `json:"is_control"`
+	Ordering      int            `json:"ordering"`
+	HarnessID     string         `json:"harness_id"`
+	HarnessConfig map[string]any `json:"harness_config,omitempty"`
 }
 
 type ArtifactRequest struct {
