@@ -158,8 +158,14 @@ export function DiagnosticLaunchPage() {
   const multiagentReady = !needsMultiAgent || validateMultiAgentConfig(multiagentConfig);
 
   const needsSpecKit = selectedHarnesses.includes('speckit');
-  const speckitReady = !needsSpecKit
-    || ((harnessConfigs.speckit as { extension_ids?: string[] } | undefined)?.extension_ids?.length ?? 0) > 0;
+  // Filter empty-string ids once and reuse — matches the same narrowing
+  // handleLaunch applies, so the preview count, the submit gate, and
+  // the actual launch all agree on whatever an empty entry would mean.
+  const validSpecKitExtensions = needsSpecKit
+    ? ((harnessConfigs.speckit as { extension_ids?: string[] } | undefined)?.extension_ids ?? [])
+        .filter((id) => id.length > 0)
+    : [];
+  const speckitReady = !needsSpecKit || validSpecKitExtensions.length > 0;
 
   // Experiments span the (task × executor × model × speckit-extension) cross-product.
   // Harnesses are intra-experiment variants — they don't multiply the experiment count.
@@ -167,9 +173,7 @@ export function DiagnosticLaunchPage() {
     taskIds: taskIDs,
     executorIds: selectedExecutors,
     modelIds: selectedModels,
-    speckitExtensions: needsSpecKit && (harnessConfigs.speckit as { extension_ids?: string[] } | undefined)?.extension_ids?.length
-      ? (harnessConfigs.speckit as { extension_ids?: string[] }).extension_ids!
-      : [''],
+    speckitExtensions: validSpecKitExtensions.length > 0 ? validSpecKitExtensions : [''],
   });
   const totalRuns = totalExperiments * Math.max(selectedHarnesses.length, 1) * runsPerVariant;
 
