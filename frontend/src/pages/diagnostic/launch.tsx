@@ -13,6 +13,7 @@ import {
   useHarnesses,
   useLaunchDiagnostic,
   useModels,
+  useRefreshOpenCodeModels,
   useTasks,
 } from '../../lib/hooks';
 import type { ExecutorInfo, ModelConfig, MultiAgentConfig } from '../../lib/types';
@@ -59,6 +60,7 @@ export function DiagnosticLaunchPage() {
   const { data: harnesses = [] } = useHarnesses();
   const { data: executors = [] } = useExecutors();
   const { data: models = [] } = useModels();
+  const refreshModels = useRefreshOpenCodeModels();
   const launch = useLaunchDiagnostic();
 
   const initialTask = searchParams.get('task') ?? '';
@@ -389,6 +391,17 @@ export function DiagnosticLaunchPage() {
                   ? 'pick an executor to filter'
                   : `${visibleModels.length} available`
               }
+              headerAction={
+                <button
+                  type="button"
+                  onClick={() => refreshModels.mutate()}
+                  disabled={refreshModels.isPending}
+                  title="Re-run `opencode models` and sync the catalog"
+                  className="text-xs text-fg-muted hover:text-fg disabled:opacity-50"
+                >
+                  {refreshModels.isPending ? 'Refreshing…' : '↻ Refresh'}
+                </button>
+              }
             >
               {visibleModels.length === 0 ? (
                 <span className="text-xs text-fg-subtle">
@@ -531,10 +544,12 @@ function CompactHeader({ title, hint }: { title: string; hint?: string }) {
 function MatrixGroup({
   label,
   hint,
+  headerAction,
   children,
 }: {
   label: string;
   hint?: string;
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -543,7 +558,10 @@ function MatrixGroup({
         <span className="text-xs font-medium uppercase tracking-wider text-fg-muted">
           {label}
         </span>
-        {hint && <span className="text-xs text-fg-subtle">{hint}</span>}
+        <span className="flex items-baseline gap-2">
+          {hint && <span className="text-xs text-fg-subtle">{hint}</span>}
+          {headerAction}
+        </span>
       </div>
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>

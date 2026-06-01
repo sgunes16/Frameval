@@ -49,10 +49,15 @@ type Service struct {
 	harnesses    harnessLookup
 	executors    executorLookup
 	hub          *Hub
+	// modelsRunner runs `opencode models` inside the sandbox image for
+	// on-demand refresh from the launcher. *sandbox.Manager satisfies
+	// the storage.OpenCodeModelsRunner interface; tests can pass any
+	// stub that does.
+	modelsRunner storage.OpenCodeModelsRunner
 }
 
-func NewService(store *storage.Store, orchestrator *experiment.Orchestrator, harnesses *builtinharness.Registry, executors *executor.Registry, hub *Hub) *Service {
-	return &Service{store: store, orchestrator: orchestrator, harnesses: harnesses, executors: executors, hub: hub}
+func NewService(store *storage.Store, orchestrator *experiment.Orchestrator, harnesses *builtinharness.Registry, executors *executor.Registry, hub *Hub, modelsRunner storage.OpenCodeModelsRunner) *Service {
+	return &Service{store: store, orchestrator: orchestrator, harnesses: harnesses, executors: executors, hub: hub, modelsRunner: modelsRunner}
 }
 
 // defaultBodyCap is the largest request body the engine accepts. 1 MiB is
@@ -119,6 +124,7 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 		r.Post("/tasks", service.CreateTask)
 		r.Get("/tasks/{id}", service.GetTask)
 		r.Get("/config/models", service.ListModels)
+		r.Post("/config/models/refresh", service.RefreshOpenCodeModels)
 		r.Get("/config/agents", service.ListAgents)
 		r.Get("/config/harnesses", service.ListHarnesses)
 		r.Get("/harnesses/speckit/catalog", service.ListSpecKitCatalog)
