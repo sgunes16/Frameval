@@ -125,11 +125,18 @@ async def _score_one_dim(
     one failing dim doesn't take down the whole grade.
     """
     try:
+        # 4096 not 512: reasoning models (Minimax M3, DeepSeek R1, OpenAI o3,
+        # Anthropic extended-thinking, etc.) spend most of their output budget
+        # on internal <thinking> tokens before emitting the visible JSON.
+        # Observed empirically: Minimax M3 burns 1011/1024 tokens on
+        # reasoning, leaving 13 for content — instructor then hits
+        # finish_reason='length' on both retries. Non-reasoning models are
+        # unaffected because billing only counts actually-generated tokens.
         verdict: DimensionVerdict = await client.create(
             model=model,
             response_model=DimensionVerdict,
             max_retries=2,
-            max_tokens=512,
+            max_tokens=4096,
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_prompt},
