@@ -54,6 +54,7 @@ func (s *Store) SeedOpenCodeModels(ctx context.Context, runner OpenCodeModelsRun
 		slog.Warn("seed opencode models: RunShell failed", "err", err, "output_prefix", truncate(output, 200))
 		return nil
 	}
+	fresh := make(map[string]struct{})
 	inserted := 0
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
@@ -68,10 +69,50 @@ func (s *Store) SeedOpenCodeModels(ctx context.Context, runner OpenCodeModelsRun
 		if err := s.UpsertModelConfig(ctx, cfg); err != nil {
 			return err
 		}
+		fresh[line] = struct{}{}
 		inserted++
 	}
-	slog.Info("seed opencode models", "count", inserted)
+	// Prune opencode/* rows whose ids are no longer in the fresh list.
+	// Without this, a model that opencode upstream stopped supporting
+	// stays in the dropdown forever and 401s the moment the user picks
+	// it. The prune only runs on a successful RunShell — a transient
+	// failure earlier returns nil with the existing rows intact.
+	pruned, err := s.pruneOrphanOpenCodeModels(ctx, fresh)
+	if err != nil {
+		return err
+	}
+	slog.Info("seed opencode models", "count", inserted, "pruned", pruned)
 	return nil
+}
+
+// pruneOrphanOpenCodeModels removes provider="opencode" rows whose
+// model_id is not in fresh. Returns the number of rows removed.
+func (s *Store) pruneOrphanOpenCodeModels(ctx context.Context, fresh map[string]struct{}) (int, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT model_id FROM model_configs WHERE provider = 'opencode'`)
+	if err != nil {
+		return 0, fmt.Errorf("list opencode model ids: %w", err)
+	}
+	var stale []string
+	for rows.Next() {
+		var id string
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan opencode model id: %w", scanErr)
+		}
+		if _, ok := fresh[id]; !ok {
+			stale = append(stale, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate opencode model ids: %w", err)
+	}
+	for _, id := range stale {
+		if _, err := s.DB.ExecContext(ctx, `DELETE FROM model_configs WHERE provider = 'opencode' AND model_id = ?`, id); err != nil {
+			return 0, fmt.Errorf("delete stale opencode model %q: %w", id, err)
+		}
+	}
+	return len(stale), nil
 }
 
 func truncate(s string, n int) string {
