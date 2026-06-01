@@ -79,6 +79,28 @@ def test_grade_client_init_failure_returns_all_failed():
     assert all("judge_unavailable: no key" in r for r in out["rationales"].values())
 
 
+def test_grade_passes_generous_max_tokens_for_reasoning_models():
+    """Regression: max_tokens must be high enough that reasoning models
+    (Minimax M3, DeepSeek R1, OpenAI o3, etc.) don't burn the entire
+    budget on internal <thinking> tokens and leave the JSON output
+    truncated with finish_reason='length'."""
+    captured: dict[str, int] = {}
+
+    class _CapturingStub:
+        async def create(self, *, model, response_model, max_retries, max_tokens, messages):
+            captured["max_tokens"] = max_tokens
+            return _v(8.0)
+
+    with patch("grader.llm_judge.grader.build_client_with_cleanup", return_value=(_CapturingStub(), _noop_close)):
+        grade(
+            code_grade={}, process_grade={}, task={}, output_files=[], transcript_json=b"",
+            config_override=_proto_rubrics(("foo", "**FOO**")),
+        )
+    assert captured["max_tokens"] >= 4096, (
+        f"max_tokens={captured['max_tokens']} is too tight; reasoning models like Minimax M3 will hit finish_reason='length'"
+    )
+
+
 def test_grade_config_override_beats_env(monkeypatch):
     """Per-call override (e.g., from the engine's JudgeConfig proto) wins
     over env vars in load_config — verified via the captured cfg."""
