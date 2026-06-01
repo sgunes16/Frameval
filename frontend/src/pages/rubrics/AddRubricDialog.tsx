@@ -13,7 +13,7 @@ specific evidence from the output files, test results, or transcript.
 ## Output format
 Return a JSON object with:
 - score: float in [0.0, 10.0]
-- rationale: string up to 600 chars
+- rationale: string up to 2000 chars; aim for the shortest rationale that says everything it needs to — do not pad
 
 ## Calibration
 Most outputs score 4-7. Reserve 8-10 for production-ready work.
