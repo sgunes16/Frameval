@@ -15,6 +15,31 @@ func (s *Service) ListModels(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, models)
 }
 
+// RefreshOpenCodeModels re-runs `opencode models` inside the sandbox and
+// re-syncs the model_configs table — same path the engine takes at boot.
+// Returns the fresh model list so the frontend doesn't have to round-trip
+// a second GET.
+//
+// Best-effort: if the sandbox runner isn't wired (very small test setups
+// like the in-process test stubs may omit it) or the `opencode models`
+// invocation fails inside the sandbox, the handler returns the existing
+// model_configs rather than a 500 — the user sees the dropdown they had
+// before, no worse than no refresh button at all.
+func (s *Service) RefreshOpenCodeModels(w http.ResponseWriter, r *http.Request) {
+	if s.modelsRunner != nil {
+		if err := s.store.SeedOpenCodeModels(r.Context(), s.modelsRunner); err != nil {
+			renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
+			return
+		}
+	}
+	models, err := s.store.ListModelConfigs(r.Context())
+	if err != nil {
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
+		return
+	}
+	JSON(w, http.StatusOK, models)
+}
+
 func (s *Service) ListAgents(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, s.store.ListAgents())
 }

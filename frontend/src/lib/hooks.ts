@@ -243,6 +243,20 @@ export function useModels() {
   return useQuery({ queryKey: ['models'], queryFn: () => api.get<ModelConfig[]>('/config/models') });
 }
 
+// useRefreshOpenCodeModels re-runs `opencode models` inside the sandbox
+// on the server, then refreshes the local ['models'] cache with the
+// returned list. Use this when the user wants to pick up an upstream
+// catalog change without restarting the engine.
+export function useRefreshOpenCodeModels() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<ModelConfig[]>('/config/models/refresh', {}),
+    onSuccess: (fresh) => {
+      client.setQueryData(['models'], fresh);
+    },
+  });
+}
+
 export function useAgents() {
   return useQuery({ queryKey: ['agents'], queryFn: () => api.get<AgentInfo[]>('/config/agents') });
 }

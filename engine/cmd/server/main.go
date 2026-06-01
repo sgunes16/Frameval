@@ -89,7 +89,7 @@ func run() error {
 	graderClient := experiment.NewGraderClient(graderAddr, logger, store)
 	defer func() { _ = graderClient.Close() }()
 	orchestrator := experiment.NewOrchestrator(store, queue, manager, registry, harnessRegistry, graderClient, hub)
-	service := api.NewService(store, orchestrator, harnessRegistry, registry, hub)
+	service := api.NewService(store, orchestrator, harnessRegistry, registry, hub, manager)
 	server := &http.Server{Addr: ":" + port, Handler: api.NewRouter(service, logger)}
 
 	go func() {
