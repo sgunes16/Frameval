@@ -7,11 +7,12 @@ _SHARED_TAIL = """## Output format
 
 Return a JSON object with two fields:
 - score: a float in [0.0, 10.0]
-- rationale: a string up to 600 chars citing specific evidence from the
+- rationale: a string up to 2000 chars citing specific evidence from the
   output files, test results, or transcript. Reference concrete file
   names, function names, line numbers, or specific snippets where
   possible. Generic praise or generic criticism without evidence is a
-  red flag in your own scoring — push yourself to be specific.
+  red flag in your own scoring — push yourself to be specific. Aim for
+  the shortest rationale that says everything it needs to; do not pad.
 
 ## Calibration
 

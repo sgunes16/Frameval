@@ -12,10 +12,16 @@ from grader.llm_judge.prompts import DIMENSION_RUBRICS, render_user_prompt
 logger = logging.getLogger(__name__)
 
 
+# Verbose judges (reasoning models, larger frontier models) routinely
+# produce 800-1500 char rationales when the prompt doesn't pin a strict
+# limit. 600 chars was too tight — instructor's Pydantic validate path
+# rejected the verdict with "string_too_long" and the dim came back as
+# judge_unavailable. 2000 leaves room for a thorough rationale while
+# still bounding storage. The system prompt also asks for ≤2000 chars.
 class DimensionVerdict(BaseModel):
     """One per-dimension LLM call's structured output."""
     score: float = Field(ge=0.0, le=10.0)
-    rationale: str = Field(max_length=600)
+    rationale: str = Field(max_length=2000)
 
 
 def grade(

@@ -79,6 +79,13 @@ def test_grade_client_init_failure_returns_all_failed():
     assert all("judge_unavailable: no key" in r for r in out["rationales"].values())
 
 
+def test_dimension_verdict_accepts_rationales_up_to_2000_chars():
+    """Regression: reasoning models routinely produce 800-1500 char
+    rationales. 600 was too tight (validate failed → judge_unavailable);
+    the floor here is the new 2000 cap."""
+    DimensionVerdict(score=5.0, rationale="x" * 2000)  # no raise
+
+
 def test_grade_passes_generous_max_tokens_for_reasoning_models():
     """Regression: max_tokens must be high enough that reasoning models
     (Minimax M3, DeepSeek R1, OpenAI o3, etc.) don't burn the entire
