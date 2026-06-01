@@ -104,10 +104,20 @@ def build_client_with_cleanup(cfg: LLMClientConfig, *, async_client: bool = Fals
         client_kwargs["base_url"] = cfg.base_url
     # Ollama accepts any non-empty key; OpenRouter / Z.ai / OpenAI require real keys.
     client_kwargs["api_key"] = cfg.api_key or "not-needed"
+    # Mode.JSON instead of instructor's default Mode.TOOLS because OpenRouter
+    # silently routes some paid models to providers that don't accept the
+    # `tool_choice` parameter, returning HTTP 404 "No endpoints found that
+    # support the provided 'tool_choice' value". Mode.JSON sets
+    # response_format={"type": "json_object"} which every provider OpenRouter
+    # fronts (and every other OpenAI-compatible host we ship — Z.ai, Ollama,
+    # OpenAI native) accepts. Slight downside vs Mode.TOOLS on
+    # tool-capable models: schema enforcement is prompt-engineering
+    # (instructor injects the schema into the system message) rather than
+    # API-level. Universal compatibility wins.
     if async_client:
         from openai import AsyncOpenAI
         raw = AsyncOpenAI(**client_kwargs)
-        return instructor.from_openai(raw).chat.completions, raw.close
+        return instructor.from_openai(raw, mode=instructor.Mode.JSON).chat.completions, raw.close
     from openai import OpenAI
     raw = OpenAI(**client_kwargs)
-    return instructor.from_openai(raw).chat.completions, _noop_aclose
+    return instructor.from_openai(raw, mode=instructor.Mode.JSON).chat.completions, _noop_aclose
