@@ -132,7 +132,14 @@ func (h *SpecKit) SandboxPrepCommands(run harness.HarnessRun) []string {
 	}
 	cmds = append(cmds, `specify init --here --ai opencode --script sh --no-git --force --ignore-agent-tools`)
 	if ext.ExtensionName != "" && ext.InstallURL != "" {
-		cmds = append(cmds, fmt.Sprintf(`yes | specify extension add %s --from %q`, ext.ExtensionName, ext.InstallURL))
+		// Single-quote the URL for POSIX shell safety (catalog URLs are plain
+		// HTTPS, no single quotes). `yes |` answers the untrusted-URL
+		// confirmation; the trailing `extension list | grep` makes a silent
+		// no-op install fail the run rather than surfacing only later when the
+		// slash command turns out to be unregistered.
+		cmds = append(cmds, fmt.Sprintf(
+			`yes | specify extension add %s --from '%s' && specify extension list | grep -qi %s`,
+			ext.ExtensionName, ext.InstallURL, ext.ExtensionName))
 	}
 	return cmds
 }
