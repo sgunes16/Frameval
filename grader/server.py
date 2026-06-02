@@ -24,7 +24,6 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
         return grader_pb2.HealthResponse(healthy=True, version=settings.version)
 
     def GradeRun(self, request: grader_pb2.GradeRunRequest, context: grpc.ServicerContext) -> grader_pb2.GradeRunResponse:
-        settings = get_settings()
         output_files = [{"path": f.path, "content": bytes(f.content)} for f in request.output_files]
         task = {
             "id": request.task.id,
