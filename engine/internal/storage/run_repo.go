@@ -123,6 +123,23 @@ func (s *Store) UpdateRunStatus(ctx context.Context, runID string, status string
 	return nil
 }
 
+// CancelPendingRuns marks every not-yet-started run of an experiment as
+// cancelled. Used by CancelExperiment so queued jobs that haven't begun
+// executing skip their work (executeRun early-returns on a cancelled run).
+// Runs already running/grading/terminal are left untouched — the running one
+// is interrupted via its context, the terminal ones keep their outcome.
+func (s *Store) CancelPendingRuns(ctx context.Context, experimentID string) error {
+	_, err := s.DB.ExecContext(ctx, `
+		UPDATE runs SET status = 'cancelled',
+		    completed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+		WHERE experiment_id = ? AND status IN ('pending', 'queued')
+	`, experimentID)
+	if err != nil {
+		return fmt.Errorf("cancel pending runs: %w", err)
+	}
+	return nil
+}
+
 func scanRun(scanner interface{ Scan(dest ...any) error }) (models.Run, error) {
 	var run models.Run
 	var containerID, fingerprint, startedAt, completedAt, errorMessage sql.NullString

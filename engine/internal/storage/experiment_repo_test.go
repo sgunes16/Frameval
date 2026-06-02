@@ -183,3 +183,50 @@ func TestListExperimentsIncludesVariants(t *testing.T) {
 		t.Errorf("variant order/names wrong: %+v", found.Variants)
 	}
 }
+
+func TestCancelPendingRunsLeavesStartedRunsAlone(t *testing.T) {
+	store := support.TmpStore(t)
+	seedTaskForExperimentTest(t, store, "task-cancel")
+	ctx := context.Background()
+
+	exp, err := store.CreateExperiment(ctx, models.ExperimentRequest{
+		Name: "cancel-test", TaskID: "task-cancel", Model: "claude", AgentCLI: "claude", RunsPerVariant: 1,
+		Variants: []models.VariantRequest{
+			{Name: "a", HarnessID: "bare"},
+			{Name: "b", HarnessID: "bare"},
+			{Name: "c", HarnessID: "bare"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateExperiment: %v", err)
+	}
+	if err := store.EnsureRunsForExperiment(ctx, exp.ID); err != nil {
+		t.Fatalf("EnsureRunsForExperiment: %v", err)
+	}
+	runs, err := store.ListRunsByExperiment(ctx, exp.ID)
+	if err != nil || len(runs) != 3 {
+		t.Fatalf("want 3 runs, got %d (err %v)", len(runs), err)
+	}
+	// One in-flight, one finished, one still pending.
+	_ = store.UpdateRunStatus(ctx, runs[0].ID, "running", "")
+	_ = store.UpdateRunStatus(ctx, runs[1].ID, "completed", "")
+
+	if err := store.CancelPendingRuns(ctx, exp.ID); err != nil {
+		t.Fatalf("CancelPendingRuns: %v", err)
+	}
+
+	after, _ := store.ListRunsByExperiment(ctx, exp.ID)
+	got := map[string]string{}
+	for _, r := range after {
+		got[r.ID] = r.Status
+	}
+	if got[runs[0].ID] != "running" {
+		t.Errorf("running run must be untouched, got %q", got[runs[0].ID])
+	}
+	if got[runs[1].ID] != "completed" {
+		t.Errorf("completed run must be untouched, got %q", got[runs[1].ID])
+	}
+	if got[runs[2].ID] != "cancelled" {
+		t.Errorf("pending run must be cancelled, got %q", got[runs[2].ID])
+	}
+}
