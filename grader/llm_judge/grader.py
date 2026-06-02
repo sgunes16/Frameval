@@ -42,7 +42,6 @@ def grade(
         {
             "scores":        {key: float, ...},
             "rationales":    {key: str, ...},
-            "irr_alpha":     0.0,
             "raw_responses": [str, ...],
         }
     """
@@ -109,7 +108,6 @@ async def _grade_async(
         return {
             "scores": scores,
             "rationales": rationales,
-            "irr_alpha": 0.0,
             "raw_responses": raw_responses,
             "user_prompt": user_prompt,
         }
@@ -172,7 +170,6 @@ def _all_dims_failed(reason: str, rubrics: list[tuple[str, str]]) -> dict[str, A
     return {
         "scores": {key: 0.0 for key, _ in rubrics},
         "rationales": {key: f"judge_unavailable: {short}" for key, _ in rubrics},
-        "irr_alpha": 0.0,
         "raw_responses": [f"dim={key};judge_unavailable: {short}" for key, _ in rubrics],
         "user_prompt": "",
     }
