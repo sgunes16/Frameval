@@ -146,6 +146,9 @@ func mergeIterationTranscripts(results []*executor.RunResult) *executor.RunResul
 				turn.Stage = stage
 				merged.ParsedTurns = append(merged.ParsedTurns, turn)
 			}
+			// Each iteration is its own opencode invocation; sum real token/cost.
+			merged.TotalTokens += r.TotalTokens
+			merged.CostUSD += r.CostUSD
 		}
 	}
 	merged.RawOutput = b.String()

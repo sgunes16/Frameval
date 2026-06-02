@@ -194,6 +194,35 @@ func (o *Orchestrator) RegradeRunPayload(ctx context.Context, runID string, task
 	if err != nil {
 		return nil, err
 	}
+	// Engine-side process + harness-adherence + composite (mirror executeRun/RegradeRun).
+	harnessID := "bare"
+	if run, rerr := o.store.GetRun(ctx, runID); rerr == nil {
+		if variant, verr := o.store.GetVariant(ctx, run.VariantID); verr == nil && variant.HarnessID != "" {
+			harnessID = variant.HarnessID
+		}
+	}
+	pm := metrics.Process(transcript.ParsedTurns)
+	grade.ToolCallCount = pm.ToolCallCount
+	grade.ToolErrorRate = pm.ToolErrorRate
+	grade.RanValidation = pm.RanValidation
+	grade.TurnCount = pm.TurnCount
+	if grade.TotalTokens == 0 {
+		grade.TotalTokens = transcript.TotalTokens
+	}
+	if grade.CostUSD == 0 {
+		grade.CostUSD = transcript.CostUSD
+	}
+	adh := metrics.HarnessAdherence(harnessID, transcript.ParsedTurns)
+	grade.HarnessAdherenceScore = adh.Score
+	if b, mErr := json.Marshal(adh.Checks); mErr == nil {
+		grade.HarnessAdherenceJSON = string(b)
+	}
+	grade.TokenEfficiency = 0
+	grade.ContextUtilization = 0
+	grade.IdleTurns = 0
+	grade.PrematureCompletion = false
+	grade.JudgeIRRAlpha = 0
+	grade.CompositeScore = computeComposite(grade)
 	grade.ID = uuid.NewString()
 	grade.RunID = runID
 	grade.GradedAt = time.Now().UTC().Format(time.RFC3339)
@@ -423,7 +452,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		if timedOut {
 			failMsg = fmt.Sprintf("run exceeded wall-clock timeout of %s; agent stalled and the sandbox was cancelled", hRun.Budget.WallTimeout())
 		}
-		transcript := models.Transcript{ID: uuid.NewString(), RunID: run.ID, RawOutput: result.RawOutput, ParsedTurns: result.ParsedTurns, TotalTurns: len(result.ParsedTurns), TotalTokens: len(strings.Fields(result.RawOutput)), CostUSD: 0}
+		transcript := models.Transcript{ID: uuid.NewString(), RunID: run.ID, RawOutput: result.RawOutput, ParsedTurns: result.ParsedTurns, TotalTurns: len(result.ParsedTurns), TotalTokens: result.TotalTokens, CostUSD: result.CostUSD}
 		_ = o.store.SaveTranscript(ctx, transcript)
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", failMsg)
 		o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "failed", "variant_id": run.VariantID})
@@ -438,7 +467,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", fileErr.Error())
 		return fileErr
 	}
-	transcript := models.Transcript{ID: uuid.NewString(), RunID: run.ID, RawOutput: result.RawOutput, ParsedTurns: result.ParsedTurns, TotalTurns: len(result.ParsedTurns), TotalTokens: len(strings.Fields(result.RawOutput)), CostUSD: 0, OutputFiles: outputFiles, FilesystemDiff: o.sandbox.DiffSnapshots(beforeSnapshot, outputFiles), Patch: patch}
+	transcript := models.Transcript{ID: uuid.NewString(), RunID: run.ID, RawOutput: result.RawOutput, ParsedTurns: result.ParsedTurns, TotalTurns: len(result.ParsedTurns), TotalTokens: result.TotalTokens, CostUSD: result.CostUSD, OutputFiles: outputFiles, FilesystemDiff: o.sandbox.DiffSnapshots(beforeSnapshot, outputFiles), Patch: patch}
 	if err := o.store.SaveTranscript(ctx, transcript); err != nil {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", err.Error())
 		return err
@@ -1036,12 +1065,6 @@ func materializeHiddenFiles(workspace string, metadata map[string]any) error {
 
 func isHiddenTest(testCase models.TestCase) bool {
 	return strings.EqualFold(strings.TrimSpace(testCase.Visibility), "hidden")
-}
-
-// recomputeCompositeScore delegates to the single composite formula so the
-// regrade path uses the same blend as the primary grade path.
-func recomputeCompositeScore(grade models.Grade) float64 {
-	return computeComposite(grade)
 }
 
 // speckitVersionOrDefault resolves the spec-kit CLI version: app_settings

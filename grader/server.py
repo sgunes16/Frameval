@@ -52,7 +52,11 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
             ]
         process: dict = {}
         judge_cfg = request.judge_config if request.HasField("judge_config") else None
-        judge_active = settings.enable_llm_judge or judge_cfg is not None
+        # The engine is authoritative: it only sends a JudgeConfig when
+        # app_settings['judge.enabled'] resolves true (see grader_client.judgeEnabled).
+        # Don't fall back to the env default here, or a UI "judge off" would be
+        # silently overridden by FRAMEVAL_ENABLE_LLM_JUDGE.
+        judge_active = judge_cfg is not None
         if judge_active:
             judge = judge_grade(
                 code,
