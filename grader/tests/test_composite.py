@@ -29,3 +29,26 @@ def test_judge_with_n_dims_averages_them():
 def test_judge_empty_scores_treated_as_zero():
     out = compute_composite({"test_pass_rate": 0.0}, {}, judge_grade={"scores": {}})
     assert out == 0.0
+
+def test_judge_unavailable_dim_excluded_from_average():
+    # One dimension's LLM call failed (judge_unavailable sentinel + 0.0 score).
+    # It must NOT count as a real zero — exclude it so a parse/timeout failure
+    # doesn't drag the composite down. Mirrors speckit/tdd-first in exp 47d31451.
+    judge = {
+        "scores": {"best_practices": 8.5, "completeness": 9.0, "correctness": 7.0,
+                   "error_handling": 0.0, "maintainability": 9.2},
+        "rationales": {"best_practices": "ok", "completeness": "ok", "correctness": "ok",
+                       "error_handling": "judge_unavailable: EOF while parsing",
+                       "maintainability": "ok"},
+    }
+    out = compute_composite({"test_pass_rate": 0.0}, {}, judge_grade=judge)
+    # valid mean = (8.5+9+7+9.2)/4 = 8.425; composite = 0*0.3 + 8.425*0.3 = 2.5275
+    assert abs(out - 2.5275) < 0.001
+
+def test_all_judge_dims_unavailable_is_zero():
+    judge = {
+        "scores": {"a": 0.0, "b": 0.0},
+        "rationales": {"a": "judge_unavailable: x", "b": "judge_unavailable: y"},
+    }
+    out = compute_composite({"test_pass_rate": 0.0}, {}, judge_grade=judge)
+    assert out == 0.0

@@ -23,6 +23,17 @@ def compute_composite(
         return round((code_score * 0.6) + (process_score * 0.4), 4)
 
     scores = (judge_grade or {}).get("scores") or {}
-    judge_score = (sum(scores.values()) / len(scores)) if scores else 0.0
+    rationales = (judge_grade or {}).get("rationales") or {}
+    # A dimension whose LLM call failed comes back as 0.0 with a
+    # "judge_unavailable: ..." rationale. That means "couldn't grade", not
+    # "scored zero" — counting it would unfairly drag the composite down,
+    # so drop it from the average. If every dimension failed, fall back to
+    # 0.0 (no usable judge signal), matching the all-dims-failed sentinel.
+    valid = {
+        key: value
+        for key, value in scores.items()
+        if not str(rationales.get(key, "")).startswith("judge_unavailable")
+    }
+    judge_score = (sum(valid.values()) / len(valid)) if valid else 0.0
     adherence_score = float((adherence_grade or {}).get("instruction_compliance", 0.0))
     return round((code_score * 0.3) + (judge_score * 0.3) + (process_score * 0.2) + (adherence_score * 0.2), 4)
