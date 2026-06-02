@@ -1,8 +1,9 @@
 """End-to-end tests for the wordfreq CLI.
 
-The agent's solution lives in ../workspace; tests invoke it as a subprocess
-so they exercise the full CLI surface (arg parsing, exit codes, stderr,
-stdout format) rather than poking at internals.
+The agent's solution (wordfreq.py) lives at the workspace root — the same
+directory the materialized tests/ sits under at run time. Tests invoke it as
+a subprocess so they exercise the full CLI surface (arg parsing, exit codes,
+stderr, stdout format) rather than poking at internals.
 
 Tests must:
   - run from the workspace directory (eval.sh handles cd)
@@ -19,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-WORKSPACE = Path(__file__).resolve().parent.parent / "workspace"
+WORKSPACE = Path(__file__).resolve().parent.parent
 CLI = WORKSPACE / "wordfreq.py"
 
 
