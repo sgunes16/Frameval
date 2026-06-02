@@ -11,9 +11,10 @@ import {
 import { ToolHistogram } from '../../components/run-inspector/ToolHistogram';
 import { TurnDiffPanel } from '../../components/run-inspector/TurnDiffPanel';
 import { ErrorState, LoadingSkeleton } from '../../components/system';
+import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
-import { useDiagnostic, useReparseRun, useRun, useRunTurns, useSpecKitCatalog, useTranscript, useVariants } from '../../lib/hooks';
+import { useDiagnostic, useReparseRun, useRetryRun, useRun, useRunTurns, useSpecKitCatalog, useTranscript, useVariants } from '../../lib/hooks';
 import { buildEvidenceByTurn } from '../../lib/symptom-evidence';
 import { buildToolHistogram } from '../../lib/tool-histogram';
 import {
@@ -39,6 +40,14 @@ import { useTurnStream } from '../../lib/use-turn-stream';
  * back/forward, and copy-link share the exact same view.
  */
 
+const STATUS_TONE: Partial<Record<string, 'success' | 'danger' | 'info' | 'muted' | 'warning' | 'neutral'>> = {
+  completed: 'success',
+  failed: 'danger',
+  running: 'info',
+  cancelled: 'muted',
+  pending: 'warning',
+};
+
 export function RunInspectPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -54,6 +63,7 @@ export function RunInspectPage() {
   // socket drop reconciles missed turns via the next REST refetch.
   const stream = useTurnStream(id);
   const reparse = useReparseRun();
+  const retry = useRetryRun();
 
   const filters = useMemo<TurnFilter[]>(
     () => parseFilterTokens(searchParams.getAll('filter')),
@@ -163,61 +173,100 @@ export function RunInspectPage() {
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
       <header className="rounded-md border border-border bg-bg-elev-1 px-4 py-3">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <div className="text-xs uppercase tracking-wider text-fg-muted">Run</div>
-            <div className="font-mono text-sm text-fg">{id}</div>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          {/* Identity: status + run id + variant name */}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium uppercase tracking-wider text-fg-muted">Run</span>
+              {run && (
+                <Badge tone={STATUS_TONE[run.status] ?? 'neutral'} className="capitalize">
+                  {run.status}
+                </Badge>
+              )}
+              {/*
+                LiveCursor only makes sense while the run is actively
+                producing turns. A terminal run still has the WS connected
+                and lastEventAt populated from the final turn, but rendering
+                "Live" for a finished run would be misleading.
+              */}
+              {run?.status === 'running' && (
+                <LiveCursor
+                  isConnected={stream.isConnected}
+                  lastEventAt={stream.lastEventAt}
+                  turnCount={stream.lastTurnCount}
+                />
+              )}
+            </div>
+            <div className="mt-1 flex items-center gap-2 text-sm">
+              <span className="truncate font-mono text-fg" title={id}>{id}</span>
+              {variant && (
+                <>
+                  <span className="text-fg-muted">·</span>
+                  <span className="truncate font-mono text-xs text-fg-muted" title={variant.name ?? run?.variant_id}>
+                    {variant.name ?? run?.variant_id}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* Actions */}
+          <div className="flex flex-shrink-0 items-center gap-2">
             <InspectorSearch turns={turns} onFocus={setFocusedParentIndex} />
             {/*
-              LiveCursor only makes sense while the run is actively
-              producing turns. A 'completed' / 'failed' run still has
-              the WS connected and lastEventAt populated from the
-              final turn, but rendering "Live" for a finished run
-              would be misleading. Hide it once the run is terminal.
+              Retry re-queues a terminal run (backend resets it to pending and
+              re-executes); the run/runs queries are invalidated so this view
+              flips back to running. Handy for runs that died on a transient —
+              a stalled model, a manually-killed sandbox.
             */}
-            {run?.status === 'running' && (
-              <LiveCursor
-                isConnected={stream.isConnected}
-                lastEventAt={stream.lastEventAt}
-                turnCount={stream.lastTurnCount}
-              />
+            {id && run && (run.status === 'failed' || run.status === 'completed' || run.status === 'cancelled') && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="whitespace-nowrap"
+                disabled={retry.isPending}
+                onClick={() => {
+                  // Retrying a completed run discards its existing grade, so
+                  // guard that case; failed/cancelled runs have nothing to lose.
+                  if (
+                    run.status === 'completed' &&
+                    !window.confirm('This run already completed with a grade. Retrying discards it and re-runs the variant. Continue?')
+                  ) {
+                    return;
+                  }
+                  retry.mutate(id);
+                }}
+                title="Reset this run to pending and run it again"
+              >
+                {retry.isPending ? 'Retrying…' : 'Retry'}
+              </Button>
             )}
             {/*
-              Re-parse rewires the persisted ParsedTurns from raw_output
-              using the latest executor parser. Useful when a parser
-              improvement landed AFTER this run finished — Inspector
-              V2 reads the structured turns, so existing runs need this
-              one-shot refresh to surface filters / histogram / diffs.
-              Only meaningful for terminal runs.
+              Re-parse rewires the persisted ParsedTurns from raw_output using
+              the latest executor parser — useful when a parser improvement
+              landed after this run finished. Only meaningful for terminal runs.
             */}
             {id && run && run.status !== 'running' && (
               <Button
                 size="sm"
                 variant="ghost"
+                className="whitespace-nowrap"
                 disabled={reparse.isPending}
                 onClick={() => reparse.mutate(id)}
                 title="Re-parse the stored raw output with the latest parser"
               >
-                {reparse.isPending ? 'Re-parsing…' : 'Re-parse turns'}
+                {reparse.isPending ? 'Re-parsing…' : 'Re-parse'}
               </Button>
             )}
             {id && (
               <Button
                 size="sm"
                 variant="ghost"
+                className="whitespace-nowrap"
                 onClick={() => navigate(`/runs/${id}/grading`)}
               >
                 View grading →
               </Button>
-            )}
-            {run && (
-              <div className="text-xs text-fg-muted">
-                status: <span className="font-mono text-fg">{run.status}</span>
-                {' · '}
-                variant: <span className="font-mono text-fg">{run.variant_id}</span>
-              </div>
             )}
           </div>
         </div>

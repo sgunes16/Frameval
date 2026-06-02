@@ -295,6 +295,27 @@ export function useReparseRun() {
   });
 }
 
+// useRetryRun re-queues a terminal run for execution. The engine resets it
+// to `pending` and re-runs it; invalidating the run + experiment-run-list
+// queries makes the monitor/inspect views reflect the pending→running flip
+// (useRun then polls until terminal). Useful for runs that failed on a
+// transient (a stalled model, a killed sandbox) rather than a real defect.
+export function useRetryRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) =>
+      api.post<{ queued: boolean }>(`/runs/${runId}/retry`, {}),
+    onSuccess: (_data, runId) => {
+      client.invalidateQueries({ queryKey: ['run', runId] });
+      // ['runs', expId] (monitor) and ['compare-runs', ids] (compare matrix)
+      // are distinct key prefixes — invalidate both so every view that lists
+      // this run reflects the pending→running flip.
+      client.invalidateQueries({ queryKey: ['runs'] });
+      client.invalidateQueries({ queryKey: ['compare-runs'] });
+    },
+  });
+}
+
 export function useLaunchDiagnostic() {
   const client = useQueryClient();
   return useMutation({
