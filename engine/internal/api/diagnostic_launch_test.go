@@ -23,7 +23,7 @@ func newLaunchTestService(t *testing.T) *Service {
 	}
 	return &Service{
 		store:        store,
-		harnesses:    support.NewStaticHarnessRegistry("bare", "ralph"),
+		harnesses:    support.NewStaticHarnessRegistry("bare", "ralph", "speckit"),
 		executors:    support.NewStaticExecutorRegistry("opencode"),
 		orchestrator: support.NewNoopOrchestrator(),
 	}
@@ -267,4 +267,95 @@ func TestLaunchDiagnosticPersistsHarnessConfig(t *testing.T) {
 			t.Fatalf("HarnessConfig.agent_instructions.content: got %q want %q", got, "# rules\nbe concise")
 		}
 	})
+}
+
+func TestLaunchWithVariantsArrayCreatesPerVariantConfig(t *testing.T) {
+	svc := newLaunchTestService(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"task_id":     "t-launch",
+		"executor_id": "opencode",
+		"model":       "anything",
+		"variants": []map[string]any{
+			{"harness_id": "speckit", "name": "speckit/canonical",
+				"harness_config": map[string]any{"speckit": map[string]any{"extension_id": "canonical"}}},
+			{"harness_id": "speckit", "name": "speckit/lite",
+				"harness_config": map[string]any{"speckit": map[string]any{"extension_id": "lite"}}},
+		},
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostic/launch", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	svc.LaunchDiagnostic(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status: got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp LaunchDiagnosticResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	exp, err := svc.store.GetExperiment(context.Background(), resp.ExperimentID)
+	if err != nil {
+		t.Fatalf("fetch experiment: %v", err)
+	}
+	if len(exp.Variants) != 2 {
+		t.Fatalf("variant count: got %d want 2", len(exp.Variants))
+	}
+	// Each variant keeps its own extension_id, AND both are the speckit harness.
+	gotExt := map[string]string{}
+	for _, v := range exp.Variants {
+		if v.HarnessID != "speckit" {
+			t.Errorf("variant %q harness: got %q want speckit", v.Name, v.HarnessID)
+		}
+		sub, _ := v.HarnessConfig["speckit"].(map[string]any)
+		ext, _ := sub["extension_id"].(string)
+		gotExt[v.Name] = ext
+	}
+	if gotExt["speckit/canonical"] != "canonical" || gotExt["speckit/lite"] != "lite" {
+		t.Errorf("per-variant extension_id wrong: %v", gotExt)
+	}
+}
+
+func TestLaunchVariantsRejectsUnknownHarness(t *testing.T) {
+	svc := newLaunchTestService(t)
+	body, _ := json.Marshal(map[string]any{
+		"task_id":     "t-launch",
+		"executor_id": "opencode",
+		"model":       "anything",
+		"variants": []map[string]any{
+			{"harness_id": "does-not-exist", "name": "x"},
+		},
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostic/launch", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	svc.LaunchDiagnostic(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status: got %d want 400 body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestLaunchVariantsEmptyFallsBackToHarnessIds(t *testing.T) {
+	svc := newLaunchTestService(t)
+	body, _ := json.Marshal(map[string]any{
+		"task_id":     "t-launch",
+		"executor_id": "opencode",
+		"model":       "anything",
+		"harness_ids": []string{"bare"},
+		"variants":    []map[string]any{}, // empty → legacy path
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostic/launch", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	svc.LaunchDiagnostic(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status: got %d want 202 body=%s", rec.Code, rec.Body.String())
+	}
+	var resp LaunchDiagnosticResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	exp, _ := svc.store.GetExperiment(context.Background(), resp.ExperimentID)
+	if len(exp.Variants) != 1 || exp.Variants[0].HarnessID != "bare" {
+		t.Errorf("legacy fallback variants wrong: %+v", exp.Variants)
+	}
 }

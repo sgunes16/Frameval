@@ -10,6 +10,17 @@ import (
 	"github.com/mustafaselman/frameval/engine/internal/models"
 )
 
+// LaunchVariant is one explicit intra-experiment variant: a harness with
+// its own per-variant config. Used by the launcher to put N spec-kit
+// extensions (and the other harnesses) into a SINGLE experiment, each
+// carrying its own harness_config, rather than crossing extensions with
+// non-speckit harnesses across separate experiments.
+type LaunchVariant struct {
+	HarnessID     string         `json:"harness_id"`
+	Name          string         `json:"name"`
+	HarnessConfig map[string]any `json:"harness_config,omitempty"`
+}
+
 // LaunchDiagnosticRequest is the shorthand body the frontend launcher posts.
 // It maps 1:1 to creating an experiment with one variant per harness, then
 // starting the experiment in the same call.
@@ -17,16 +28,17 @@ import (
 // Defaults match the AgentDx demo profile: 5 runs per variant (matches the
 // minimum enforced in storage), 600s timeout, 1 max concurrent.
 type LaunchDiagnosticRequest struct {
-	TaskID          string         `json:"task_id"`
-	ExecutorID      string         `json:"executor_id"`
-	HarnessIDs      []string       `json:"harness_ids"`
-	Model           string         `json:"model"`
-	RunsPerVariant  int            `json:"runs_per_variant"`
-	TimeoutSeconds  int            `json:"timeout_seconds"`
-	Name            string         `json:"name"`
-	BatchID         string         `json:"batch_id"`
-	BatchLabel      string         `json:"batch_label"`
-	HarnessConfigs  map[string]any `json:"harness_configs,omitempty"`
+	TaskID         string          `json:"task_id"`
+	ExecutorID     string          `json:"executor_id"`
+	HarnessIDs     []string        `json:"harness_ids"`
+	Model          string          `json:"model"`
+	RunsPerVariant int             `json:"runs_per_variant"`
+	TimeoutSeconds int             `json:"timeout_seconds"`
+	Name           string          `json:"name"`
+	BatchID        string          `json:"batch_id"`
+	BatchLabel     string          `json:"batch_label"`
+	HarnessConfigs map[string]any  `json:"harness_configs,omitempty"`
+	Variants       []LaunchVariant `json:"variants,omitempty"`
 }
 
 // LaunchDiagnosticResponse returns the IDs the frontend needs to navigate
@@ -52,14 +64,25 @@ func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "executor_id is required", nil)
 		return
 	}
-	if len(req.HarnessIDs) == 0 {
-		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "harness_ids must contain at least one harness", nil)
+	useVariants := len(req.Variants) > 0
+	if !useVariants && len(req.HarnessIDs) == 0 {
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "harness_ids or variants required", nil)
 		return
 	}
-	for _, hid := range req.HarnessIDs {
-		if _, err := s.harnesses.Get(hid); err != nil {
-			renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, fmt.Sprintf("unknown harness %q", hid), err)
-			return
+	// Validate every harness id referenced (either path).
+	if useVariants {
+		for _, v := range req.Variants {
+			if _, err := s.harnesses.Get(v.HarnessID); err != nil {
+				renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, fmt.Sprintf("unknown harness %q", v.HarnessID), err)
+				return
+			}
+		}
+	} else {
+		for _, hid := range req.HarnessIDs {
+			if _, err := s.harnesses.Get(hid); err != nil {
+				renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, fmt.Sprintf("unknown harness %q", hid), err)
+				return
+			}
 		}
 	}
 	if _, err := s.executors.Get(req.ExecutorID); err != nil {
@@ -86,21 +109,40 @@ func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 		name = fmt.Sprintf("Diagnostic %s · %s", task.Name, time.Now().UTC().Format("2006-01-02 15:04"))
 	}
 
-	variants := make([]models.VariantRequest, 0, len(req.HarnessIDs))
-	for idx, hid := range req.HarnessIDs {
-		variants = append(variants, models.VariantRequest{
-			Name:          hid,
-			Description:   fmt.Sprintf("Harness: %s", hid),
-			IsControl:     idx == 0,
-			Ordering:      idx,
-			HarnessID:     hid,
-			HarnessConfig: req.HarnessConfigs,
-		})
+	var variants []models.VariantRequest
+	if useVariants {
+		variants = make([]models.VariantRequest, 0, len(req.Variants))
+		for idx, v := range req.Variants {
+			vname := v.Name
+			if vname == "" {
+				vname = v.HarnessID
+			}
+			variants = append(variants, models.VariantRequest{
+				Name:          vname,
+				Description:   fmt.Sprintf("Harness: %s", v.HarnessID),
+				IsControl:     idx == 0,
+				Ordering:      idx,
+				HarnessID:     v.HarnessID,
+				HarnessConfig: v.HarnessConfig,
+			})
+		}
+	} else {
+		variants = make([]models.VariantRequest, 0, len(req.HarnessIDs))
+		for idx, hid := range req.HarnessIDs {
+			variants = append(variants, models.VariantRequest{
+				Name:          hid,
+				Description:   fmt.Sprintf("Harness: %s", hid),
+				IsControl:     idx == 0,
+				Ordering:      idx,
+				HarnessID:     hid,
+				HarnessConfig: req.HarnessConfigs,
+			})
+		}
 	}
 
 	experiment, err := s.store.CreateExperiment(r.Context(), models.ExperimentRequest{
 		Name:           name,
-		Description:    fmt.Sprintf("Diagnostic launcher: %d harness(es), executor=%s", len(req.HarnessIDs), req.ExecutorID),
+		Description:    fmt.Sprintf("Diagnostic launcher: %d variant(s), executor=%s", len(variants), req.ExecutorID),
 		TaskID:         req.TaskID,
 		Model:          req.Model,
 		AgentCLI:       req.ExecutorID,
