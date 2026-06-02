@@ -169,6 +169,29 @@ func (o *Orchestrator) EstimateExperiment(ctx context.Context, experimentID stri
 	return estimate, nil
 }
 
+// invokeWithTimeout runs the harness Invoke under a wall-clock deadline
+// derived from the run's Budget (experiment.TimeoutSeconds). Without this,
+// Invoke's context has no deadline, so a stalled agent process — e.g. a free
+// model that pauses its stream mid-stage — leaves the run in `running`
+// forever and blocks every subsequent run in the experiment (runs are
+// sequential). On timeout the cancelled context propagates to the sandbox's
+// ContainerWait, whose deferred force-remove kills the agent container.
+//
+// timedOut distinguishes our per-run deadline (report a clear timeout) from
+// a parent cancellation (experiment cancel), which should surface as-is.
+func invokeWithTimeout(
+	ctx context.Context,
+	h pkgharness.Harness,
+	hRun pkgharness.HarnessRun,
+	exec executor.AgentExecutor,
+) (result *executor.RunResult, err error, timedOut bool) {
+	invokeCtx, cancel := context.WithTimeout(ctx, hRun.Budget.WallTimeout())
+	defer cancel()
+	result, err = h.Invoke(invokeCtx, hRun, exec)
+	timedOut = err != nil && invokeCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil
+	return result, err, timedOut
+}
+
 func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	run, err := o.store.GetRun(ctx, runID)
 	if err != nil {
@@ -255,7 +278,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 			stream.append(line)
 		},
 	}
-	result, execErr := harnessImpl.Invoke(ctx, hRun, execImpl)
+	result, execErr, timedOut := invokeWithTimeout(ctx, harnessImpl, hRun, execImpl)
 	if tdErr := harnessImpl.Teardown(ctx, hRun); tdErr != nil {
 		o.broadcastRunLog(*experiment, *run, "executor", "harness teardown warning: "+tdErr.Error())
 	}
@@ -269,9 +292,13 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		o.broadcastRunLog(*experiment, *run, "executor", execErr.Error())
 	}
 	if execErr != nil {
+		failMsg := execErr.Error()
+		if timedOut {
+			failMsg = fmt.Sprintf("run exceeded wall-clock timeout of %s; agent stalled and the sandbox was cancelled", hRun.Budget.WallTimeout())
+		}
 		transcript := models.Transcript{ID: uuid.NewString(), RunID: run.ID, RawOutput: result.RawOutput, ParsedTurns: result.ParsedTurns, TotalTurns: len(result.ParsedTurns), TotalTokens: len(strings.Fields(result.RawOutput)), CostUSD: 0}
 		_ = o.store.SaveTranscript(ctx, transcript)
-		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", execErr.Error())
+		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", failMsg)
 		o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "failed", "variant_id": run.VariantID})
 		return execErr
 	}
