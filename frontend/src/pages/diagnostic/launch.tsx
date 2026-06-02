@@ -16,7 +16,8 @@ import {
   useRefreshOpenCodeModels,
   useTasks,
 } from '../../lib/hooks';
-import type { ExecutorInfo, ModelConfig, MultiAgentConfig } from '../../lib/types';
+import type { ExecutorInfo, LaunchVariant, ModelConfig, MultiAgentConfig } from '../../lib/types';
+import { buildLaunchVariants } from './build-variants';
 import { countExperiments, expandLaunchMatrix } from './launch-matrix';
 
 const DEFAULT_RUNS_PER_VARIANT = 5;
@@ -33,13 +34,6 @@ function allowedProvidersFor(executorId: string): string[] {
     default:
       return [];
   }
-}
-
-interface Variant {
-  harness: string;
-  executor: string;
-  model: string;
-  modelDisplay: string;
 }
 
 /**
@@ -116,27 +110,6 @@ export function DiagnosticLaunchPage() {
     );
   }, [visibleModels]);
 
-  const variants = useMemo<Variant[]>(() => {
-    const out: Variant[] = [];
-    for (const h of selectedHarnesses) {
-      for (const eid of selectedExecutors) {
-        const allowed = new Set(allowedProvidersFor(eid));
-        for (const mid of selectedModels) {
-          const model = models.find((m) => m.model_id === mid);
-          if (!model) continue;
-          if (allowed.size > 0 && !allowed.has(model.provider)) continue;
-          out.push({
-            harness: h,
-            executor: eid,
-            model: mid,
-            modelDisplay: model.display_name,
-          });
-        }
-      }
-    }
-    return out;
-  }, [selectedHarnesses, selectedExecutors, selectedModels, models]);
-
   const toggleHarness = (id: string) =>
     setSelectedHarnesses((prev) =>
       prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id],
@@ -169,19 +142,27 @@ export function DiagnosticLaunchPage() {
     : [];
   const speckitReady = !needsSpecKit || validSpecKitExtensions.length > 0;
 
-  // Experiments span the (task × executor × model × speckit-extension) cross-product.
-  // Harnesses are intra-experiment variants — they don't multiply the experiment count.
+  // The intra-experiment variant list — the same for every experiment
+  // the matrix produces. Non-speckit harnesses → 1 each; speckit → 1 per
+  // selected extension. Executor/model are cross-experiment axes, not
+  // part of this list.
+  const experimentVariants = useMemo<LaunchVariant[]>(
+    () => buildLaunchVariants(selectedHarnesses, harnessConfigs, validSpecKitExtensions),
+    [selectedHarnesses, harnessConfigs, validSpecKitExtensions],
+  );
+
+  // Experiments span the (task × executor × model) cross-product.
+  // Harnesses and speckit extensions are intra-experiment variants.
   const totalExperiments = countExperiments({
     taskIds: taskIDs,
     executorIds: selectedExecutors,
     modelIds: selectedModels,
-    speckitExtensions: validSpecKitExtensions.length > 0 ? validSpecKitExtensions : [''],
   });
-  const totalRuns = totalExperiments * Math.max(selectedHarnesses.length, 1) * runsPerVariant;
+  const totalRuns = totalExperiments * experimentVariants.length * runsPerVariant;
 
   const canSubmit =
     taskIDs.length > 0
-    && variants.length > 0
+    && experimentVariants.length > 0
     && agentInstructionsReady
     && multiagentReady
     && speckitReady
@@ -202,74 +183,55 @@ export function DiagnosticLaunchPage() {
     }
     setPartialError(null);
 
-    const speckitConfig = harnessConfigs.speckit as { extension_ids?: string[] } | undefined;
-    const selectedExtensions = selectedHarnesses.includes('speckit')
-      ? (speckitConfig?.extension_ids ?? []).filter((id) => id.length > 0)
-      : [''];
-    const speckitAxis = selectedExtensions.length > 0 ? selectedExtensions : [''];
-
     const cells = expandLaunchMatrix({
       taskIds: taskIDs,
       executorIds: selectedExecutors,
       modelIds: selectedModels,
-      speckitExtensions: speckitAxis,
     });
+    const variants = buildLaunchVariants(selectedHarnesses, harnessConfigs, validSpecKitExtensions);
+    if (variants.length === 0) {
+      setPartialError('Pick at least one harness (and a spec-kit extension if spec-kit is selected).');
+      return;
+    }
 
-    // Single cell → one experiment, no batch identity, land on Compare.
+    // Single cell → one experiment, no batch, land on Compare.
     if (cells.length === 1) {
       const cell = cells[0];
-      const cellConfigs: Record<string, unknown> = { ...harnessConfigs };
-      if (cell.speckitExtension) {
-        cellConfigs.speckit = { extension_id: cell.speckitExtension };
-      } else if ('speckit' in cellConfigs) {
-        delete cellConfigs.speckit;
-      }
       const res = await launch.mutateAsync({
         task_id: cell.taskId,
         executor_id: cell.executorId,
-        harness_ids: selectedHarnesses,
         model: cell.modelId,
         runs_per_variant: runsPerVariant,
         name: name.trim() || undefined,
-        harness_configs: cellConfigs,
+        variants,
       });
       navigate(`/diagnostic/compare?experiment=${res.experiment_id}`);
       return;
     }
 
-    // Multi-cell → client mints the batch identity and fires one
-    // single-launch call per cell in parallel. All cells share batch_id
-    // so the Experiments list groups them under one header.
+    // Multi-cell → batch the experiments; every experiment gets the same
+    // variant list.
     const batchId = crypto.randomUUID();
     const label = suiteLabel.trim()
       || `Diagnostic suite · ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
-    const results = await Promise.allSettled(cells.map((cell) => {
-      const cellConfigs: Record<string, unknown> = { ...harnessConfigs };
-      if (cell.speckitExtension) {
-        cellConfigs.speckit = { extension_id: cell.speckitExtension };
-      } else if ('speckit' in cellConfigs) {
-        delete cellConfigs.speckit;
-      }
-      return launch.mutateAsync({
+    const results = await Promise.allSettled(cells.map((cell) =>
+      launch.mutateAsync({
         task_id: cell.taskId,
         executor_id: cell.executorId,
-        harness_ids: selectedHarnesses,
         model: cell.modelId,
         runs_per_variant: runsPerVariant,
         batch_id: batchId,
         batch_label: label,
-        harness_configs: cellConfigs,
-      });
-    }));
+        variants,
+      }),
+    ));
     const failures = results
       .map((r, i) => r.status === 'rejected'
         ? { cell: cells[i], reason: r.reason instanceof Error ? r.reason.message : String(r.reason) }
         : null)
       .filter((x): x is { cell: typeof cells[number]; reason: string } => x !== null);
     if (failures.length > 0) {
-      setPartialError(
-        `Started ${cells.length - failures.length}/${cells.length}. Failed: ${failures.map((f) => `${f.cell.taskId}/${f.cell.modelId}`).join(', ')}`,
-      );
+      setPartialError(`Started ${cells.length - failures.length}/${cells.length}. Failed: ${failures.map((f) => f.cell.taskId).join(', ')}`);
     }
     navigate(`/experiments?batch=${batchId}`);
   };
@@ -435,7 +397,7 @@ export function DiagnosticLaunchPage() {
             title="Preview"
             hint={`${totalExperiments} experiment${totalExperiments === 1 ? '' : 's'} × ${runsPerVariant} runs each`}
           />
-          <VariantPreview variants={variants} />
+          <VariantPreview variants={experimentVariants} />
         </Card>
         <Card className="lg:col-span-5">
           <CompactHeader title="Sample size" hint={`${runsPerVariant} runs / variant`} />
@@ -500,7 +462,7 @@ export function DiagnosticLaunchPage() {
                 ? `Launching…`
                 : taskIDs.length === 0
                 ? 'Pick a task'
-                : variants.length === 0
+                : experimentVariants.length === 0
                 ? 'Pick a variant'
                 : !agentInstructionsReady
                 ? 'Type agent instructions'
@@ -618,11 +580,11 @@ function Chip({ label, title, checked, onToggle, disabled, badge }: ChipProps) {
   );
 }
 
-function VariantPreview({ variants }: { variants: Variant[] }) {
+function VariantPreview({ variants }: { variants: LaunchVariant[] }) {
   if (variants.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-3 text-center text-xs text-fg-muted">
-        No valid variants yet. Tick at least one harness, executor, and model.
+        No variants yet. Tick at least one harness (and a spec-kit extension if spec-kit is on).
       </div>
     );
   }
@@ -630,17 +592,13 @@ function VariantPreview({ variants }: { variants: Variant[] }) {
     <ul className="max-h-56 space-y-0.5 overflow-auto rounded-md border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs">
       {variants.map((v, i) => (
         <li
-          key={`${v.harness}-${v.executor}-${v.model}-${i}`}
+          key={`${v.name}-${i}`}
           className="flex items-baseline gap-2 px-1 py-0.5 leading-5"
         >
           <span className="w-6 select-none text-right text-fg-subtle">
             {String(i + 1).padStart(2, '0')}
           </span>
-          <span className="text-fg">{v.harness}</span>
-          <span className="text-fg-subtle">·</span>
-          <span className="text-fg">{v.executor}</span>
-          <span className="text-fg-subtle">·</span>
-          <span className="truncate text-fg-muted">{v.modelDisplay}</span>
+          <span className="text-fg">{v.name}</span>
         </li>
       ))}
     </ul>
