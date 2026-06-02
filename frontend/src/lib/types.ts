@@ -284,6 +284,12 @@ export type ExecutorInfo = {
   modes: string[];
 };
 
+export type LaunchVariant = {
+  harness_id: string;
+  name: string;
+  harness_config?: Record<string, unknown>;
+};
+
 export type LaunchDiagnosticRequest = {
   task_id: string;
   executor_id: string;
@@ -295,6 +301,7 @@ export type LaunchDiagnosticRequest = {
   batch_id?: string;
   batch_label?: string;
   harness_configs?: Record<string, unknown>;
+  variants?: LaunchVariant[];
 };
 
 export type LaunchDiagnosticResponse = {
