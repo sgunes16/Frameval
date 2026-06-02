@@ -18,6 +18,11 @@ import (
 // spec-kit, and naming the grading files leads thorough planning
 // workflows to recreate them at the workspace root (false scope drift)
 // and leaks trap answers. See the brownfield-* task.yaml rewrites.
+//
+// Scope: this guard only catches truth-set test *filenames*. Prose that
+// describes grading mechanics without a filename (e.g. "the reset test
+// mocks time via freeze_time") is a softer leak the regex won't catch —
+// task authors must still keep technical_details implementer-facing.
 var truthSetTestRefRE = regexp.MustCompile(`\btest_[A-Za-z0-9_]*\.(py|sh)\b`)
 
 // TestSeedBuiltinTasksRecordsTaskRootPath pins the fix for the

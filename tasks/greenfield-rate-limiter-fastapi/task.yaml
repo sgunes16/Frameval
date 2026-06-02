@@ -33,12 +33,12 @@ task_prompt: |
     - Do not start a uvicorn server in module scope; tests instantiate
       a TestClient against `app`.
 technical_details: |
-  - Tests instantiate `app` from `app.py` (workspace root) and inject
-    X-Forwarded-For via TestClient headers.
-  - The window reset test mocks time via `freezegun.freeze_time` so it
-    completes deterministically and quickly (no real sleeps).
-  - Response shapes are strict: success body keys exactly {"data"};
-    429 body keys exactly {"error"}.
+  - Client IP comes from the X-Forwarded-For header; limiting is per-IP, so
+    two different X-Forwarded-For values must have independent budgets.
+  - The 60-second window is wall-clock based: once it elapses, a previously
+    throttled client can succeed again (request 11 succeeds after refill).
+  - Response bodies are strict: success is exactly {"data": ...}; a throttled
+    request returns HTTP 429 with exactly {"error": ...}.
 test_cases:
   - name: First 10 requests return 200
     test_command: pytest -q tests/test_rate_limit.py::test_first_10_ok
