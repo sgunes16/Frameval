@@ -620,14 +620,17 @@ func (o *Orchestrator) persistDiagnostic(
 		Recovery:    recovery,
 	}
 
-	// LLM classifier is opt-in via FRAMEVAL_ENABLE_LLM_JUDGE=true (set in .env).
-	// Until then we persist deterministic stages only and leave failure_label NULL.
-	if os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE") == "true" {
+	// LLM classifier runs when judge is enabled (resolved via app_settings →
+	// FRAMEVAL_ENABLE_LLM_JUDGE env → false). Model is resolved via the same
+	// precedence as the judge: app_settings['judge.model'] → FRAMEVAL_LLM_MODEL
+	// → "claude-haiku-4-5".
+	if judgeEnabled(ctx, o.store) {
 		tail := transcript.RawOutput
 		if len(tail) > 4000 {
 			tail = tail[len(tail)-4000:]
 		}
-		clsResult := o.grader.ClassifyFailure(ctx, run.ID, symptoms, taskRec.Description, tail, "claude-haiku-4-5")
+		classifierModel := resolveClassifierModel(ctx, o.store)
+		clsResult := o.grader.ClassifyFailure(ctx, run.ID, symptoms, taskRec.Description, tail, classifierModel)
 		if clsResult.Classification.Confidence > 0 {
 			label := clsResult.Classification
 			rec.FailureLabel = &label

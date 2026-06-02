@@ -377,6 +377,54 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 // together; if AgentDx ever needs aggregate stats again, they belong in
 // engine/pkg/diagnostic where they can compose with the fingerprint vector.
 
+// judgeEnabled reports whether LLM judging/classification is on.
+//
+// Precedence (highest to lowest):
+//  1. app_settings['judge.enabled'] — authoritative when set to "true" or "false"
+//  2. FRAMEVAL_ENABLE_LLM_JUDGE env var — fallback when the SQLite row is absent
+//  3. false — safe default
+//
+// Both buildJudgeConfig and persistDiagnostic call this so the two paths
+// can never silently diverge.
+func judgeEnabled(ctx context.Context, store SettingsStore) bool {
+	if store == nil {
+		return os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE") == "true"
+	}
+	settings, err := store.GetSettingsByPrefix(ctx, "judge.")
+	if err != nil {
+		// Settings lookup failed — fall back to env.
+		return os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE") == "true"
+	}
+	if val, ok := settings["judge.enabled"]; ok {
+		// SQLite row is authoritative regardless of env.
+		return val == "true"
+	}
+	// Key absent in SQLite — fall through to env.
+	return os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE") == "true"
+}
+
+// resolveClassifierModel returns the LLM model to use for failure
+// classification.
+//
+// Precedence (highest to lowest):
+//  1. app_settings['judge.model']
+//  2. FRAMEVAL_LLM_MODEL env var
+//  3. "claude-haiku-4-5" — hardcoded fallback
+func resolveClassifierModel(ctx context.Context, store SettingsStore) string {
+	if store != nil {
+		settings, err := store.GetSettingsByPrefix(ctx, "judge.")
+		if err == nil {
+			if m := settings["judge.model"]; m != "" {
+				return m
+			}
+		}
+	}
+	if m := os.Getenv("FRAMEVAL_LLM_MODEL"); m != "" {
+		return m
+	}
+	return "claude-haiku-4-5"
+}
+
 // buildJudgeConfig returns a JudgeConfig proto reflecting current SQLite
 // state. Returns nil when judge is disabled or the settings store is
 // missing — the grader treats a nil JudgeConfig as "use grader-side env
@@ -385,12 +433,12 @@ func (c *GraderClient) buildJudgeConfig(ctx context.Context) *graderpb.JudgeConf
 	if c.settings == nil {
 		return nil
 	}
+	if !judgeEnabled(ctx, c.settings) {
+		return nil
+	}
 	settings, err := c.settings.GetSettingsByPrefix(ctx, "judge.")
 	if err != nil {
 		c.logger.Warn("buildJudgeConfig: settings lookup failed", "err", err)
-		return nil
-	}
-	if settings["judge.enabled"] != "true" {
 		return nil
 	}
 	provider := settings["judge.provider"]
