@@ -29,17 +29,15 @@ task_prompt: |
 
   The app uses FastAPI + asyncio. The fix should be an asyncio-friendly lock.
 technical_details: |
-  - Workspace is initialized as a git repo by setup.sh so scope-discipline can
-    diff against the baseline commit.
-  - Tests use httpx.AsyncClient + ASGITransport against the in-process app;
-    no live uvicorn needed.
-  - 100 concurrent +1 requests against user_id=1 must result in final
-    credits == 100 (test_race_fixed).
-  - Response shape for GET /users/{id} must remain `{"id": int, "name": str,
-    "credits": int}` (test_api_unchanged).
-  - `git diff --name-only baseline` (baseline tag set by setup.sh) must
-    list only `app/user_service.py`; untracked files also count as drift
-    (test_scope.sh).
+  - The bug is a read-modify-write on user credits that yields across an
+    `await` boundary without a lock; the fix must make concurrent increments
+    atomic using an asyncio-friendly lock (not a thread lock).
+  - 100 concurrent +1 requests against a single user starting at 0 must end
+    with credits == 100 — no lost updates under load.
+  - The GET /users/{id} response shape must stay `{"id": int, "name": str,
+    "credits": int}`.
+  - Confine the change to app/user_service.py; do not add or modify other
+    files.
 test_cases:
   - name: 100 concurrent +1s result in 100 credits
     test_command: pytest -q tests/test_race_fixed.py

@@ -21,15 +21,10 @@ task_prompt: |
 
   The project uses Pydantic 2.x — check pyproject.toml.
 technical_details: |
-  - workspace/pyproject.toml pins pydantic ^2.7.
-  - test_validator_works.py constructs User with bad and good email,
-    asserts ValidationError on bad.
-  - test_imports_v2_api.py greps app/models.py for:
-      * MUST contain `from pydantic import field_validator` OR
-        `from pydantic import field_validator, ...`
-      * MUST NOT contain `from pydantic import validator` or
-        `from pydantic import .*validator(?!_)`
-  - test_scope.sh: only app/models.py may change.
+  - workspace/pyproject.toml pins pydantic ^2.7; honor the pinned major version.
+  - The validator must reject email strings that lack an `@` and raise
+    ValueError("invalid email"); well-formed addresses must pass through unchanged.
+  - This is a single targeted change: confine it to app/models.py.
 test_cases:
   - name: Validator rejects invalid emails
     test_command: pytest -q tests/test_validator_works.py

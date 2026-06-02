@@ -19,10 +19,27 @@ def compute_composite(
     code_score = float(code_grade.get("test_pass_rate", 0.0)) * 10
     process_score = compute_process_score(process_grade)
 
-    if judge_grade is None and adherence_grade is None:
+    scores = (judge_grade or {}).get("scores") or {}
+    rationales = (judge_grade or {}).get("rationales") or {}
+    # A dimension whose LLM call failed comes back as 0.0 with a
+    # "judge_unavailable: ..." rationale. That means "couldn't grade", not
+    # "scored zero" — counting it would unfairly drag the composite down,
+    # so drop it from the average.
+    valid = {
+        key: value
+        for key, value in scores.items()
+        if not str(rationales.get(key, "")).startswith("judge_unavailable")
+    }
+    judge_score = (sum(valid.values()) / len(valid)) if valid else None
+
+    has_judge = judge_score is not None
+    has_adherence = adherence_grade is not None
+    # No usable judge signal (judge never ran, returned no scores, or every
+    # dimension failed) and no adherence → grade on code + process only,
+    # rather than penalizing the composite with a phantom zero judge term.
+    if not has_judge and not has_adherence:
         return round((code_score * 0.6) + (process_score * 0.4), 4)
 
-    scores = (judge_grade or {}).get("scores") or {}
-    judge_score = (sum(scores.values()) / len(scores)) if scores else 0.0
+    judge_component = judge_score if has_judge else 0.0
     adherence_score = float((adherence_grade or {}).get("instruction_compliance", 0.0))
-    return round((code_score * 0.3) + (judge_score * 0.3) + (process_score * 0.2) + (adherence_score * 0.2), 4)
+    return round((code_score * 0.3) + (judge_component * 0.3) + (process_score * 0.2) + (adherence_score * 0.2), 4)

@@ -31,18 +31,15 @@ task_prompt: |
   column is present in the schema after migrations run, defaults to
   False, and appears in API responses.
 technical_details: |
-  - workspace/tests/conftest.py creates a fresh sqlite at the start of
-    each test session and runs `alembic upgrade head` against it.
-  - test_migrations_apply.py inspects the sqlite schema post-upgrade
-    and asserts a `verified` column exists with type BOOLEAN and
-    default 0.
-  - test_user_list_response.py serializes a User through the Pydantic
-    schema and checks the dict contains 'verified'.
-  - test_user_creates.py inserts a row with verified=True and reads
-    it back.
-  - test_scope.sh allows app/models.py, app/schemas.py, and any new
-    file under alembic/versions/. Disallows changes to db.py, env.py,
-    main.py, the existing 0001_initial.py migration, alembic.ini.
+  - The database is rebuilt from scratch via `alembic upgrade head`, so a
+    model/schema change alone is invisible at runtime — the column only
+    exists if a migration adds it. The work is complete only when the
+    schema, the SQLAlchemy model, and the Pydantic schema all agree.
+  - The `verified` column is BOOLEAN with a default of False (0); a
+    serialized User must include `verified`.
+  - Allowed to change: app/models.py, app/schemas.py, and new files under
+    alembic/versions/. Do not modify db.py, env.py, main.py, the existing
+    0001_initial.py migration, or alembic.ini.
 test_cases:
   - name: User can be created with verified column
     test_command: pytest -q tests/test_user_creates.py
