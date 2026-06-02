@@ -29,8 +29,8 @@ func TestSpecKitCatalogHandlerReturnsAllEntries(t *testing.T) {
 	}
 	// Stage clipping: the public shape carries name + slash_command + role,
 	// NOT the full prompt template.
-	if len(got[0].Stages) != 4 {
-		t.Errorf("canonical stage count: got %d want 4", len(got[0].Stages))
+	if len(got[0].Stages) != 6 {
+		t.Errorf("canonical stage count: got %d want 6", len(got[0].Stages))
 	}
 	if got[0].Stages[0].SlashCommand != "/speckit.specify" {
 		t.Errorf("first stage slash: got %q", got[0].Stages[0].SlashCommand)

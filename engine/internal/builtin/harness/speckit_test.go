@@ -133,8 +133,8 @@ func TestSpecKitInvokeWalksExtensionStages(t *testing.T) {
 	if len(exec.calls) != 2 {
 		t.Fatalf("call count: got %d want 2", len(exec.calls))
 	}
-	if exec.calls[0].Stage != "specify" || exec.calls[1].Stage != "implement" {
-		t.Errorf("stage order: got %q,%q want specify,implement", exec.calls[0].Stage, exec.calls[1].Stage)
+	if exec.calls[0].Stage != "tinyspec" || exec.calls[1].Stage != "tinyspec-implement" {
+		t.Errorf("stage order: got %q,%q want tinyspec,tinyspec-implement", exec.calls[0].Stage, exec.calls[1].Stage)
 	}
 	if !strings.Contains(exec.calls[0].Prompt, "scaffold") {
 		t.Errorf("specify prompt should contain task content; got %q", exec.calls[0].Prompt)
@@ -255,6 +255,36 @@ func TestSpecKitSetupRejectsMissingExtensionID(t *testing.T) {
 		if _, err := h.Setup(context.Background(), ws, task.Task{}, pkgharness.Budget{}, cfg); !errors.Is(err, ErrSpecKitExtensionMissing) {
 			t.Errorf("case %d: got %v want ErrSpecKitExtensionMissing", i, err)
 		}
+	}
+}
+
+func TestSpecKitSandboxPrepCommands(t *testing.T) {
+	h := NewSpecKit()
+	mk := func(extID, version string) pkgharness.HarnessRun {
+		ws := pkgharness.Workspace{Path: t.TempDir()}
+		cfg := map[string]any{"speckit": map[string]any{"extension_id": extID}}
+		if version != "" {
+			cfg["speckit"].(map[string]any)["version"] = version
+		}
+		run, err := h.Setup(context.Background(), ws, task.Task{TaskPrompt: "x"}, pkgharness.Budget{}, cfg)
+		if err != nil {
+			t.Fatalf("Setup(%s): %v", extID, err)
+		}
+		return run
+	}
+	// canonical: init only (no extension)
+	if got := h.SandboxPrepCommands(mk("canonical", "")); len(got) != 1 || !strings.Contains(got[0], "specify init") {
+		t.Errorf("canonical: want 1 init cmd, got %v", got)
+	}
+	// lite: init + extension add tinyspec
+	got := h.SandboxPrepCommands(mk("lite", ""))
+	if len(got) != 2 || !strings.Contains(got[0], "specify init") || !strings.Contains(got[1], "extension add tinyspec") {
+		t.Errorf("lite: want init + tinyspec add, got %v", got)
+	}
+	// non-default version: prepend uv tool install --force
+	gotv := h.SandboxPrepCommands(mk("lite", "v0.8.0"))
+	if len(gotv) != 3 || !strings.Contains(gotv[0], "uv tool install --force") || !strings.Contains(gotv[0], "v0.8.0") {
+		t.Errorf("versioned: want uv install first, got %v", gotv)
 	}
 }
 

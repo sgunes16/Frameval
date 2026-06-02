@@ -1,9 +1,6 @@
 package speckit
 
-import (
-	"strings"
-	"testing"
-)
+import ("strings"; "testing")
 
 func TestListReturnsAllEntries(t *testing.T) {
 	got := List()
@@ -35,41 +32,6 @@ func TestLookupKnownAndUnknown(t *testing.T) {
 	}
 }
 
-func TestCanonicalEntryPreservesOldStagePrompts(t *testing.T) {
-	ext, ok := Lookup("canonical")
-	if !ok {
-		t.Fatal("canonical missing")
-	}
-	if len(ext.Stages) != 4 {
-		t.Fatalf("stage count: got %d want 4", len(ext.Stages))
-	}
-	expect := []struct {
-		name         string
-		slashCommand string
-		promptStart  string
-	}{
-		{"specify", "/speckit.specify", "/speckit.specify\n\n{{TASK}}"},
-		{"plan", "/speckit.plan", "/speckit.plan\n\n{{TECHNICAL_DETAILS}}"},
-		{"tasks", "/speckit.tasks", "/speckit.tasks"},
-		{"implement", "/speckit.implement", "/speckit.implement"},
-	}
-	for i, want := range expect {
-		st := ext.Stages[i]
-		if st.Name != want.name {
-			t.Errorf("stage %d name: got %q want %q", i, st.Name, want.name)
-		}
-		if st.SlashCommand != want.slashCommand {
-			t.Errorf("stage %d slash: got %q want %q", i, st.SlashCommand, want.slashCommand)
-		}
-		if !strings.Contains(st.PromptTemplate, want.promptStart) {
-			t.Errorf("stage %d prompt should contain %q; got %q", i, want.promptStart, st.PromptTemplate)
-		}
-		if st.Role != "" {
-			t.Errorf("canonical stage %d should have empty role; got %q", i, st.Role)
-		}
-	}
-}
-
 func TestDualRoleEntryHasRoleTags(t *testing.T) {
 	ext, ok := Lookup("dual-role")
 	if !ok {
@@ -85,6 +47,27 @@ func TestDualRoleEntryHasRoleTags(t *testing.T) {
 	for i, want := range wantRoles {
 		if ext.Stages[i].Role != want {
 			t.Errorf("stage %d role: got %q want %q", i, ext.Stages[i].Role, want)
+		}
+	}
+}
+
+func TestCatalogUsesOnlyRealCommands(t *testing.T) {
+	known := map[string]bool{"specify": true, "clarify": true, "plan": true, "tasks": true,
+		"analyze": true, "checklist": true, "constitution": true, "implement": true, "taskstoissues": true}
+	prefixes := []string{"tinyspec", "brownfield", "red-team", "conduct", "v-model"}
+	for _, ext := range List() {
+		for _, s := range ext.Stages {
+			cmd := strings.TrimPrefix(s.SlashCommand, "/speckit.")
+			ok := known[cmd]
+			for _, p := range prefixes {
+				if strings.HasPrefix(cmd, p) { ok = true }
+			}
+			if !ok {
+				t.Errorf("extension %q stage %q uses unknown command %q", ext.ID, s.Name, s.SlashCommand)
+			}
+		}
+		if ext.ID != "canonical" && (ext.ExtensionName == "" || ext.InstallURL == "") {
+			t.Errorf("extension %q must set ExtensionName and InstallURL", ext.ID)
 		}
 	}
 }

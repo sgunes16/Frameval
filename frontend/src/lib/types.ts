@@ -398,3 +398,7 @@ export type SpecKitConfig = {
   // as { speckit: { extension_id } } — one variant per chosen extension.
   extension_id: string;
 };
+
+export interface SpecKitSettings {
+  version: string;
+}

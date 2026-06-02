@@ -29,6 +29,14 @@ const metadataKeyOwnsSpecify = "speckit.created_by_harness"
 // HarnessRun so Invoke can walk its stages without re-parsing cfg.
 const metadataKeySpecKitExtension = "speckit.extension"
 
+// metadataKeySpecKitVersion stashes the resolved spec-kit CLI version on the
+// HarnessRun so SandboxPrepCommands can emit the correct install command.
+const metadataKeySpecKitVersion = "speckit.version"
+
+// defaultSpecKitVersion is the spec-kit CLI version baked into the sandbox
+// image. If the variant requests this exact version, no re-install is needed.
+const defaultSpecKitVersion = "v0.9.1"
+
 // ErrSpecKitExtensionMissing surfaces when cfg has no extension_id.
 // The launcher's submit gate prevents this in normal flow; the sentinel
 // catches direct API consumers.
@@ -86,6 +94,13 @@ func (h *SpecKit) Setup(_ context.Context, ws harness.Workspace, t task.Task, b 
 		}
 	}
 
+	version := defaultSpecKitVersion
+	if sk, ok := cfg["speckit"].(map[string]any); ok {
+		if v, ok := sk["version"].(string); ok && strings.TrimSpace(v) != "" {
+			version = strings.TrimSpace(v)
+		}
+	}
+
 	return harness.HarnessRun{
 		HarnessName: h.Name(),
 		Task:        t,
@@ -94,8 +109,39 @@ func (h *SpecKit) Setup(_ context.Context, ws harness.Workspace, t task.Task, b 
 		Metadata: map[string]any{
 			metadataKeyOwnsSpecify:      owned,
 			metadataKeySpecKitExtension: ext,
+			metadataKeySpecKitVersion:   version,
 		},
 	}, nil
+}
+
+// SandboxPrepCommands returns the in-sandbox setup for a spec-kit run: install
+// a non-default spec-kit CLI version if requested, run `specify init` (offline)
+// to register the core /speckit.* commands, then install the variant's
+// community extension from its pinned URL. Core-only variants (canonical) skip
+// the extension step.
+func (h *SpecKit) SandboxPrepCommands(run harness.HarnessRun) []string {
+	ext, _ := run.Metadata[metadataKeySpecKitExtension].(speckit.SpecKitExtension)
+	version, _ := run.Metadata[metadataKeySpecKitVersion].(string)
+	if version == "" {
+		version = defaultSpecKitVersion
+	}
+	cmds := make([]string, 0, 3)
+	if version != defaultSpecKitVersion {
+		cmds = append(cmds, fmt.Sprintf(
+			`uv tool install --force specify-cli --from "git+https://github.com/github/spec-kit.git@%s"`, version))
+	}
+	cmds = append(cmds, `specify init --here --ai opencode --script sh --no-git --force --ignore-agent-tools`)
+	if ext.ExtensionName != "" && ext.InstallURL != "" {
+		// Single-quote the URL for POSIX shell safety (catalog URLs are plain
+		// HTTPS, no single quotes). `yes |` answers the untrusted-URL
+		// confirmation; the trailing `extension list | grep` makes a silent
+		// no-op install fail the run rather than surfacing only later when the
+		// slash command turns out to be unregistered.
+		cmds = append(cmds, fmt.Sprintf(
+			`yes | specify extension add %s --from '%s' && specify extension list | grep -qi %s`,
+			ext.ExtensionName, ext.InstallURL, ext.ExtensionName))
+	}
+	return cmds
 }
 
 func (h *SpecKit) Invoke(ctx context.Context, run harness.HarnessRun, exec executor.AgentExecutor) (*executor.RunResult, error) {

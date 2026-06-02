@@ -3,6 +3,7 @@ import { ApiKeysPanel } from '../../components/settings/api-keys';
 import { DefaultsPanel } from '../../components/settings/defaults';
 import { JudgeProviderPanel } from '../../components/settings/judge-provider';
 import { ModelsPanel } from '../../components/settings/models';
+import { SpecKitPanel } from '../../components/settings/speckit';
 import { Card, CardHeader } from '../../components/ui/card';
 import { useAgents, useAPIKeys, useModels } from '../../lib/hooks';
 
@@ -27,6 +28,7 @@ export function SettingsPage() {
         </div>
       </Card>
       <JudgeProviderPanel />
+      <SpecKitPanel />
       <div className="grid gap-4 lg:grid-cols-2">
         <ApiKeysPanel keys={apiKeys} />
         <ModelsPanel models={models} />

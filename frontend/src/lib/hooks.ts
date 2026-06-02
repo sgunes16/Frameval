@@ -22,6 +22,7 @@ import type {
   Rubric,
   Run,
   SpecKitExtensionPublic,
+  SpecKitSettings,
   Task,
   Transcript,
   Variant,
@@ -410,6 +411,21 @@ export function useSaveLLMSettings() {
       client.invalidateQueries({ queryKey: ['config', 'llm-settings'] });
       client.invalidateQueries({ queryKey: ['config', 'api-keys'] });
     },
+  });
+}
+
+export function useSpecKitSettings() {
+  return useQuery({
+    queryKey: ['config', 'speckit-settings'],
+    queryFn: () => api.get<SpecKitSettings>('/config/speckit-settings'),
+  });
+}
+
+export function useSaveSpecKitSettings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SpecKitSettings) => api.put<SpecKitSettings>('/config/speckit-settings', payload),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['config', 'speckit-settings'] }),
   });
 }
 

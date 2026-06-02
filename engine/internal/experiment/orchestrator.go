@@ -28,17 +28,59 @@ type EventBroadcaster interface {
 }
 
 type Orchestrator struct {
-	store       *storage.Store
-	queue       *Queue
-	sandbox     *sandbox.Manager
-	registry    *executor.Registry
-	harnesses   *builtinharness.Registry
-	grader      *GraderClient
-	hub         EventBroadcaster
+	store     *storage.Store
+	queue     *Queue
+	sandbox   *sandbox.Manager
+	registry  *executor.Registry
+	harnesses *builtinharness.Registry
+	grader    *GraderClient
+	hub       EventBroadcaster
+
+	// cancelMu guards runCancels: experimentID → runID → cancel func for the
+	// in-flight run's context, so CancelExperiment can interrupt a running
+	// agent (not just flip the experiment status).
+	cancelMu   sync.Mutex
+	runCancels map[string]map[string]context.CancelFunc
 }
 
 func NewOrchestrator(store *storage.Store, queue *Queue, manager *sandbox.Manager, registry *executor.Registry, harnesses *builtinharness.Registry, grader *GraderClient, hub EventBroadcaster) *Orchestrator {
-	return &Orchestrator{store: store, queue: queue, sandbox: manager, registry: registry, harnesses: harnesses, grader: grader, hub: hub}
+	return &Orchestrator{
+		store: store, queue: queue, sandbox: manager, registry: registry,
+		harnesses: harnesses, grader: grader, hub: hub,
+		runCancels: map[string]map[string]context.CancelFunc{},
+	}
+}
+
+// registerRunCancel records the cancel func for an in-flight run so
+// CancelExperiment can interrupt it. unregisterRunCancel clears it on exit.
+func (o *Orchestrator) registerRunCancel(experimentID, runID string, cancel context.CancelFunc) {
+	o.cancelMu.Lock()
+	defer o.cancelMu.Unlock()
+	if o.runCancels[experimentID] == nil {
+		o.runCancels[experimentID] = map[string]context.CancelFunc{}
+	}
+	o.runCancels[experimentID][runID] = cancel
+}
+
+func (o *Orchestrator) unregisterRunCancel(experimentID, runID string) {
+	o.cancelMu.Lock()
+	defer o.cancelMu.Unlock()
+	if m := o.runCancels[experimentID]; m != nil {
+		delete(m, runID)
+		if len(m) == 0 {
+			delete(o.runCancels, experimentID)
+		}
+	}
+}
+
+// cancelExperimentRuns cancels the context of every in-flight run for the
+// experiment, tearing down their sandbox containers.
+func (o *Orchestrator) cancelExperimentRuns(experimentID string) {
+	o.cancelMu.Lock()
+	defer o.cancelMu.Unlock()
+	for _, cancel := range o.runCancels[experimentID] {
+		cancel()
+	}
 }
 
 func (o *Orchestrator) StartExperiment(ctx context.Context, experimentID string) error {
@@ -137,6 +179,14 @@ func (o *Orchestrator) CancelExperiment(ctx context.Context, experimentID string
 	if err := o.store.UpdateExperimentStatus(ctx, experimentID, "cancelled"); err != nil {
 		return err
 	}
+	// Mark not-yet-started runs cancelled so their queued jobs early-return
+	// instead of executing once a worker frees up.
+	if err := o.store.CancelPendingRuns(ctx, experimentID); err != nil {
+		return err
+	}
+	// Interrupt any in-flight run for this experiment — cancelling its context
+	// tears down the sandbox container and unblocks the worker.
+	o.cancelExperimentRuns(experimentID)
 	o.broadcast("experiment.status", map[string]any{"experiment_id": experimentID, "status": "cancelled"})
 	return nil
 }
@@ -201,7 +251,24 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = o.refreshExperimentState(ctx, experiment.ID) }()
+	// Refresh uses the parent (queue) context, not the per-run cancellable one
+	// below — otherwise cancelling the run would also kill the state refresh.
+	parentCtx := ctx
+	defer func() { _ = o.refreshExperimentState(parentCtx, experiment.ID) }()
+	// The experiment may have been cancelled while this job sat in the queue;
+	// CancelExperiment marks pending runs cancelled. Honor that and skip work.
+	if run.Status == "cancelled" || experiment.Status == "cancelled" {
+		_ = o.store.UpdateRunStatus(parentCtx, run.ID, "cancelled", "")
+		o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "cancelled", "variant_id": run.VariantID})
+		return nil
+	}
+	// Per-run cancellable context so CancelExperiment can interrupt the
+	// in-flight agent (and its sandbox container) mid-run.
+	runCtx, cancelRun := context.WithCancel(parentCtx)
+	defer cancelRun()
+	o.registerRunCancel(experiment.ID, run.ID, cancelRun)
+	defer o.unregisterRunCancel(experiment.ID, run.ID)
+	ctx = runCtx
 	task, err := o.store.GetTask(ctx, experiment.TaskID)
 	if err != nil {
 		return err
@@ -243,6 +310,17 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	// Harness lifecycle: Setup lays down harness-specific files (e.g. CLAUDE.md),
 	// Invoke calls the executor — possibly multiple times for ralph/speckit/planner_coder —
 	// and Teardown removes harness-owned files while preserving the agent's edits.
+	if harnessID == "speckit" {
+		if variant.HarnessConfig == nil {
+			variant.HarnessConfig = map[string]any{}
+		}
+		sk, _ := variant.HarnessConfig["speckit"].(map[string]any)
+		if sk == nil {
+			sk = map[string]any{}
+		}
+		sk["version"] = speckitVersionOrDefault(ctx, o.store)
+		variant.HarnessConfig["speckit"] = sk
+	}
 	harnessWorkspace := pkgharness.Workspace{Path: workspace}
 	hRun, setupErr := harnessImpl.Setup(ctx, harnessWorkspace, *task, pkgharness.Budget{
 		MaxIterations:  3,
@@ -278,6 +356,20 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 			stream.append(line)
 		},
 	}
+	if prep, ok := harnessImpl.(pkgharness.SandboxPreparer); ok {
+		for _, cmd := range prep.SandboxPrepCommands(hRun) {
+			o.broadcastRunLog(*experiment, *run, "harness", "$ "+cmd)
+			out, perr := o.sandbox.RunShell(ctx, workspace, verificationEnvironment(task.ID, harnessID), cmd)
+			if strings.TrimSpace(out) != "" {
+				o.broadcastRunLog(*experiment, *run, "harness", out)
+			}
+			if perr != nil {
+				_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", fmt.Sprintf("spec-kit prep failed (%s): %v", cmd, perr))
+				o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "failed", "variant_id": run.VariantID})
+				return perr
+			}
+		}
+	}
 	result, execErr, timedOut := invokeWithTimeout(ctx, harnessImpl, hRun, execImpl)
 	if tdErr := harnessImpl.Teardown(ctx, hRun); tdErr != nil {
 		o.broadcastRunLog(*experiment, *run, "executor", "harness teardown warning: "+tdErr.Error())
@@ -292,6 +384,13 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		o.broadcastRunLog(*experiment, *run, "executor", execErr.Error())
 	}
 	if execErr != nil {
+		// Operator cancel: the per-run ctx was cancelled while the parent
+		// (queue) ctx is still alive. Record it as cancelled, not failed.
+		if runCtx.Err() == context.Canceled && parentCtx.Err() == nil {
+			_ = o.store.UpdateRunStatus(parentCtx, run.ID, "cancelled", "")
+			o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "cancelled", "variant_id": run.VariantID})
+			return nil
+		}
 		failMsg := execErr.Error()
 		if timedOut {
 			failMsg = fmt.Sprintf("run exceeded wall-clock timeout of %s; agent stalled and the sandbox was cancelled", hRun.Budget.WallTimeout())
@@ -895,6 +994,18 @@ func recomputeCompositeScore(grade models.Grade) float64 {
 	return math.Round(composite*10000) / 10000
 }
 
+// speckitVersionOrDefault resolves the spec-kit CLI version: app_settings
+// 'speckit.version' → FRAMEVAL_SPECKIT_RELEASE env → "v0.9.1".
+func speckitVersionOrDefault(ctx context.Context, store *storage.Store) string {
+	if v, err := store.GetSetting(ctx, "speckit.version"); err == nil && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	if v := strings.TrimSpace(os.Getenv("FRAMEVAL_SPECKIT_RELEASE")); v != "" {
+		return v
+	}
+	return "v0.9.1"
+}
+
 func runEnvironment(taskID string) map[string]string {
 	return map[string]string{
 		"FRAMEVAL_TASK_ID": taskID,
@@ -931,14 +1042,18 @@ func harnessExcludePathspecs(harnessID string) []string {
 	case "agent_instructions":
 		return []string{":!CLAUDE.md"}
 	case "speckit":
-		// spec-kit lays down .specify/memory/constitution.md at Setup
-		// and writes specs/<NNN>-<slug>/{spec,plan,tasks}.md and a
-		// memory/ folder during the workflow's specify/plan/tasks
-		// stages. All are workflow scaffolding, not agent intent.
+		// spec-kit lays down .specify/memory/constitution.md at Setup,
+		// registers slash commands under .opencode/commands/ via
+		// `specify init` + `specify extension add`, writes the opencode
+		// agent-context file AGENTS.md, and creates specs/<NNN>-<slug>/
+		// {spec,plan,tasks}.md + a memory/ folder during the workflow
+		// stages. All are harness scaffolding, not agent intent.
 		return []string{
+			":!.opencode", ":!.opencode/**",
 			":!.specify", ":!.specify/**",
 			":!specs", ":!specs/**",
 			":!memory", ":!memory/**",
+			":!AGENTS.md",
 		}
 	default:
 		return nil

@@ -136,6 +136,8 @@ func NewRouter(service *Service, logger *slog.Logger) http.Handler {
 		r.Delete("/config/api-keys/{provider}", service.DeleteAPIKey)
 		r.Get("/config/llm-settings", service.GetLLMSettings)
 		r.Put("/config/llm-settings", service.PutLLMSettings)
+		r.Get("/config/speckit-settings", service.GetSpecKitSettings)
+		r.Put("/config/speckit-settings", service.PutSpecKitSettings)
 		r.Get("/config/rubrics", service.ListRubrics)
 		r.Post("/config/rubrics", service.CreateRubric)
 		r.Get("/config/rubrics/{key}", service.GetRubric)
