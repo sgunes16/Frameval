@@ -307,7 +307,11 @@ export function useRetryRun() {
       api.post<{ queued: boolean }>(`/runs/${runId}/retry`, {}),
     onSuccess: (_data, runId) => {
       client.invalidateQueries({ queryKey: ['run', runId] });
+      // ['runs', expId] (monitor) and ['compare-runs', ids] (compare matrix)
+      // are distinct key prefixes — invalidate both so every view that lists
+      // this run reflects the pending→running flip.
       client.invalidateQueries({ queryKey: ['runs'] });
+      client.invalidateQueries({ queryKey: ['compare-runs'] });
     },
   });
 }

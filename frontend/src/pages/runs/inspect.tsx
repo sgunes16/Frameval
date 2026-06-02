@@ -40,7 +40,7 @@ import { useTurnStream } from '../../lib/use-turn-stream';
  * back/forward, and copy-link share the exact same view.
  */
 
-const STATUS_TONE: Record<string, 'success' | 'danger' | 'info' | 'muted' | 'warning'> = {
+const STATUS_TONE: Partial<Record<string, 'success' | 'danger' | 'info' | 'muted' | 'warning' | 'neutral'>> = {
   completed: 'success',
   failed: 'danger',
   running: 'info',
@@ -225,7 +225,17 @@ export function RunInspectPage() {
                 variant="outline"
                 className="whitespace-nowrap"
                 disabled={retry.isPending}
-                onClick={() => retry.mutate(id)}
+                onClick={() => {
+                  // Retrying a completed run discards its existing grade, so
+                  // guard that case; failed/cancelled runs have nothing to lose.
+                  if (
+                    run.status === 'completed' &&
+                    !window.confirm('This run already completed with a grade. Retrying discards it and re-runs the variant. Continue?')
+                  ) {
+                    return;
+                  }
+                  retry.mutate(id);
+                }}
                 title="Reset this run to pending and run it again"
               >
                 {retry.isPending ? 'Retrying…' : 'Retry'}
