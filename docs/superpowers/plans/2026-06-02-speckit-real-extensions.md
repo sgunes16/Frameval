@@ -17,8 +17,8 @@
 | Variant | Extension id | `--from` URL | Real commands (primary order) | Scripts in sandbox? | Brownfield fit |
 |---|---|---|---|---|---|
 | canonical | — (core) | none (`specify init` only) | specify → clarify → plan → tasks → analyze → implement | core only | good |
-| lite | tinyspec | `https://github.com/Quratulain-bilal/spec-kit-tinyspec/archive/refs/heads/main.zip` (no release; pin by commit SHA) | tinyspec.classify → tinyspec → tinyspec.implement | none | good (writes specs/tiny/) |
-| research-first | brownfield | `https://github.com/Quratulain-bilal/spec-kit-brownfield/archive/refs/heads/main.zip` (no release) | brownfield.scan → specify → plan → tasks → implement | none | scan read-only ok; migrate heavy |
+| lite | tinyspec | `https://github.com/Quratulain-bilal/spec-kit-tinyspec/archive/0d0e84cc2586.zip` (no release; SHA-pinned) | tinyspec.classify → tinyspec → tinyspec.implement | none | good (writes specs/tiny/) |
+| research-first | brownfield | `https://github.com/Quratulain-bilal/spec-kit-brownfield/archive/7479c5206a57.zip` (no release; SHA-pinned) | brownfield.scan → specify → plan → tasks → implement | none | scan read-only ok; migrate heavy |
 | rigorous | red-team | `https://github.com/ashbrener/spec-kit-red-team/archive/refs/tags/v1.0.2.zip` | specify → clarify → red-team.run → plan → tasks → analyze → implement | none | good (arbitrary target path) |
 | dual-role | conduct | `https://github.com/twbrandon7/spec-kit-conduct-ext/archive/refs/tags/v1.0.1.zip` | conduct.run specify → conduct.run plan → conduct.run tasks → conduct.run implement | **load.sh/common.sh** | inherits core |
 | tdd-first | v-model | `https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.7.2.zip` | v-model.requirements → v-model.acceptance → v-model.plan → v-model.tasks → v-model.implement → v-model.trace | **heavy setup-*.sh + gates** | worst (Status:Approved gates) |
@@ -121,7 +121,7 @@ type SpecKitExtension struct {
 {
 	ID: "lite", Name: "TinySpec (lightweight)", Description: "Single-file lightweight flow.",
 	ExtensionName: "tinyspec",
-	InstallURL: "https://github.com/Quratulain-bilal/spec-kit-tinyspec/archive/<PIN_SHA>.zip",
+	InstallURL: "https://github.com/Quratulain-bilal/spec-kit-tinyspec/archive/0d0e84cc2586.zip",
 	Stages: []Stage{
 		{Name: "tinyspec",          SlashCommand: "/speckit.tinyspec",           PromptTemplate: "/speckit.tinyspec\n\n{{TASK}}"},
 		{Name: "tinyspec-implement",SlashCommand: "/speckit.tinyspec.implement", PromptTemplate: "/speckit.tinyspec.implement"},
@@ -279,7 +279,7 @@ if prep, ok := harnessImpl.(pkgharness.SandboxPreparer); ok {
 
 ### Task 6: Backend — speckit.version setting + API
 
-**Files:** Create `engine/internal/storage/migrations/0NN_speckit_version.sql`; modify `engine/internal/api/config_handler.go`, `engine/internal/api/router.go`.
+**Files:** Create `engine/internal/storage/migrations/021_speckit_version.sql`; modify `engine/internal/api/config_handler.go`, `engine/internal/api/router.go`.
 
 - [ ] **Step 1: Migration** (next number after the latest): seed default.
 ```sql
