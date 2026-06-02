@@ -13,7 +13,7 @@ import { TurnDiffPanel } from '../../components/run-inspector/TurnDiffPanel';
 import { ErrorState, LoadingSkeleton } from '../../components/system';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
-import { useDiagnostic, useReparseRun, useRun, useRunTurns, useSpecKitCatalog, useTranscript, useVariants } from '../../lib/hooks';
+import { useDiagnostic, useReparseRun, useRetryRun, useRun, useRunTurns, useSpecKitCatalog, useTranscript, useVariants } from '../../lib/hooks';
 import { buildEvidenceByTurn } from '../../lib/symptom-evidence';
 import { buildToolHistogram } from '../../lib/tool-histogram';
 import {
@@ -54,6 +54,7 @@ export function RunInspectPage() {
   // socket drop reconciles missed turns via the next REST refetch.
   const stream = useTurnStream(id);
   const reparse = useReparseRun();
+  const retry = useRetryRun();
 
   const filters = useMemo<TurnFilter[]>(
     () => parseFilterTokens(searchParams.getAll('filter')),
@@ -183,6 +184,23 @@ export function RunInspectPage() {
                 lastEventAt={stream.lastEventAt}
                 turnCount={stream.lastTurnCount}
               />
+            )}
+            {/*
+              Retry re-queues a terminal run. The backend resets it to
+              pending and re-executes; the run/runs queries are invalidated
+              so this view flips back to running. Handy for runs that died
+              on a transient (a stalled model, a manually-killed sandbox).
+            */}
+            {id && run && (run.status === 'failed' || run.status === 'completed' || run.status === 'cancelled') && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={retry.isPending}
+                onClick={() => retry.mutate(id)}
+                title="Reset this run to pending and run it again"
+              >
+                {retry.isPending ? 'Retrying…' : 'Retry run'}
+              </Button>
             )}
             {/*
               Re-parse rewires the persisted ParsedTurns from raw_output
