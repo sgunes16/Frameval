@@ -36,10 +36,17 @@ type RunConfig struct {
 //
 // The orchestrator combines this with run-level metadata (run ID, container ID,
 // timing) when persisting a full Transcript in the database.
+//
+// TotalTokens and CostUSD are populated by executors that can derive real
+// token counts and cost from their output stream (e.g. opencode's step_finish
+// events). Executors that cannot measure these leave them at zero; the
+// orchestrator falls back to heuristic estimates in that case.
 type RunResult struct {
 	RawOutput      string
 	ParsedTurns    []ParsedTurn
 	StreamedOutput bool
+	TotalTokens    int
+	CostUSD        float64
 }
 
 // Stable BlockKind values. Executors that don't distinguish should set
