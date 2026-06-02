@@ -17,6 +17,11 @@ ENV PATH="/root/.local/bin:/root/.cursor/bin:/root/.opencode/bin:${PATH}"
 # freezegun/sqlalchemy/alembic/yaml/aiolimiter).
 RUN pip install --no-cache-dir uv pytest pytest-asyncio pytest-timeout ruff mypy aider-chat \
     fastapi httpx pydantic jsonschema freezegun aiolimiter sqlalchemy alembic pyyaml openapi-spec-validator
+# spec-kit CLI (specify) — default version; the spec-kit harness can reinstall
+# a different version at run time via `uv tool install --force ...@<ver>`.
+# uv tool installs into /root/.local/bin (already on PATH).
+ARG SPECKIT_DEFAULT_VERSION=v0.9.1
+RUN uv tool install specify-cli --from "git+https://github.com/github/spec-kit.git@${SPECKIT_DEFAULT_VERSION}"
 # Frameval copies workspaces in/out of the sandbox via tar; the host
 # uid (typically 501 on macOS) survives the round-trip while the
 # container process is root (uid 0). git ≥2.35 refuses to operate on
