@@ -133,8 +133,8 @@ func TestSpecKitInvokeWalksExtensionStages(t *testing.T) {
 	if len(exec.calls) != 2 {
 		t.Fatalf("call count: got %d want 2", len(exec.calls))
 	}
-	if exec.calls[0].Stage != "specify" || exec.calls[1].Stage != "implement" {
-		t.Errorf("stage order: got %q,%q want specify,implement", exec.calls[0].Stage, exec.calls[1].Stage)
+	if exec.calls[0].Stage != "tinyspec" || exec.calls[1].Stage != "tinyspec-implement" {
+		t.Errorf("stage order: got %q,%q want tinyspec,tinyspec-implement", exec.calls[0].Stage, exec.calls[1].Stage)
 	}
 	if !strings.Contains(exec.calls[0].Prompt, "scaffold") {
 		t.Errorf("specify prompt should contain task content; got %q", exec.calls[0].Prompt)
