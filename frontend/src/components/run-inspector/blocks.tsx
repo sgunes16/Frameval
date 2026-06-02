@@ -189,6 +189,23 @@ function ToolOutputSnippet({ output, toolName }: { output: string; toolName: str
             </div>
           );
         }
+        if (seg.tag === 'task_result') {
+          // Result returned by a delegated sub-agent (opencode's task tool;
+          // used by e.g. the spec-kit conduct extension). Render it as a
+          // distinct info-toned block so it reads as a nested agent's output
+          // rather than the parent's own stdout.
+          const { visible } = takeLines(seg.body);
+          return (
+            <div key={i}>
+              <div className="px-2 pt-1 text-xs uppercase tracking-wider text-fg-subtle">
+                task result
+              </div>
+              <pre className="overflow-auto whitespace-pre-wrap rounded-sm border border-info/30 bg-info/5 px-2 py-1 font-mono text-xs leading-[1.55] text-fg">
+                {visible}
+              </pre>
+            </div>
+          );
+        }
         // Untagged stdout / unknown tag. Body is still rendered
         // (never silently dropped); when the tag is unrecognized
         // we surface a small "unhandled tag" pill so future-us
@@ -296,6 +313,7 @@ const KNOWN_TOOL_OUTPUT_TAGS = new Set([
   'entries',
   'shell_metadata',
   'error',
+  'task_result',
 ]);
 
 // Compact inline summary for the tool-card header so a single-line
