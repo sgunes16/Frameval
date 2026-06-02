@@ -26,13 +26,12 @@ task_prompt: |
       rate. Throughput must not collapse below 8 req/s under that
       sustained load.
 technical_details: |
-  - Naive time.sleep in async code blocks the loop, queues stack up,
-    test_throttle_under_load.py times out or asserts throughput floor.
-  - Reference solution uses asyncio.Lock + monotonic timer for a
-    simple token-bucket; aiolimiter is also acceptable (added to
-    requirements.txt).
-  - Tests use httpx.AsyncClient + ASGITransport (in-process, no
-    uvicorn).
+  - A naive time.sleep in async code blocks the event loop, so requests
+    queue up and throughput collapses under load — the throttle must be
+    non-blocking.
+  - A correct approach is an asyncio.Lock + monotonic-clock token bucket;
+    aiolimiter is also acceptable (already in requirements.txt).
+  - Confine the change to app/search.py.
 test_cases:
   - name: Single request still returns expected shape
     test_command: pytest -q tests/test_search_correctness.py

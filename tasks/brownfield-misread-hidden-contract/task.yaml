@@ -26,13 +26,12 @@ task_prompt: |
     - Function signature of get_user() may not change.
     - Existing response fields (id, name, email) remain.
 technical_details: |
-  - workspace/docs/api/contract.v1.yaml is the response contract.
-  - tests/test_response_contract.py loads the contract and validates
-    live responses against it via jsonschema (additionalProperties
-    tightened to False).
-  - The agent must update BOTH workspace/app/users.py and
-    workspace/docs/api/contract.v1.yaml.
-  - test_scope.sh allows only those two paths in the diff.
+  - created_at is an ISO 8601 timestamp string; for the seeded users
+    (id 1 and id 2) return "2024-01-01T00:00:00Z".
+  - Existing response fields (id, name, email) must remain and the
+    get_user() signature must not change.
+  - Before changing a public response shape, read the repository to
+    understand what else governs or documents that shape.
 test_cases:
   - name: GET /users/{user_id} returns created_at
     test_command: pytest -q tests/test_users_basic.py
