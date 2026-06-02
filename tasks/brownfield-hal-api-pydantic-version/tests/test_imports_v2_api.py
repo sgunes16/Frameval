@@ -60,15 +60,21 @@ def _decorator_names(tree: ast.AST) -> set[str]:
     return names
 
 
-def test_uses_field_validator_not_legacy_validator():
+# v2 validator decorators (field-level and whole-model). Either is fine —
+# the trap is about v1-vs-v2 API, not field_validator specifically.
+V2_VALIDATORS = {"field_validator", "model_validator"}
+# v1 decorators that signal the outdated API (HAL_API failure mode).
+V1_VALIDATORS = {"validator", "root_validator"}
+
+
+def test_uses_v2_validator_not_legacy_validator():
     tree = ast.parse(MODELS_PATH.read_text())
-    imported = _pydantic_imported_names(tree)
-    decorators = _decorator_names(tree)
+    names = _pydantic_imported_names(tree) | _decorator_names(tree)
 
-    uses_v2 = "field_validator" in imported or "field_validator" in decorators
-    assert uses_v2, "expected Pydantic v2 `field_validator` (import or decorator)"
-
-    uses_v1 = "validator" in imported or "validator" in decorators
-    assert not uses_v1, (
-        "found legacy v1 `validator` decorator/import; use `field_validator`"
+    assert V2_VALIDATORS & names, (
+        "expected a Pydantic v2 validator (field_validator/model_validator)"
+    )
+    legacy = V1_VALIDATORS & names
+    assert not legacy, (
+        f"found legacy v1 API {sorted(legacy)}; use the v2 validator API"
     )

@@ -52,3 +52,15 @@ def test_all_judge_dims_unavailable_is_zero():
     }
     out = compute_composite({"test_pass_rate": 0.0}, {}, judge_grade=judge)
     assert out == 0.0
+
+def test_all_judge_dims_unavailable_falls_back_to_code_process():
+    # When every dimension failed there is no usable judge signal, so the
+    # composite must match the judge-never-ran case (60/40) instead of
+    # penalizing with a phantom zero judge term.
+    judge = {
+        "scores": {"a": 0.0, "b": 0.0},
+        "rationales": {"a": "judge_unavailable: x", "b": "judge_unavailable: y"},
+    }
+    failed = compute_composite({"test_pass_rate": 1.0}, {}, judge_grade=judge)
+    never = compute_composite({"test_pass_rate": 1.0}, {})
+    assert failed == never == 6.0
