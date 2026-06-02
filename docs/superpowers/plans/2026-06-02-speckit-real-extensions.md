@@ -21,13 +21,15 @@
 | research-first | brownfield | `https://github.com/Quratulain-bilal/spec-kit-brownfield/archive/7479c5206a57.zip` (no release; SHA-pinned) | brownfield.scan → specify → plan → tasks → implement | none | scan read-only ok; migrate heavy |
 | rigorous | red-team | `https://github.com/ashbrener/spec-kit-red-team/archive/refs/tags/v1.0.2.zip` | specify → clarify → red-team.run → plan → tasks → analyze → implement | none | good (arbitrary target path) |
 | dual-role | conduct | `https://github.com/twbrandon7/spec-kit-conduct-ext/archive/refs/tags/v1.0.1.zip` | conduct.run specify → conduct.run plan → conduct.run tasks → conduct.run implement | **load.sh/common.sh** | inherits core |
-| tdd-first | v-model | `https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.7.2.zip` | v-model.requirements → v-model.acceptance → v-model.plan → v-model.tasks → v-model.implement → v-model.trace | **heavy setup-*.sh + gates** | worst (Status:Approved gates) |
+| tdd-first | v-model | `https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.7.2.zip` | **HYBRID (Phase-0 locked):** v-model.requirements → v-model.acceptance → /speckit.plan → /speckit.tasks → /speckit.implement | requirements/acceptance only (gate-free) | OK via hybrid (core implement bypasses v-model gate) |
 
 **Reproducibility note:** tinyspec + brownfield have no GitHub releases — pin them by commit SHA (`archive/<sha>.zip`) resolved during Task 2, not the mutable `main` branch.
 
 ---
 
-## Phase 0 — Feasibility smoke per extension (do FIRST, gate the rest)
+## Phase 0 — Feasibility smoke per extension — ✅ DONE 2026-06-02
+
+**Outcome:** all 5 extensions install + register in `frameval-sandbox:local` (tinyspec 3 / red-team 2 / conduct 1 / v-model 17 / brownfield 4 commands). v-model.implement runs a pre-implementation gate (Status:Approved) → unfit for one-file edits, so **tdd-first uses the hybrid flow** (v-model.requirements → v-model.acceptance → core plan/tasks/implement). conduct + v-model scripts present in sandbox. Proceed.
 
 ### Task 0: Smoke-test each extension on a reference brownfield task in the sandbox image
 
