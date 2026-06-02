@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -92,6 +93,39 @@ type llmSettingsPayload struct {
 	Model         string `json:"model"`
 	Enabled       bool   `json:"enabled"`
 	APIKeyPresent bool   `json:"api_key_present"`
+}
+
+type specKitSettingsPayload struct {
+	Version string `json:"version"`
+}
+
+// GetSpecKitSettings returns the spec-kit CLI version the spec-kit harness
+// installs in the sandbox. Falls back to the hard-coded default when unset.
+func (s *Service) GetSpecKitSettings(w http.ResponseWriter, r *http.Request) {
+	v, err := s.store.GetSetting(r.Context(), "speckit.version")
+	if err != nil || strings.TrimSpace(v) == "" {
+		v = "v0.9.1"
+	}
+	JSON(w, http.StatusOK, specKitSettingsPayload{Version: v})
+}
+
+// PutSpecKitSettings updates the spec-kit CLI version (a release tag, e.g.
+// v0.9.1). The harness passes it to `uv tool install ...@<version>` at run time.
+func (s *Service) PutSpecKitSettings(w http.ResponseWriter, r *http.Request) {
+	var payload specKitSettingsPayload
+	if err := decodeJSON(r, &payload); err != nil {
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "invalid request", err)
+		return
+	}
+	if strings.TrimSpace(payload.Version) == "" {
+		renderError(w, r.Context(), http.StatusBadRequest, ErrCodeBadRequest, "version required", nil)
+		return
+	}
+	if err := s.store.SetSetting(r.Context(), "speckit.version", strings.TrimSpace(payload.Version)); err != nil {
+		renderError(w, r.Context(), http.StatusInternalServerError, ErrCodeInternal, "internal error", err)
+		return
+	}
+	s.GetSpecKitSettings(w, r)
 }
 
 func (s *Service) GetLLMSettings(w http.ResponseWriter, r *http.Request) {
