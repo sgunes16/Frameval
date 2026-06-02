@@ -5,7 +5,7 @@ import type { HarnessConfigValue } from '../../components/launcher/HarnessConfig
 import { validateMultiAgentConfig } from '../../components/launcher/multiagent-validate';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
-import { Card, CardHeader } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { cn } from '../../lib/utils';
 import {
