@@ -23,6 +23,7 @@ func TestHarnessExcludePathspecs(t *testing.T) {
 			":!.specify", ":!.specify/**",
 			":!specs", ":!specs/**",
 			":!memory", ":!memory/**",
+			":!AGENTS.md",
 		}},
 		{"unknown-future", nil},
 		{"", nil},
