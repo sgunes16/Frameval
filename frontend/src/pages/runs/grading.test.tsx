@@ -23,8 +23,6 @@ vi.mock('../../lib/hooks', () => ({
       lint_score: 7,
       type_check_pass: true,
       file_state_valid: true,
-      token_efficiency: 0.8,
-      context_utilization: 0.6,
       spec_instruction_compliance: 9,
       test_results: [{ name: 'test_one', passed: true, output: 'ok' }],
       judge_scores: {
@@ -41,7 +39,6 @@ vi.mock('../../lib/hooks', () => ({
         best_practices: 'sync lock in async code',
         error_handling: 'happy path only',
       },
-      judge_irr_alpha: 0,
       turn_count: 5,
       total_tokens: 1200,
     },

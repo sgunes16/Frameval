@@ -209,14 +209,27 @@ export type Grade = {
   turn_count?: number;
   total_tokens?: number;
   cost_usd?: number;
-  token_efficiency: number;
+  /** @deprecated use tool_call_count + tool_error_rate */
+  token_efficiency?: number;
   backtrack_count?: number;
+  /** @deprecated use ran_validation */
   self_validation_rate?: number;
+  /** @deprecated no longer meaningful */
   premature_completion?: boolean;
+  /** @deprecated no longer meaningful */
   idle_turns?: number;
+  /** @deprecated no longer meaningful */
   error_recovery_count?: number;
+  /** @deprecated use tool_call_count + tool_error_rate */
   tool_call_accuracy?: number;
-  context_utilization: number;
+  /** @deprecated use tool_call_count + tool_error_rate */
+  context_utilization?: number;
+  // New accurate fields from redesigned metric layer:
+  tool_call_count?: number;
+  tool_error_rate?: number;
+  ran_validation?: boolean;
+  harness_adherence_score?: number;
+  harness_adherence_json?: string;
 
   // --- LLM-as-Judge rubric (cross-model) ---
   judge_scores?: Record<string, number>;
