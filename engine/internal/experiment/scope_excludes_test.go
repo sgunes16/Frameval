@@ -16,6 +16,7 @@ func TestHarnessExcludePathspecs(t *testing.T) {
 		{"multiagent", nil},
 		{"agent_instructions", []string{":!CLAUDE.md"}},
 		{"speckit", []string{
+			":!.opencode", ":!.opencode/**",
 			":!.specify", ":!.specify/**",
 			":!specs", ":!specs/**",
 			":!memory", ":!memory/**",
