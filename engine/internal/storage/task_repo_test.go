@@ -116,3 +116,39 @@ func TestTechnicalDetailDoesNotLeakTruthSet(t *testing.T) {
 		}
 	}
 }
+
+// TestTaskTestsUseFlattenedWorkspacePath guards against a path bug that made
+// two greenfield tasks unsolvable. At run time Frameval flattens a task's
+// workspace/ contents to the sandbox root and materializes tests/ alongside
+// it (so the agent's app.py lives at /workspace/app.py and the tests at
+// /workspace/tests/). A test that resolves the solution dir as
+// `Path(__file__).parent.parent / "workspace"` therefore points one level too
+// deep (/workspace/workspace) and never finds the agent's files — every test
+// errors regardless of the agent. The correct anchor is `parent.parent`
+// (the flattened root). Ban the buggy pattern across all task test files.
+func TestTaskTestsUseFlattenedWorkspacePath(t *testing.T) {
+	tasksRoot, err := filepath.Abs(filepath.Join("..", "..", "..", "tasks"))
+	if err != nil {
+		t.Fatalf("resolve tasks root: %v", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(tasksRoot, "*", "tests", "*.py"))
+	if err != nil {
+		t.Fatalf("glob task tests: %v", err)
+	}
+	if len(matches) == 0 {
+		t.Fatal("no task test files found")
+	}
+	// The flatten-incompatible anchor: an extra `/ "workspace"` segment.
+	badPath := regexp.MustCompile(`parent\.parent\s*/\s*"workspace"`)
+	for _, path := range matches {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if badPath.Match(body) {
+			rel, _ := filepath.Rel(tasksRoot, path)
+			t.Errorf("%s resolves the solution dir as parent.parent/\"workspace\"; "+
+				"Frameval flattens workspace/ to the sandbox root — use parent.parent", rel)
+		}
+	}
+}

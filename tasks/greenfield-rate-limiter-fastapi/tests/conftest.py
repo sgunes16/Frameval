@@ -1,8 +1,9 @@
 """Pytest fixtures for the rate-limiter task.
 
-Adds the workspace directory to sys.path so `from app import app`
-resolves to whatever the agent wrote at workspace/app.py. Each test
-fixture reloads the module so per-test rate-limit state is fresh.
+Adds the workspace root to sys.path so `from app import app` resolves to
+the app.py the agent wrote there (the tests/ dir is materialized under that
+same root at run time). Each test fixture reloads the module so per-test
+rate-limit state is fresh.
 """
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-WORKSPACE = Path(__file__).resolve().parent.parent / "workspace"
+WORKSPACE = Path(__file__).resolve().parent.parent
 if str(WORKSPACE) not in sys.path:
     sys.path.insert(0, str(WORKSPACE))
 

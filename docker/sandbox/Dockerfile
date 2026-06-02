@@ -10,7 +10,7 @@ ENV PATH="/root/.local/bin:/root/.cursor/bin:/root/.opencode/bin:${PATH}"
 # fresh sandbox container) doesn't have to repeat `pip install`. Tasks
 # that need a library not listed here either embed their own
 # `pip install` in the test_command or contribute the dep upstream.
-RUN pip install --no-cache-dir uv pytest pytest-asyncio pytest-timeout ruff mypy aider-chat \
+RUN pip install --no-cache-dir uv pytest pytest-asyncio pytest-timeout freezegun ruff mypy aider-chat \
     aiolimiter sqlalchemy alembic pyyaml openapi-spec-validator
 # Frameval copies workspaces in/out of the sandbox via tar; the host
 # uid (typically 501 on macOS) survives the round-trip while the
