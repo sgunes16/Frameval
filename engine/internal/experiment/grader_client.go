@@ -362,7 +362,10 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 			grade.SpecPerInstruction = append(grade.SpecPerInstruction, models.InstructionResult{Instruction: item.Instruction, Status: item.Status, Reasoning: item.Reasoning})
 		}
 	}
-	grade.CompositeScore = float64(response.CompositeScore)
+	// Do NOT copy response.CompositeScore — the engine now computes the
+	// composite via computeComposite() after wiring in process + harness-adherence,
+	// and that value overwrites whatever the grader returned. Leaving this field
+	// un-set (zero) ensures the engine value is the single source of truth.
 	grade.JudgeUserPrompt = response.JudgeUserPrompt
 	return grade
 }
