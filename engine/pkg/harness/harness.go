@@ -94,6 +94,15 @@ func MergeConfig(base, override executor.RunConfig) executor.RunConfig {
 	return merged
 }
 
+// SandboxPreparer is an optional capability. A harness that needs shell setup
+// run inside the sandbox (with the run's workspace mounted) BEFORE Invoke
+// implements it. The orchestrator runs each returned command in order via the
+// sandbox manager; a non-zero exit fails the run. Commands must be idempotent
+// and safe to run in a fresh container (the workspace is copied in/out per call).
+type SandboxPreparer interface {
+	SandboxPrepCommands(run HarnessRun) []string
+}
+
 // Harness scaffolds an agent run.
 //
 // A Harness describes "how to invoke an executor on a task". Built-in harnesses

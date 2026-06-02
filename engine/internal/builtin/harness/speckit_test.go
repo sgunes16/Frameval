@@ -258,6 +258,36 @@ func TestSpecKitSetupRejectsMissingExtensionID(t *testing.T) {
 	}
 }
 
+func TestSpecKitSandboxPrepCommands(t *testing.T) {
+	h := NewSpecKit()
+	mk := func(extID, version string) pkgharness.HarnessRun {
+		ws := pkgharness.Workspace{Path: t.TempDir()}
+		cfg := map[string]any{"speckit": map[string]any{"extension_id": extID}}
+		if version != "" {
+			cfg["speckit"].(map[string]any)["version"] = version
+		}
+		run, err := h.Setup(context.Background(), ws, task.Task{TaskPrompt: "x"}, pkgharness.Budget{}, cfg)
+		if err != nil {
+			t.Fatalf("Setup(%s): %v", extID, err)
+		}
+		return run
+	}
+	// canonical: init only (no extension)
+	if got := h.SandboxPrepCommands(mk("canonical", "")); len(got) != 1 || !strings.Contains(got[0], "specify init") {
+		t.Errorf("canonical: want 1 init cmd, got %v", got)
+	}
+	// lite: init + extension add tinyspec
+	got := h.SandboxPrepCommands(mk("lite", ""))
+	if len(got) != 2 || !strings.Contains(got[0], "specify init") || !strings.Contains(got[1], "extension add tinyspec") {
+		t.Errorf("lite: want init + tinyspec add, got %v", got)
+	}
+	// non-default version: prepend uv tool install --force
+	gotv := h.SandboxPrepCommands(mk("lite", "v0.8.0"))
+	if len(gotv) != 3 || !strings.Contains(gotv[0], "uv tool install --force") || !strings.Contains(gotv[0], "v0.8.0") {
+		t.Errorf("versioned: want uv install first, got %v", gotv)
+	}
+}
+
 func TestSpecKitSetupRejectsUnknownExtensionID(t *testing.T) {
 	h := NewSpecKit()
 	ws := pkgharness.Workspace{Path: t.TempDir()}
