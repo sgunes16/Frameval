@@ -140,3 +140,46 @@ func TestVariantHarnessConfigRoundTrip(t *testing.T) {
 		t.Fatalf("HarnessConfig round-trip: got %q want %q", got, "rule one")
 	}
 }
+
+func TestListExperimentsIncludesVariants(t *testing.T) {
+	store := support.TmpStore(t)
+	seedTaskForExperimentTest(t, store, "task-listvar")
+
+	_, err := store.CreateExperiment(context.Background(), models.ExperimentRequest{
+		Name:           "with-variants",
+		TaskID:         "task-listvar",
+		Model:          "m",
+		AgentCLI:       "opencode",
+		RunsPerVariant: 1,
+		Variants: []models.VariantRequest{
+			{Name: "bare", HarnessID: "bare", Ordering: 0},
+			{Name: "speckit/canonical", HarnessID: "speckit", Ordering: 1},
+			{Name: "speckit/lite", HarnessID: "speckit", Ordering: 2},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateExperiment: %v", err)
+	}
+
+	listed, err := store.ListExperiments(context.Background())
+	if err != nil {
+		t.Fatalf("ListExperiments: %v", err)
+	}
+	var found *models.Experiment
+	for i := range listed {
+		if listed[i].Name == "with-variants" {
+			found = &listed[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("experiment not in list")
+	}
+	if len(found.Variants) != 3 {
+		t.Fatalf("variant count in list: got %d want 3", len(found.Variants))
+	}
+	// Ordered by `ordering`, names preserved.
+	if found.Variants[0].Name != "bare" || found.Variants[2].Name != "speckit/lite" {
+		t.Errorf("variant order/names wrong: %+v", found.Variants)
+	}
+}

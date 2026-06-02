@@ -81,7 +81,24 @@ func (s *Store) ListExperiments(ctx context.Context) ([]models.Experiment, error
 		}
 		experiments = append(experiments, experiment)
 	}
-	return experiments, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Attach variants in one batched query so the Experiments list can
+	// render the per-experiment variant count + harness names without an
+	// N+1 round-trip.
+	ids := make([]string, len(experiments))
+	for i := range experiments {
+		ids[i] = experiments[i].ID
+	}
+	byExp, err := s.ListVariantsByExperiments(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range experiments {
+		experiments[i].Variants = byExp[experiments[i].ID]
+	}
+	return experiments, nil
 }
 
 func (s *Store) GetExperiment(ctx context.Context, experimentID string) (*models.Experiment, error) {
