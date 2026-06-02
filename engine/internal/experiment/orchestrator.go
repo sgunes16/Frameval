@@ -243,6 +243,17 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 	// Harness lifecycle: Setup lays down harness-specific files (e.g. CLAUDE.md),
 	// Invoke calls the executor — possibly multiple times for ralph/speckit/planner_coder —
 	// and Teardown removes harness-owned files while preserving the agent's edits.
+	if harnessID == "speckit" {
+		if variant.HarnessConfig == nil {
+			variant.HarnessConfig = map[string]any{}
+		}
+		sk, _ := variant.HarnessConfig["speckit"].(map[string]any)
+		if sk == nil {
+			sk = map[string]any{}
+		}
+		sk["version"] = speckitVersionOrDefault(ctx, o.store)
+		variant.HarnessConfig["speckit"] = sk
+	}
 	harnessWorkspace := pkgharness.Workspace{Path: workspace}
 	hRun, setupErr := harnessImpl.Setup(ctx, harnessWorkspace, *task, pkgharness.Budget{
 		MaxIterations:  3,
@@ -277,6 +288,20 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 			o.broadcastRunLog(*experiment, *run, "executor", line)
 			stream.append(line)
 		},
+	}
+	if prep, ok := harnessImpl.(pkgharness.SandboxPreparer); ok {
+		for _, cmd := range prep.SandboxPrepCommands(hRun) {
+			o.broadcastRunLog(*experiment, *run, "harness", "$ "+cmd)
+			out, perr := o.sandbox.RunShell(ctx, workspace, verificationEnvironment(task.ID, harnessID), cmd)
+			if strings.TrimSpace(out) != "" {
+				o.broadcastRunLog(*experiment, *run, "harness", out)
+			}
+			if perr != nil {
+				_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", fmt.Sprintf("spec-kit prep failed (%s): %v", cmd, perr))
+				o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "failed", "variant_id": run.VariantID})
+				return perr
+			}
+		}
 	}
 	result, execErr, timedOut := invokeWithTimeout(ctx, harnessImpl, hRun, execImpl)
 	if tdErr := harnessImpl.Teardown(ctx, hRun); tdErr != nil {
@@ -893,6 +918,18 @@ func recomputeCompositeScore(grade models.Grade) float64 {
 	}
 	composite := (codeScore * 0.3) + (judgeScore * 0.3) + (processScore * 0.2) + (grade.SpecInstructionCompliance * 0.2)
 	return math.Round(composite*10000) / 10000
+}
+
+// speckitVersionOrDefault resolves the spec-kit CLI version: app_settings
+// 'speckit.version' → FRAMEVAL_SPECKIT_RELEASE env → "v0.9.1".
+func speckitVersionOrDefault(ctx context.Context, store *storage.Store) string {
+	if v, err := store.GetSetting(ctx, "speckit.version"); err == nil && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	if v := strings.TrimSpace(os.Getenv("FRAMEVAL_SPECKIT_RELEASE")); v != "" {
+		return v
+	}
+	return "v0.9.1"
 }
 
 func runEnvironment(taskID string) map[string]string {
