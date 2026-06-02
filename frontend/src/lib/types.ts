@@ -284,10 +284,16 @@ export type ExecutorInfo = {
   modes: string[];
 };
 
+export type LaunchVariant = {
+  harness_id: string;
+  name: string;
+  harness_config?: Record<string, unknown>;
+};
+
 export type LaunchDiagnosticRequest = {
   task_id: string;
   executor_id: string;
-  harness_ids: string[];
+  harness_ids?: string[];
   model?: string;
   runs_per_variant?: number;
   timeout_seconds?: number;
@@ -295,6 +301,7 @@ export type LaunchDiagnosticRequest = {
   batch_id?: string;
   batch_label?: string;
   harness_configs?: Record<string, unknown>;
+  variants?: LaunchVariant[];
 };
 
 export type LaunchDiagnosticResponse = {
@@ -387,7 +394,7 @@ export type SpecKitExtensionPublic = {
 };
 
 export type SpecKitConfig = {
-  // Per-cell wire shape. Launcher state holds a multi-id list; matrix
-  // expansion narrows it to one id per cell before posting.
+  // Per-variant wire shape. Carried inside a LaunchVariant's harness_config
+  // as { speckit: { extension_id } } — one variant per chosen extension.
   extension_id: string;
 };

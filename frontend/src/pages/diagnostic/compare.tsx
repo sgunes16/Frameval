@@ -74,22 +74,21 @@ export function DiagnosticComparePage() {
   const { data: matrixBundles, isLoading: matrixLoading } = useRunsForExperiments(
     isMatrix ? experimentIDs : [],
   );
-  const { data: matrixExperiments } = useExperimentsForIds(isMatrix ? experimentIDs : []);
+  // Always fetch detail (variants populated) for every selected
+  // experiment — the list endpoint's variants are now populated too,
+  // but the per-run harness label needs each experiment's variant set
+  // regardless of single vs matrix mode.
+  const { data: detailExperiments } = useExperimentsForIds(experimentIDs);
 
-  // Index from experimentId → Experiment so RunPicker can label rows
-  // with the experiment's variant signature (harness/agent/model).
   const expIndex = useMemo<Map<string, Experiment>>(() => {
     const m = new Map<string, Experiment>();
-    if (isMatrix && matrixExperiments) {
-      for (const e of matrixExperiments) {
+    if (detailExperiments) {
+      for (const e of detailExperiments) {
         if (e) m.set(e.id, e);
       }
-    } else if (!isMatrix && experimentIDs[0]) {
-      const e = experiments.find((x) => x.id === experimentIDs[0]);
-      if (e) m.set(e.id, e);
     }
     return m;
-  }, [isMatrix, matrixExperiments, experiments, experimentIDs]);
+  }, [detailExperiments]);
 
   // Flatten runs across all selected experiments; each row still
   // carries its `experiment_id` (it's already on the Run schema)
@@ -445,7 +444,7 @@ function RunPicker({
       {runs.map((run) => {
         const isSelected = selected.has(run.id);
         const exp = run.experiment_id ? expIndex?.get(run.experiment_id) : undefined;
-        const variantSig = exp ? variantSignature(exp) : null;
+        const variantSig = exp ? variantSignature(exp, run.variant_id) : null;
         return (
           <li
             key={run.id}
@@ -490,20 +489,26 @@ function RunPicker({
 // experiment's name (`"<prefix> · <harness>/<executor>/<model>"`),
 // so we just pull the trailing `… · X` segment off; falling back to
 // agent_cli + model when the name doesn't carry the convention.
-function variantSignature(exp: Experiment): string {
+function variantSignature(exp: Experiment, variantId?: string): string {
   const dot = ' · ';
   const idx = exp.name.lastIndexOf(dot);
   if (idx >= 0) {
     const tail = exp.name.slice(idx + dot.length).trim();
     if (tail.includes('/')) return tail;
   }
-  const harness = exp.variants?.[0]?.harness_id ?? exp.variants?.[0]?.name ?? '?';
+  // Resolve the run's specific variant by id — an experiment with N
+  // variants (one per harness / spec-kit extension) would otherwise
+  // label every column with variants[0].
+  const variant = variantId
+    ? exp.variants?.find((v) => v.id === variantId)
+    : exp.variants?.[0];
+  const harness = variant?.name ?? variant?.harness_id ?? '?';
   return `${harness}/${exp.agent_cli}/${exp.model}`;
 }
 
 interface GradeComparisonTableProps {
   runIds: string[];
-  runs: Array<{ id: string; run_number: number; status: string; experiment_id?: string }>;
+  runs: Array<{ id: string; run_number: number; status: string; experiment_id?: string; variant_id?: string }>;
   grades: Array<Grade | null>;
   expIndex?: Map<string, Experiment>;
 }
@@ -602,8 +607,9 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
   const rawCoords = runIds.map((id) => {
     const run = runs.find((r) => r.id === id);
     const exp = run?.experiment_id ? expIndex?.get(run.experiment_id) : undefined;
+    const variant = exp?.variants?.find((v) => v.id === run?.variant_id);
     return {
-      harness: exp?.variants?.[0]?.harness_id ?? exp?.variants?.[0]?.name ?? '—',
+      harness: variant?.name ?? variant?.harness_id ?? '—',
       agent: exp?.agent_cli ?? '—',
       model: exp?.model ?? '—',
     } satisfies Record<Dim, string>;
@@ -1031,7 +1037,7 @@ function BoolRow({
 }
 
 function shortLabel(
-  runs: Array<{ id: string; run_number: number; experiment_id?: string }>,
+  runs: Array<{ id: string; run_number: number; experiment_id?: string; variant_id?: string }>,
   runId: string,
   expIndex?: Map<string, Experiment>,
 ): string {
@@ -1042,7 +1048,7 @@ function shortLabel(
   const found = runs.find((r) => r.id === runId);
   if (found && expIndex && found.experiment_id) {
     const exp = expIndex.get(found.experiment_id);
-    if (exp) return variantSignature(exp);
+    if (exp) return variantSignature(exp, found.variant_id);
   }
   if (found) return `Run ${found.run_number}`;
   return runId.length > 12 ? runId.slice(0, 8) + '…' : runId;

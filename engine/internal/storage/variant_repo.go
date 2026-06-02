@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/mustafaselman/frameval/engine/internal/models"
@@ -57,6 +58,40 @@ func (s *Store) ListVariantsByExperiment(ctx context.Context, experimentID strin
 		variants[idx].ArtifactVersions = artifacts
 	}
 	return variants, nil
+}
+
+// ListVariantsByExperiments batch-loads variants for many experiments in
+// one query and groups them by experiment_id. Unlike
+// ListVariantsByExperiment it does NOT eager-load artifact versions —
+// callers that need only variant identity (the Experiments list's run
+// label) skip that extra per-variant query. Returns a map keyed by
+// experiment_id; experiments with no variants are simply absent.
+func (s *Store) ListVariantsByExperiments(ctx context.Context, experimentIDs []string) (map[string][]models.Variant, error) {
+	out := make(map[string][]models.Variant)
+	if len(experimentIDs) == 0 {
+		return out, nil
+	}
+	placeholders := make([]string, len(experimentIDs))
+	args := make([]any, len(experimentIDs))
+	for i, id := range experimentIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := `SELECT id, experiment_id, name, description, is_control, ordering, harness_id, harness_config_json
+		FROM variants WHERE experiment_id IN (` + strings.Join(placeholders, ",") + `) ORDER BY experiment_id, ordering ASC`
+	rows, err := s.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list variants by experiments: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		variant, scanErr := scanVariant(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		out[variant.ExperimentID] = append(out[variant.ExperimentID], variant)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) GetVariant(ctx context.Context, variantID string) (*models.Variant, error) {
