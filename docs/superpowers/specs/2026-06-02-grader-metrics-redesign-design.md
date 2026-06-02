@@ -79,6 +79,11 @@ The engine assembles the composite after merging grader results with its own pro
 - Add Grade fields/columns: `tool_call_count`, `tool_error_rate`, `ran_validation`, `harness_adherence_score`, `harness_adherence_json` (the checks).
 - Stop populating `idle_turns`, `token_efficiency`, `context_utilization`, `premature_completion`, `judge_irr_alpha` (leave columns for back-compat; new migration only ADDs the new columns — never edits existing ones).
 
+### 5b. failure classifier — fix the gate + use configured judge (`engine/internal/experiment/orchestrator.go`)
+The LLM failure classifier (the AgentDx primary-failure-mode label) is silently disabled: `persistDiagnostic` gates it on the raw env `os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE")=="true"`, but the rest of the system treats `app_settings['judge.enabled']` as authoritative (per CLAUDE.md; the grader's `buildJudgeConfig` already reads `GetSettingsByPrefix("judge.")`). It also hardcodes the classifier model `"claude-haiku-4-5"`, which needs an Anthropic key unrelated to the configured judge provider. Result: `failure_label` is NULL in all 233 diagnostic rows even with the judge enabled in Settings.
+
+Fix: gate the classifier on the same resolved `judge.enabled` (app_settings → env fallback) the judge uses, and drive `ClassifyFailure` with the **configured judge provider/model/api-key** (reuse the `JudgeConfig` assembly) instead of the hardcoded haiku — so enabling the judge in Settings also produces failure labels, using the model the user actually configured.
+
 ### 6. frontend (`frontend/src/pages/runs/grading.tsx` + types)
 - Process section: show the real metrics; **remove** idle_turns / token_efficiency / context_utilization / premature_completion / inter-rater α from the display.
 - Add a **Harness adherence** section: the 0–1 score + the per-check pass/fail list (the diagnostic the thesis cares about).
