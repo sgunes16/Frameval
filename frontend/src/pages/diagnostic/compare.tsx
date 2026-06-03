@@ -6,6 +6,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { BehavioralRadar } from '../../components/diagnostic/behavioral-radar';
 import { CostQualityScatter } from '../../components/diagnostic/cost-quality-scatter';
 import { FailureBreakdown } from '../../components/diagnostic/failure-breakdown';
+import { GradeCharts } from '../../components/diagnostic/grade-charts';
 import { RecoveryTimeline } from '../../components/diagnostic/recovery-timeline';
 import { TranscriptEvidence } from '../../components/diagnostic/transcript-evidence';
 import { ErrorBoundary } from '../../components/system';
@@ -621,7 +622,9 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
   grades = orderedGrades;
 
   return (
-    <div className="overflow-x-auto">
+    <div className="space-y-4">
+      <GradeCharts headers={headers} grades={grades} />
+      <div className="overflow-x-auto">
       <DimOrderBar order={dimOrder} onChange={setDimOrder} />
       <table className="w-full text-sm">
         <PivotHead dimOrder={dimOrder} coords={coords} headers={headers} />
@@ -669,6 +672,7 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
               headers={headers}
               grades={grades}
               pick={(g) => g.judge_scores?.[dim] ?? 0}
+              scale={10}
             />
           ))}
           <SectionHeader colSpan={headers.length + 1} label="Spec adherence" />
@@ -680,6 +684,7 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
           <BarRow label="Harness adherence score" headers={headers} grades={grades} pick={(g) => g.harness_adherence_score ?? 0} />
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
