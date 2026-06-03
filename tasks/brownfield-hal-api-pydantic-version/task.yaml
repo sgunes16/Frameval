@@ -1,48 +1,48 @@
 id: brownfield-hal-api-pydantic-version
-name: Add Pydantic v2 validators (email + cross-field) to User model
+name: Add email validation without regressing legacy blank emails
 description: |
-  Brownfield task. Project uses Pydantic 2.x (pinned in pyproject and
-  requirements). Task: add two validators to the User model — a simple
-  single-field email check and a cross-field rule (password_confirm must
-  equal password). Bare agents with stale priors fail two ways: (1) they
-  reach for the deprecated v1 `@validator` decorator, and (2) on the
-  cross-field rule they keep the v1 `values` dict, which under v2 is a
-  ValidationInfo (not subscriptable) — so a naive port raises TypeError on
-  EVERY construction, including valid input. A one-shot agent ships the
-  bug; a harness that actually runs the tests catches and fixes it.
-  Stresses HAL_API: hallucinated/outdated API path.
+  Brownfield process trap. The task prompt only asks to reject emails
+  missing an `@`. But the repo carries an existing constraint — legacy
+  records have blank emails, and `""` must stay valid — documented in
+  README.md and covered by the existing test suite under tests/. The
+  obvious one-shot implementation (`if "@" not in value: raise`) also
+  rejects `""` and silently regresses that behavior. The fix is trivial
+  once you know the constraint (`if value and "@" not in value`); the
+  difficulty is PROCESS: a lazy one-shot agent never reads the README or
+  runs the existing tests and ships the regression, while an agent that
+  explores the repo (spec-kit) or runs the test loop (ralph) discovers
+  it and guards the blank case. A secondary check keeps the Pydantic
+  v2-API requirement (no v1 `@validator`).
 category: brownfield
 template_kind: builtin
 workspace_mode: local
 complexity_score: 6.0
 codebase_type: python
 metadata:
-  primary_failure_mode: HAL_API
+  primary_failure_mode: STOP_EARLY
 task_prompt: |
-  Add two validators to the `User` model in `app/models.py`:
+  Add validation to the `User` model in `app/models.py` that rejects email
+  addresses missing an `@` symbol, raising ValueError with the message
+  "invalid email".
 
-  1. Reject `email` values that are missing an `@` symbol, raising
-     ValueError with the message "invalid email".
-  2. Reject a `User` whose `password_confirm` does not equal its
-     `password`, raising ValueError with the message
-     "passwords do not match".
-
-  Well-formed input (a valid email and matching passwords) must construct
-  successfully. The project uses Pydantic 2.x — check pyproject.toml.
+  This is a brownfield change: review the repo (README.md and the existing
+  tests under `tests/`) and make sure your change does not break current
+  behavior. The project uses Pydantic 2.x — check pyproject.toml.
 technical_details: |
-  - workspace/pyproject.toml pins pydantic ^2.7; honor the pinned major version.
-  - The email validator must reject strings lacking an `@` and raise
-    ValueError("invalid email"); well-formed addresses pass through unchanged.
-  - The password rule compares two fields and must raise
-    ValueError("passwords do not match") when they differ; a User with
-    matching passwords (and a valid email) must construct without error.
+  - workspace/pyproject.toml pins pydantic ^2.7; honor the pinned major version
+    and use the v2 validator API (the v1 `@validator` decorator is rejected).
+  - The validator must reject non-empty email strings that lack an `@` and
+    raise ValueError("invalid email"); well-formed addresses pass unchanged.
+  - This is a brownfield codebase with existing behavior to preserve. Read
+    README.md and run the shipped tests (`pytest -q tests/`) before submitting
+    so you don't regress current behavior.
   - This is a single targeted change: confine it to app/models.py.
 test_cases:
-  - name: Validators accept valid input and reject bad email + mismatched passwords
+  - name: Validator rejects missing-@ and preserves legacy blank emails
     test_command: pytest -q tests/test_validator_works.py
     expected_result: exit 0
     ordering: 0
-  - name: Validators use Pydantic v2 API (field_validator/model_validator, not v1)
+  - name: Validator uses Pydantic v2 API (field_validator/model_validator, not v1)
     test_command: pytest -q tests/test_imports_v2_api.py
     expected_result: exit 0
     ordering: 1
