@@ -47,12 +47,6 @@ export function LLMJudgeCard({ grade, isGrading }: { grade: Grade; isGrading?: b
             ))}
           </div>
 
-          {grade.judge_irr_alpha != null && grade.judge_irr_alpha > 0 && (
-            <div className="mt-2 text-xs text-fg-muted">
-              Inter-rater α: <span className="font-mono">{grade.judge_irr_alpha.toFixed(2)}</span>
-            </div>
-          )}
-
           {grade.judge_user_prompt && (
             <details className="mb-3 rounded-lg border border-border bg-bg-elev-1 p-2">
               <summary className="cursor-pointer text-xs font-medium text-fg-muted">

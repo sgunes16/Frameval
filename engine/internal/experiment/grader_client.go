@@ -141,6 +141,8 @@ func (c *GraderClient) ClassifyFailure(
 	taskDescription string,
 	transcriptTail string,
 	classifierModel string,
+	provider string,
+	apiKey string,
 ) ClassifyFailureResult {
 	fallback := ClassifyFailureResult{
 		Classification:  diagnostic.FailureClassification{Primary: diagnostic.FailureNone},
@@ -161,6 +163,8 @@ func (c *GraderClient) ClassifyFailure(
 		TaskDescription: taskDescription,
 		TranscriptTail:  transcriptTail,
 		ClassifierModel: classifierModel,
+		Provider:        provider,
+		ApiKey:          apiKey,
 	}
 	response, err := breakerExec(c.breaker, func() (*graderpb.ClassifyFailureResponse, error) {
 		return retryGrader(ctx, defaultGraderRetry, func(ctx context.Context) (*graderpb.ClassifyFailureResponse, error) {
@@ -362,7 +366,10 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 			grade.SpecPerInstruction = append(grade.SpecPerInstruction, models.InstructionResult{Instruction: item.Instruction, Status: item.Status, Reasoning: item.Reasoning})
 		}
 	}
-	grade.CompositeScore = float64(response.CompositeScore)
+	// Do NOT copy response.CompositeScore — the engine now computes the
+	// composite via computeComposite() after wiring in process + harness-adherence,
+	// and that value overwrites whatever the grader returned. Leaving this field
+	// un-set (zero) ensures the engine value is the single source of truth.
 	grade.JudgeUserPrompt = response.JudgeUserPrompt
 	return grade
 }
@@ -374,6 +381,83 @@ func gradeFromProto(response *graderpb.GradeRunResponse) models.Grade {
 // together; if AgentDx ever needs aggregate stats again, they belong in
 // engine/pkg/diagnostic where they can compose with the fingerprint vector.
 
+// judgeEnabled reports whether LLM judging/classification is on.
+//
+// Precedence (highest to lowest):
+//  1. app_settings['judge.enabled'] — authoritative when set to "true" or "false"
+//  2. FRAMEVAL_ENABLE_LLM_JUDGE env var — fallback when the SQLite row is absent
+//  3. false — safe default
+//
+// Both buildJudgeConfig and persistDiagnostic call this so the two paths
+// can never silently diverge.
+func judgeEnabled(ctx context.Context, store SettingsStore) bool {
+	if store == nil {
+		return os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE") == "true"
+	}
+	settings, err := store.GetSettingsByPrefix(ctx, "judge.")
+	if err != nil {
+		// Settings lookup failed — fall back to env.
+		return os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE") == "true"
+	}
+	if val, ok := settings["judge.enabled"]; ok {
+		// SQLite row is authoritative regardless of env.
+		return val == "true"
+	}
+	// Key absent in SQLite — fall through to env.
+	return os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE") == "true"
+}
+
+// resolveClassifierModel returns the LLM model to use for failure
+// classification.
+//
+// The classifier uses the configured judge model — never a hardcoded Anthropic
+// Haiku. Precedence (highest to lowest):
+//  1. app_settings['judge.model']  (e.g. the OpenRouter judge the user set)
+//  2. FRAMEVAL_LLM_MODEL env var
+//  3. "" — empty; combined with the judge provider (passed alongside) the
+//     grader falls back to that provider's preset default model.
+func resolveClassifierModel(ctx context.Context, store SettingsStore) string {
+	if store != nil {
+		settings, err := store.GetSettingsByPrefix(ctx, "judge.")
+		if err == nil {
+			if m := settings["judge.model"]; m != "" {
+				return m
+			}
+		}
+	}
+	return strings.TrimSpace(os.Getenv("FRAMEVAL_LLM_MODEL"))
+}
+
+// resolveClassifierProviderKey returns the provider and decrypted API key for
+// the failure classifier, using the same precedence as the judge:
+//
+//  1. app_settings['judge.provider'] → decrypted api_keys row for that provider
+//  2. Empty strings when the settings store is nil (grader falls back to env)
+//
+// The classifier reuses the judge's provider/key because they are the same
+// LLM endpoint; the only difference is the model (resolveClassifierModel).
+func resolveClassifierProviderKey(ctx context.Context, store SettingsStore) (provider, apiKey string) {
+	if store == nil {
+		return "", ""
+	}
+	settings, err := store.GetSettingsByPrefix(ctx, "judge.")
+	if err != nil {
+		return "", ""
+	}
+	provider = settings["judge.provider"]
+	if provider == "" {
+		return "", ""
+	}
+	key, err := store.GetDecryptedAPIKey(ctx, provider)
+	if err != nil {
+		// sql.ErrNoRows means no key set (e.g. Ollama); other errors are
+		// surfaced via the judge's own buildJudgeConfig log. Either way,
+		// return the provider so the grader at least knows which one to use.
+		return provider, ""
+	}
+	return provider, key
+}
+
 // buildJudgeConfig returns a JudgeConfig proto reflecting current SQLite
 // state. Returns nil when judge is disabled or the settings store is
 // missing — the grader treats a nil JudgeConfig as "use grader-side env
@@ -382,12 +466,12 @@ func (c *GraderClient) buildJudgeConfig(ctx context.Context) *graderpb.JudgeConf
 	if c.settings == nil {
 		return nil
 	}
+	if !judgeEnabled(ctx, c.settings) {
+		return nil
+	}
 	settings, err := c.settings.GetSettingsByPrefix(ctx, "judge.")
 	if err != nil {
 		c.logger.Warn("buildJudgeConfig: settings lookup failed", "err", err)
-		return nil
-	}
-	if settings["judge.enabled"] != "true" {
 		return nil
 	}
 	provider := settings["judge.provider"]

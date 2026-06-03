@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	builtinharness "github.com/mustafaselman/frameval/engine/internal/builtin/harness"
 	"github.com/mustafaselman/frameval/engine/internal/diagnostic"
 	"github.com/mustafaselman/frameval/engine/internal/executor"
+	"github.com/mustafaselman/frameval/engine/internal/metrics"
 	"github.com/mustafaselman/frameval/engine/internal/models"
 	"github.com/mustafaselman/frameval/engine/internal/sandbox"
 	"github.com/mustafaselman/frameval/engine/internal/storage"
@@ -136,6 +136,11 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 		return err
 	}
 	artifact, _ := o.store.GetLatestArtifactByVariant(ctx, run.VariantID)
+	variant, _ := o.store.GetVariant(ctx, run.VariantID)
+	regradeHarnessID := "bare"
+	if variant != nil && variant.HarnessID != "" {
+		regradeHarnessID = variant.HarnessID
+	}
 	// Regrade: pass the previously-stored verified test results so the
 	// judge sees the real test_pass_rate (its own grade_code would otherwise
 	// return 0/N — see grader_client.go:buildVerifiedTestResults).
@@ -152,6 +157,29 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 	if grade.Source != models.GradeSourceGrader {
 		return ErrGraderUnavailable
 	}
+	// Wire in engine-side process + harness-adherence on the regrade path too.
+	pm := metrics.Process(run.Transcript.ParsedTurns)
+	grade.ToolCallCount = pm.ToolCallCount
+	grade.ToolErrorRate = pm.ToolErrorRate
+	grade.RanValidation = pm.RanValidation
+	grade.TurnCount = pm.TurnCount
+	if grade.TotalTokens == 0 {
+		grade.TotalTokens = run.Transcript.TotalTokens
+	}
+	if grade.CostUSD == 0 {
+		grade.CostUSD = run.Transcript.CostUSD
+	}
+	adh := metrics.HarnessAdherence(regradeHarnessID, run.Transcript.ParsedTurns)
+	grade.HarnessAdherenceScore = adh.Score
+	if b, err := json.Marshal(adh.Checks); err == nil {
+		grade.HarnessAdherenceJSON = string(b)
+	}
+	grade.TokenEfficiency = 0
+	grade.ContextUtilization = 0
+	grade.IdleTurns = 0
+	grade.PrematureCompletion = false
+	grade.JudgeIRRAlpha = 0
+	grade.CompositeScore = computeComposite(grade)
 	grade.ID = uuid.NewString()
 	grade.RunID = run.ID
 	return o.store.SaveGrade(ctx, grade)
@@ -166,6 +194,35 @@ func (o *Orchestrator) RegradeRunPayload(ctx context.Context, runID string, task
 	if err != nil {
 		return nil, err
 	}
+	// Engine-side process + harness-adherence + composite (mirror executeRun/RegradeRun).
+	harnessID := "bare"
+	if run, rerr := o.store.GetRun(ctx, runID); rerr == nil {
+		if variant, verr := o.store.GetVariant(ctx, run.VariantID); verr == nil && variant.HarnessID != "" {
+			harnessID = variant.HarnessID
+		}
+	}
+	pm := metrics.Process(transcript.ParsedTurns)
+	grade.ToolCallCount = pm.ToolCallCount
+	grade.ToolErrorRate = pm.ToolErrorRate
+	grade.RanValidation = pm.RanValidation
+	grade.TurnCount = pm.TurnCount
+	if grade.TotalTokens == 0 {
+		grade.TotalTokens = transcript.TotalTokens
+	}
+	if grade.CostUSD == 0 {
+		grade.CostUSD = transcript.CostUSD
+	}
+	adh := metrics.HarnessAdherence(harnessID, transcript.ParsedTurns)
+	grade.HarnessAdherenceScore = adh.Score
+	if b, mErr := json.Marshal(adh.Checks); mErr == nil {
+		grade.HarnessAdherenceJSON = string(b)
+	}
+	grade.TokenEfficiency = 0
+	grade.ContextUtilization = 0
+	grade.IdleTurns = 0
+	grade.PrematureCompletion = false
+	grade.JudgeIRRAlpha = 0
+	grade.CompositeScore = computeComposite(grade)
 	grade.ID = uuid.NewString()
 	grade.RunID = runID
 	grade.GradedAt = time.Now().UTC().Format(time.RFC3339)
@@ -395,7 +452,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		if timedOut {
 			failMsg = fmt.Sprintf("run exceeded wall-clock timeout of %s; agent stalled and the sandbox was cancelled", hRun.Budget.WallTimeout())
 		}
-		transcript := models.Transcript{ID: uuid.NewString(), RunID: run.ID, RawOutput: result.RawOutput, ParsedTurns: result.ParsedTurns, TotalTurns: len(result.ParsedTurns), TotalTokens: len(strings.Fields(result.RawOutput)), CostUSD: 0}
+		transcript := models.Transcript{ID: uuid.NewString(), RunID: run.ID, RawOutput: result.RawOutput, ParsedTurns: result.ParsedTurns, TotalTurns: len(result.ParsedTurns), TotalTokens: result.TotalTokens, CostUSD: result.CostUSD}
 		_ = o.store.SaveTranscript(ctx, transcript)
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", failMsg)
 		o.broadcast("run.status", map[string]any{"experiment_id": experiment.ID, "run_id": run.ID, "status": "failed", "variant_id": run.VariantID})
@@ -410,7 +467,7 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", fileErr.Error())
 		return fileErr
 	}
-	transcript := models.Transcript{ID: uuid.NewString(), RunID: run.ID, RawOutput: result.RawOutput, ParsedTurns: result.ParsedTurns, TotalTurns: len(result.ParsedTurns), TotalTokens: len(strings.Fields(result.RawOutput)), CostUSD: 0, OutputFiles: outputFiles, FilesystemDiff: o.sandbox.DiffSnapshots(beforeSnapshot, outputFiles), Patch: patch}
+	transcript := models.Transcript{ID: uuid.NewString(), RunID: run.ID, RawOutput: result.RawOutput, ParsedTurns: result.ParsedTurns, TotalTurns: len(result.ParsedTurns), TotalTokens: result.TotalTokens, CostUSD: result.CostUSD, OutputFiles: outputFiles, FilesystemDiff: o.sandbox.DiffSnapshots(beforeSnapshot, outputFiles), Patch: patch}
 	if err := o.store.SaveTranscript(ctx, transcript); err != nil {
 		_ = o.store.UpdateRunStatus(ctx, run.ID, "failed", err.Error())
 		return err
@@ -490,8 +547,37 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		grade.TestFailCount = failed
 		grade.TestPassRate = float64(passed) / float64(total)
 		grade.FileStateValid = len(outputFiles) > 0
-		grade.CompositeScore = recomputeCompositeScore(grade)
 	}
+	// Set TotalTokens and CostUSD from the transcript when the grader did not
+	// populate them (fallback path or grader omitting process fields).
+	if grade.TotalTokens == 0 {
+		grade.TotalTokens = transcript.TotalTokens
+	}
+	if grade.CostUSD == 0 {
+		grade.CostUSD = transcript.CostUSD
+	}
+	// Compute process + harness-adherence from the structured transcript in the
+	// engine — not the grader — so they are always present even when the grader
+	// is unavailable or returns no process block.
+	pm := metrics.Process(transcript.ParsedTurns)
+	grade.ToolCallCount = pm.ToolCallCount
+	grade.ToolErrorRate = pm.ToolErrorRate
+	grade.RanValidation = pm.RanValidation
+	grade.TurnCount = pm.TurnCount
+	adh := metrics.HarnessAdherence(harnessID, transcript.ParsedTurns)
+	grade.HarnessAdherenceScore = adh.Score
+	if b, err := json.Marshal(adh.Checks); err == nil {
+		grade.HarnessAdherenceJSON = string(b)
+	}
+	// Stop populating dropped legacy fields: TokenEfficiency, ContextUtilization,
+	// IdleTurns, PrematureCompletion, JudgeIRRAlpha are left at their zero value.
+	grade.TokenEfficiency = 0
+	grade.ContextUtilization = 0
+	grade.IdleTurns = 0
+	grade.PrematureCompletion = false
+	grade.JudgeIRRAlpha = 0
+	// Single composite formula — engine is now the source of truth.
+	grade.CompositeScore = computeComposite(grade)
 	grade.ID = uuid.NewString()
 	grade.RunID = run.ID
 	grade.GradedAt = time.Now().UTC().Format(time.RFC3339)
@@ -563,14 +649,18 @@ func (o *Orchestrator) persistDiagnostic(
 		Recovery:    recovery,
 	}
 
-	// LLM classifier is opt-in via FRAMEVAL_ENABLE_LLM_JUDGE=true (set in .env).
-	// Until then we persist deterministic stages only and leave failure_label NULL.
-	if os.Getenv("FRAMEVAL_ENABLE_LLM_JUDGE") == "true" {
+	// LLM classifier runs when judge is enabled (resolved via app_settings →
+	// FRAMEVAL_ENABLE_LLM_JUDGE env → false). Model is resolved via the same
+	// precedence as the judge: app_settings['judge.model'] → FRAMEVAL_LLM_MODEL
+	// → "claude-haiku-4-5".
+	if judgeEnabled(ctx, o.store) {
 		tail := transcript.RawOutput
 		if len(tail) > 4000 {
 			tail = tail[len(tail)-4000:]
 		}
-		clsResult := o.grader.ClassifyFailure(ctx, run.ID, symptoms, taskRec.Description, tail, "claude-haiku-4-5")
+		classifierModel := resolveClassifierModel(ctx, o.store)
+		classifierProvider, classifierAPIKey := resolveClassifierProviderKey(ctx, o.store)
+		clsResult := o.grader.ClassifyFailure(ctx, run.ID, symptoms, taskRec.Description, tail, classifierModel, classifierProvider, classifierAPIKey)
 		if clsResult.Classification.Confidence > 0 {
 			label := clsResult.Classification
 			rec.FailureLabel = &label
@@ -976,22 +1066,6 @@ func materializeHiddenFiles(workspace string, metadata map[string]any) error {
 
 func isHiddenTest(testCase models.TestCase) bool {
 	return strings.EqualFold(strings.TrimSpace(testCase.Visibility), "hidden")
-}
-
-func recomputeCompositeScore(grade models.Grade) float64 {
-	codeScore := grade.TestPassRate * 10
-	processScore := ((grade.SelfValidationRate * 0.4) + (grade.TokenEfficiency * 0.3) + (grade.ContextUtilization * 0.3)) * 10
-	// Derive a single judge score from the map: average all dimensions when present.
-	judgeScore := 0.0
-	if len(grade.JudgeScores) > 0 {
-		sum := 0.0
-		for _, v := range grade.JudgeScores {
-			sum += v
-		}
-		judgeScore = sum / float64(len(grade.JudgeScores))
-	}
-	composite := (codeScore * 0.3) + (judgeScore * 0.3) + (processScore * 0.2) + (grade.SpecInstructionCompliance * 0.2)
-	return math.Round(composite*10000) / 10000
 }
 
 // speckitVersionOrDefault resolves the spec-kit CLI version: app_settings

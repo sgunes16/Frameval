@@ -13,7 +13,7 @@ from grader.config import get_settings
 from grader.failure_classifier import classify as classify_failure
 from grader.failure_classifier.grader import FailureClassifier
 from grader.llm_judge import grade as judge_grade
-from grader.process_grader import grade as process_grade
+from grader.spec_adherence import grade as spec_adherence_grade
 from grader.stats import compute_stats
 from grader.proto import grader_pb2, grader_pb2_grpc
 
@@ -24,7 +24,6 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
         return grader_pb2.HealthResponse(healthy=True, version=settings.version)
 
     def GradeRun(self, request: grader_pb2.GradeRunRequest, context: grpc.ServicerContext) -> grader_pb2.GradeRunResponse:
-        settings = get_settings()
         output_files = [{"path": f.path, "content": bytes(f.content)} for f in request.output_files]
         task = {
             "id": request.task.id,
@@ -50,9 +49,14 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
                 {"name": r.name, "passed": bool(r.passed), "output": r.output}
                 for r in v.results
             ]
-        process = process_grade(request.transcript_json)
+        process: dict = {}
         judge_cfg = request.judge_config if request.HasField("judge_config") else None
-        if settings.enable_llm_judge or judge_cfg is not None:
+        # The engine is authoritative: it only sends a JudgeConfig when
+        # app_settings['judge.enabled'] resolves true (see grader_client.judgeEnabled).
+        # Don't fall back to the env default here, or a UI "judge off" would be
+        # silently overridden by FRAMEVAL_ENABLE_LLM_JUDGE.
+        judge_active = judge_cfg is not None
+        if judge_active:
             judge = judge_grade(
                 code,
                 process,
@@ -61,20 +65,24 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
                 transcript_json=request.transcript_json.encode(),
                 config_override=judge_cfg,
             )
+            adherence = spec_adherence_grade(
+                task_prompt=task.get("prompt", ""),
+                diff=request.filesystem_diff,
+                judge_config=judge_cfg,
+                output_files=output_files,
+            )
         else:
             judge = disabled_judge_result()
-        adherence = disabled_adherence_result()
-        judge_active = settings.enable_llm_judge or judge_cfg is not None
+            adherence = disabled_adherence_result()
         composite = compute_composite(
             code,
             process,
             judge if judge_active else None,
-            None,
+            adherence if judge_active else None,
         )
         judge_pb = grader_pb2.JudgeGradeResult(
             scores=judge["scores"],
             rationales=judge["rationales"],
-            irr_alpha=judge["irr_alpha"],
             raw_responses=judge["raw_responses"],
         )
         return grader_pb2.GradeRunResponse(
@@ -87,7 +95,7 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
                 file_state_valid=code["file_state_valid"],
                 test_results=[grader_pb2.TestResult(name=item["name"], passed=item["passed"], output=item["output"]) for item in code["test_results"]],
             ),
-            process=grader_pb2.ProcessGradeResult(**process),
+            process=grader_pb2.ProcessGradeResult(),
             judge=judge_pb,
             adherence=grader_pb2.SpecAdherenceResult(
                 instruction_compliance=adherence["instruction_compliance"],
@@ -136,8 +144,14 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
         # through to the module-level default (Haiku 4.5 per spec §4.7.4).
         # This is the override hook calibration ablation runs use (Story #25).
         override_model = (request.classifier_model or "").strip()
-        if override_model:
-            verdict = FailureClassifier(model=override_model).classify(
+        req_provider = (request.provider or "").strip()
+        req_api_key = (request.api_key or "").strip()
+        if override_model or req_provider or req_api_key:
+            verdict = FailureClassifier(
+                model=override_model,
+                provider=req_provider,
+                api_key=req_api_key,
+            ).classify(
                 symptoms=symptoms,
                 task_description=request.task_description,
                 transcript_tail=request.transcript_tail,
@@ -197,7 +211,6 @@ def disabled_judge_result() -> dict:
     return {
         "scores": {},
         "rationales": {},
-        "irr_alpha": 0.0,
         "raw_responses": ["llm_judge_disabled"],
         "user_prompt": "",
     }

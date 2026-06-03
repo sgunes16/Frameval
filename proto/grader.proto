@@ -219,6 +219,8 @@ message ClassifyFailureRequest {
   // Optional override for the classifier model id. Empty string uses the
   // server-side default (Claude Haiku 4.5 per spec §4.7.4).
   string classifier_model = 5;
+  string provider = 6;   // judge provider (openrouter/openai/...); empty = grader env fallback
+  string api_key = 7;    // judge api key; empty = grader env fallback
 }
 
 message ClassifyFailureResponse {

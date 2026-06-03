@@ -55,8 +55,11 @@ func TestGraderClient_GradeRun_RoundTripsThroughFakeGrader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GradeRun: %v", err)
 	}
-	if grade.CompositeScore != 6.5 {
-		t.Errorf("CompositeScore: want 6.5, got %v", grade.CompositeScore)
+	// The engine no longer trusts the grader's composite — it computes the
+	// composite itself (code/judge/process/spec-adherence) in the orchestrator
+	// after GradeRun returns. So the client mapping leaves it at 0.
+	if grade.CompositeScore != 0 {
+		t.Errorf("CompositeScore: want 0 (engine-computed downstream), got %v", grade.CompositeScore)
 	}
 	if grade.TestPassRate != 0.75 {
 		t.Errorf("TestPassRate: want 0.75, got %v", grade.TestPassRate)
@@ -75,7 +78,7 @@ func TestGraderClient_ClassifyFailure_RoundTripsThroughFakeGrader(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	verdict := client.ClassifyFailure(ctx, "run-1", diagnostic.Symptoms{}, "task description", "tail", "claude-haiku-4-5-20251001")
+	verdict := client.ClassifyFailure(ctx, "run-1", diagnostic.Symptoms{}, "task description", "tail", "claude-haiku-4-5-20251001", "openrouter", "test-key")
 
 	if verdict.Classification.Primary != "HAL_API" {
 		t.Errorf("Primary: want HAL_API, got %q", verdict.Classification.Primary)

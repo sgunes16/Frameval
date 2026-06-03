@@ -4,6 +4,7 @@ import {
   CodeGradingCard,
   FailureClassifierCard,
   GradingHeader,
+  HarnessAdherenceCard,
   LLMJudgeCard,
   ProcessMetricsCard,
 } from '../../components/grading-inspector';
@@ -67,6 +68,7 @@ export function RunGradingPage() {
       <CodeGradingCard grade={grade ?? ({} as Grade)} />
       <ProcessMetricsCard grade={grade ?? ({} as Grade)} />
       <LLMJudgeCard grade={grade ?? ({} as Grade)} isGrading={isGrading} />
+      <HarnessAdherenceCard grade={grade ?? ({} as Grade)} />
       <FailureClassifierCard diagnostic={diagnosticQuery.data} runId={id} />
     </div>
   );

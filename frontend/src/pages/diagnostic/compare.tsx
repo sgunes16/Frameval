@@ -549,35 +549,26 @@ const METRIC_HELP: Record<string, string> = {
   Tokens: 'Total tokens the model consumed across all turns (input + output combined).',
   'Cost (USD)':
     'Sum of priced tokens × the model_config rate. Local-model runs report 0.00.',
-  'Token efficiency':
-    'Code-quality outcome per 1k tokens. Penalises runs that burned tokens without progress. 0..1.',
-  'Context utilization':
-    'How much of the model\'s context window was actually filled. 0..1; very low values can indicate the harness under-grounded the agent.',
-  'Tool call accuracy':
-    'Fraction of tool_use events whose tool_result reported success (no error string, expected schema). 0..1.',
-  'Self-validation rate':
-    'How often the agent ran tests / lint / type checks itself before declaring done. 0..1.',
+  'Tool calls': 'Total number of tool_use events emitted by the agent across all turns.',
+  'Tool error rate':
+    'Fraction of tool_use calls whose tool_result reported an error. 0..1; lower is better.',
+  'Ran validation':
+    'Did the agent run tests / lint / type checks itself before declaring done? Boolean.',
   Backtracks:
     'Number of times the agent reverted its own edit (write→re-write of the same file with overlapping ranges).',
-  'Idle turns':
-    'Turns that produced neither a tool call nor net progress (pure restating, navel-gazing). High counts → SLOP signal.',
-  'Error recoveries':
-    'Times the agent hit an error and produced a working follow-up. Higher means more resilient.',
-  'Premature completion':
-    'Did the agent declare done while at least one deterministic test was still failing? Boolean — true is bad.',
   Correctness: 'LLM-as-Judge: does the change correctly solve the stated problem? 0..1.',
   Maintainability: 'LLM-as-Judge: clarity, naming, structure. 0..1.',
   Completeness: 'LLM-as-Judge: did it cover the stated scope without leaving TODOs? 0..1.',
   'Best practices': 'LLM-as-Judge: idiomatic patterns for the language/framework. 0..1.',
   'Error handling': 'LLM-as-Judge: defensiveness, edge case coverage. 0..1.',
-  'Inter-rater α':
-    'Krippendorff\'s alpha across the judge\'s replicates. >0.67 = reliable; <0.5 = judge is wobbly, treat rubric numbers with caution.',
   'Instruction compliance':
     'Fraction of the task\'s explicit instructions the patch honored (e.g. "do not change signature"). 0..1.',
   'Convention adherence':
     'Code-style match against the repo\'s prevailing patterns (auto-detected from the codebase\'s anchor files).',
   'Constraint violations':
     'Number of explicit "don\'t" constraints the agent broke (touching forbidden files, changing public schema, etc.).',
+  'Harness adherence score':
+    'How well the agent followed the harness configuration and constraints. 0..1; higher is better.',
 };
 
 type Dim = 'harness' | 'agent' | 'model';
@@ -648,14 +639,10 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
           <NumericRow label="Turns" headers={headers} grades={grades} format={(g) => `${g.turn_count ?? '—'}`} />
           <NumericRow label="Tokens" headers={headers} grades={grades} format={(g) => g.total_tokens ? g.total_tokens.toLocaleString() : '—'} />
           <NumericRow label="Cost (USD)" headers={headers} grades={grades} format={(g) => g.cost_usd != null ? `$${g.cost_usd.toFixed(4)}` : '—'} />
-          <BarRow label="Token efficiency" headers={headers} grades={grades} pick={(g) => g.token_efficiency} />
-          <BarRow label="Context utilization" headers={headers} grades={grades} pick={(g) => g.context_utilization} />
-          <BarRow label="Tool call accuracy" headers={headers} grades={grades} pick={(g) => g.tool_call_accuracy ?? 0} />
-          <BarRow label="Self-validation rate" headers={headers} grades={grades} pick={(g) => g.self_validation_rate ?? 0} />
+          <NumericRow label="Tool calls" headers={headers} grades={grades} format={(g) => g.tool_call_count != null ? `${g.tool_call_count}` : '—'} />
+          <NumericRow label="Tool error rate" headers={headers} grades={grades} format={(g) => g.tool_error_rate != null ? `${(g.tool_error_rate * 100).toFixed(0)}%` : '—'} />
+          <BoolRow label="Ran validation" headers={headers} grades={grades} pick={(g) => g.ran_validation} positive="yes" negative="no" />
           <NumericRow label="Backtracks" headers={headers} grades={grades} format={(g) => `${g.backtrack_count ?? 0}`} />
-          <NumericRow label="Idle turns" headers={headers} grades={grades} format={(g) => `${g.idle_turns ?? 0}`} />
-          <NumericRow label="Error recoveries" headers={headers} grades={grades} format={(g) => `${g.error_recovery_count ?? 0}`} />
-          <BoolRow label="Premature completion" headers={headers} grades={grades} pick={(g) => g.premature_completion} positive="yes" negative="no" tone="warn-positive" />
 
           <SectionHeader colSpan={headers.length + 1} label="LLM-as-Judge rubric" />
           <tr>
@@ -684,12 +671,13 @@ function GradeComparisonTable({ runIds, runs, grades, expIndex }: GradeCompariso
               pick={(g) => g.judge_scores?.[dim] ?? 0}
             />
           ))}
-          <NumericRow label="Inter-rater α" headers={headers} grades={grades} format={(g) => g.judge_irr_alpha != null ? g.judge_irr_alpha.toFixed(2) : '—'} />
-
           <SectionHeader colSpan={headers.length + 1} label="Spec adherence" />
           <BarRow label="Instruction compliance" headers={headers} grades={grades} pick={(g) => g.spec_instruction_compliance} />
           <BarRow label="Convention adherence" headers={headers} grades={grades} pick={(g) => g.spec_convention_adherence ?? 0} />
           <NumericRow label="Constraint violations" headers={headers} grades={grades} format={(g) => `${g.spec_constraint_violations ?? 0}`} />
+
+          <SectionHeader colSpan={headers.length + 1} label="Harness adherence" />
+          <BarRow label="Harness adherence score" headers={headers} grades={grades} pick={(g) => g.harness_adherence_score ?? 0} />
         </tbody>
       </table>
     </div>

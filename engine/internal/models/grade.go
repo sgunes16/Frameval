@@ -31,6 +31,16 @@ type Grade struct {
 	CompositeScore            float64             `json:"composite_score"`
 	GradedAt                  string              `json:"graded_at"`
 	TestResults               []TestResult        `json:"test_results,omitempty"`
+	// Real process + harness-adherence metrics (metrics redesign, migration 022).
+	ToolCallCount         int     `json:"tool_call_count"`
+	ToolErrorRate         float64 `json:"tool_error_rate"`
+	RanValidation         bool    `json:"ran_validation"`
+	HarnessAdherenceScore float64 `json:"harness_adherence_score"`
+	// HarnessAdherenceJSON holds the serialized []metrics.Check slice produced
+	// by the harness-adherence grader. Stored as a JSON string for forward
+	// compatibility; consumers unmarshal on demand.
+	HarnessAdherenceJSON string `json:"harness_adherence_json,omitempty"`
+
 	// JudgeUserPrompt is the rendered user message that was sent to the
 	// LLM judge model. Stored for transparency and debugging — the
 	// progressive grading view surfaces it alongside judge scores so

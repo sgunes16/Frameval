@@ -96,7 +96,14 @@ func (e *OpenCodeExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResu
 
 	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, env, command, cfg.OnOutput)
 	turns, _ := e.ParseTranscript([]byte(output))
-	return &RunResult{RawOutput: output, ParsedTurns: turns, StreamedOutput: cfg.OnOutput != nil}, err
+	totalTokens, costUSD := accumulateOpenCodeTokensAndCost([]byte(output))
+	return &RunResult{
+		RawOutput:      output,
+		ParsedTurns:    turns,
+		StreamedOutput: cfg.OnOutput != nil,
+		TotalTokens:    totalTokens,
+		CostUSD:        costUSD,
+	}, err
 }
 
 // ParseTranscript reads opencode's --format json line-by-line. Each
@@ -180,6 +187,69 @@ type opencodeEvent struct {
 	SessionID string          `json:"sessionID"`
 	Part      json.RawMessage `json:"part,omitempty"`
 	Error     string          `json:"error,omitempty"`
+}
+
+// opencodeStepFinishPart is the shape of the `part` payload on a
+// `step_finish` event. opencode carries real token counts and cost here.
+type opencodeStepFinishPart struct {
+	Tokens struct {
+		Input  int `json:"input"`
+		Output int `json:"output"`
+	} `json:"tokens"`
+	Cost float64 `json:"cost"`
+}
+
+// accumulateOpenCodeTokensAndCost scans a raw opencode --format json stream
+// and extracts real token counts and cost from `step_finish` events.
+//
+// Summation rule: per-step `input` grows (it includes the accumulating
+// context), so summing `input` or `total` across steps double-counts.
+// Correct formula:
+//
+//	TotalTokens = Σ per-step output + FINAL step's input
+//	CostUSD     = Σ per-step cost   (safe to sum)
+func accumulateOpenCodeTokensAndCost(raw []byte) (totalTokens int, costUSD float64) {
+	text := strings.TrimSpace(string(raw))
+	if text == "" {
+		return 0, 0
+	}
+	scanner := bufio.NewScanner(strings.NewReader(text))
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+
+	var genTokens int  // Σ output tokens across all steps
+	var lastInput int  // input tokens of the most recent step_finish
+	var hasSteps bool
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var event opencodeEvent
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+		if event.Type != "step_finish" {
+			continue
+		}
+		if len(event.Part) == 0 {
+			continue
+		}
+		var part opencodeStepFinishPart
+		if err := json.Unmarshal(event.Part, &part); err != nil {
+			continue
+		}
+		genTokens += part.Tokens.Output
+		lastInput = part.Tokens.Input
+		costUSD += part.Cost
+		hasSteps = true
+	}
+
+	if !hasSteps {
+		return 0, 0
+	}
+	totalTokens = genTokens + lastInput
+	return totalTokens, costUSD
 }
 
 func opencodeEventToTurn(event opencodeEvent) *ParsedTurn {

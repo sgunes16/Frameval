@@ -310,3 +310,17 @@ func TestSpecKitSetupAcceptsKnownExtensionID(t *testing.T) {
 		t.Errorf("stashed extension: got %+v ok=%v", run.Metadata["speckit.extension"], ok)
 	}
 }
+
+func TestMergeStageTranscriptsSumsTokensAndCost(t *testing.T) {
+	results := []*executor.RunResult{
+		{RawOutput: "a", TotalTokens: 100, CostUSD: 0.001},
+		{RawOutput: "b", TotalTokens: 250, CostUSD: 0.002},
+	}
+	merged := mergeStageTranscripts([]string{"specify", "implement"}, results)
+	if merged.TotalTokens != 350 {
+		t.Errorf("TotalTokens: got %d want 350", merged.TotalTokens)
+	}
+	if merged.CostUSD < 0.0029 || merged.CostUSD > 0.0031 {
+		t.Errorf("CostUSD: got %v want ~0.003", merged.CostUSD)
+	}
+}
