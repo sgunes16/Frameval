@@ -1121,13 +1121,12 @@ func harnessExcludePathspecs(harnessID string) []string {
 		return []string{":!CLAUDE.md"}
 	case "speckit":
 		// spec-kit lays down .specify/memory/constitution.md at Setup,
-		// registers slash commands under .opencode/commands/ via
-		// `specify init` + `specify extension add`, writes the opencode
-		// agent-context file AGENTS.md, and creates specs/<NNN>-<slug>/
-		// {spec,plan,tasks}.md + a memory/ folder during the workflow
-		// stages. All are harness scaffolding, not agent intent.
+		// writes the opencode agent-context file AGENTS.md, and creates
+		// specs/<NNN>-<slug>/{spec,plan,tasks}.md + a memory/ folder during
+		// the workflow stages. All are harness scaffolding, not agent intent.
+		// (.opencode/, where `specify init` registers slash commands, is
+		// already covered by the executor baseline in verificationEnvironment.)
 		return []string{
-			":!.opencode", ":!.opencode/**",
 			":!.specify", ":!.specify/**",
 			":!specs", ":!specs/**",
 			":!memory", ":!memory/**",
