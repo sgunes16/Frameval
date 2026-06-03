@@ -144,8 +144,14 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
         # through to the module-level default (Haiku 4.5 per spec §4.7.4).
         # This is the override hook calibration ablation runs use (Story #25).
         override_model = (request.classifier_model or "").strip()
-        if override_model:
-            verdict = FailureClassifier(model=override_model).classify(
+        req_provider = (request.provider or "").strip()
+        req_api_key = (request.api_key or "").strip()
+        if override_model or req_provider or req_api_key:
+            verdict = FailureClassifier(
+                model=override_model,
+                provider=req_provider,
+                api_key=req_api_key,
+            ).classify(
                 symptoms=symptoms,
                 task_description=request.task_description,
                 transcript_tail=request.transcript_tail,

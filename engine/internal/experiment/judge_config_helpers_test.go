@@ -52,6 +52,65 @@ func TestJudgeEnabled(t *testing.T) {
 	})
 }
 
+// TestResolveClassifierProviderKey covers the provider+key resolution for the
+// failure classifier. It mirrors the judge's buildJudgeConfig behaviour so the
+// two paths stay in sync.
+func TestResolveClassifierProviderKey(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("nil store returns empty strings (grader falls back to env)", func(t *testing.T) {
+		provider, apiKey := resolveClassifierProviderKey(ctx, nil)
+		if provider != "" {
+			t.Errorf("nil store: want empty provider, got %q", provider)
+		}
+		if apiKey != "" {
+			t.Errorf("nil store: want empty apiKey, got %q", apiKey)
+		}
+	})
+
+	t.Run("resolves provider and decrypted api key from app_settings", func(t *testing.T) {
+		store := support.TmpStore(t)
+		_ = store.SetSetting(ctx, "judge.provider", "openrouter")
+		_ = store.UpsertAPIKey(ctx, "openrouter", "sk-or-test-key")
+
+		provider, apiKey := resolveClassifierProviderKey(ctx, store)
+		if provider != "openrouter" {
+			t.Errorf("want provider=openrouter, got %q", provider)
+		}
+		if apiKey != "sk-or-test-key" {
+			t.Errorf("want apiKey=sk-or-test-key, got %q", apiKey)
+		}
+	})
+
+	t.Run("returns provider with empty key when no api_keys row", func(t *testing.T) {
+		store := support.TmpStore(t)
+		_ = store.SetSetting(ctx, "judge.provider", "ollama")
+		// no api_keys row for ollama
+
+		provider, apiKey := resolveClassifierProviderKey(ctx, store)
+		if provider != "ollama" {
+			t.Errorf("want provider=ollama, got %q", provider)
+		}
+		if apiKey != "" {
+			t.Errorf("want empty apiKey for ollama (no key needed), got %q", apiKey)
+		}
+	})
+
+	t.Run("returns empty strings when provider not set in app_settings", func(t *testing.T) {
+		store := support.TmpStore(t)
+		// Migration may seed judge.provider; override to empty to test the fallback path.
+		_ = store.SetSetting(ctx, "judge.provider", "")
+
+		provider, apiKey := resolveClassifierProviderKey(ctx, store)
+		if provider != "" {
+			t.Errorf("want empty provider, got %q", provider)
+		}
+		if apiKey != "" {
+			t.Errorf("want empty apiKey, got %q", apiKey)
+		}
+	})
+}
+
 // TestResolveClassifierModel covers the three-tier fallback for the classifier model.
 func TestResolveClassifierModel(t *testing.T) {
 	ctx := context.Background()

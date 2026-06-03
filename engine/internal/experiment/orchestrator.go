@@ -659,7 +659,8 @@ func (o *Orchestrator) persistDiagnostic(
 			tail = tail[len(tail)-4000:]
 		}
 		classifierModel := resolveClassifierModel(ctx, o.store)
-		clsResult := o.grader.ClassifyFailure(ctx, run.ID, symptoms, taskRec.Description, tail, classifierModel)
+		classifierProvider, classifierAPIKey := resolveClassifierProviderKey(ctx, o.store)
+		clsResult := o.grader.ClassifyFailure(ctx, run.ID, symptoms, taskRec.Description, tail, classifierModel, classifierProvider, classifierAPIKey)
 		if clsResult.Classification.Confidence > 0 {
 			label := clsResult.Classification
 			rec.FailureLabel = &label

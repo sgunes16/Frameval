@@ -67,9 +67,13 @@ class FailureClassifier:
         self,
         *,
         model: str = "",  # empty = "use shared client's default resolution"
+        provider: str = "",  # empty = grader env fallback
+        api_key: str = "",  # empty = grader env fallback
         client: _ClassifierClient | None = None,
     ) -> None:
         self.model = model
+        self.provider = provider
+        self.api_key = api_key
         self._client: _ClassifierClient | None = client
 
     def _client_lazy(self) -> _ClassifierClient:
@@ -80,9 +84,13 @@ class FailureClassifier:
         from grader.llm_client import build_client, load_config
 
         override = None
-        if self.model:
+        if self.model or self.provider or self.api_key:
             from types import SimpleNamespace
-            override = SimpleNamespace(provider="", model=self.model, api_key="")
+            override = SimpleNamespace(
+                provider=self.provider,
+                model=self.model,
+                api_key=self.api_key,
+            )
         cfg = load_config(override)
         self._client = build_client(cfg)
         return self._client

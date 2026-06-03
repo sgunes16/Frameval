@@ -1846,6 +1846,8 @@ type ClassifyFailureRequest struct {
 	// Optional override for the classifier model id. Empty string uses the
 	// server-side default (Claude Haiku 4.5 per spec §4.7.4).
 	ClassifierModel string `protobuf:"bytes,5,opt,name=classifier_model,json=classifierModel,proto3" json:"classifier_model,omitempty"`
+	Provider        string `protobuf:"bytes,6,opt,name=provider,proto3" json:"provider,omitempty"`           // judge provider (openrouter/openai/...); empty = grader env fallback
+	ApiKey          string `protobuf:"bytes,7,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"` // judge api key; empty = grader env fallback
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1911,6 +1913,20 @@ func (x *ClassifyFailureRequest) GetTranscriptTail() string {
 func (x *ClassifyFailureRequest) GetClassifierModel() string {
 	if x != nil {
 		return x.ClassifierModel
+	}
+	return ""
+}
+
+func (x *ClassifyFailureRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ClassifyFailureRequest) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
 	}
 	return ""
 }
@@ -2272,13 +2288,15 @@ const file_grader_proto_rawDesc = "" +
 	"\x12priority_signaling\x18\b \x01(\tR\x11prioritySignaling\x12#\n" +
 	"\rtool_guidance\x18\t \x01(\tR\ftoolGuidance\x12%\n" +
 	"\x0eerror_handling\x18\n" +
-	" \x01(\tR\rerrorHandling\"\xd3\x01\n" +
+	" \x01(\tR\rerrorHandling\"\x88\x02\n" +
 	"\x16ClassifyFailureRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12#\n" +
 	"\rsymptoms_json\x18\x02 \x01(\fR\fsymptomsJson\x12)\n" +
 	"\x10task_description\x18\x03 \x01(\tR\x0ftaskDescription\x12'\n" +
 	"\x0ftranscript_tail\x18\x04 \x01(\tR\x0etranscriptTail\x12)\n" +
-	"\x10classifier_model\x18\x05 \x01(\tR\x0fclassifierModel\"\x8d\x01\n" +
+	"\x10classifier_model\x18\x05 \x01(\tR\x0fclassifierModel\x12\x1a\n" +
+	"\bprovider\x18\x06 \x01(\tR\bprovider\x12\x17\n" +
+	"\aapi_key\x18\a \x01(\tR\x06apiKey\"\x8d\x01\n" +
 	"\x17ClassifyFailureResponse\x12S\n" +
 	"\x0eclassification\x18\x01 \x01(\v2+.frameval.grader.FailureClassificationProtoR\x0eclassification\x12\x1d\n" +
 	"\n" +

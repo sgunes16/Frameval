@@ -141,6 +141,8 @@ func (c *GraderClient) ClassifyFailure(
 	taskDescription string,
 	transcriptTail string,
 	classifierModel string,
+	provider string,
+	apiKey string,
 ) ClassifyFailureResult {
 	fallback := ClassifyFailureResult{
 		Classification:  diagnostic.FailureClassification{Primary: diagnostic.FailureNone},
@@ -161,6 +163,8 @@ func (c *GraderClient) ClassifyFailure(
 		TaskDescription: taskDescription,
 		TranscriptTail:  transcriptTail,
 		ClassifierModel: classifierModel,
+		Provider:        provider,
+		ApiKey:          apiKey,
 	}
 	response, err := breakerExec(c.breaker, func() (*graderpb.ClassifyFailureResponse, error) {
 		return retryGrader(ctx, defaultGraderRetry, func(ctx context.Context) (*graderpb.ClassifyFailureResponse, error) {
@@ -423,6 +427,36 @@ func resolveClassifierModel(ctx context.Context, store SettingsStore) string {
 		return m
 	}
 	return "claude-haiku-4-5"
+}
+
+// resolveClassifierProviderKey returns the provider and decrypted API key for
+// the failure classifier, using the same precedence as the judge:
+//
+//  1. app_settings['judge.provider'] → decrypted api_keys row for that provider
+//  2. Empty strings when the settings store is nil (grader falls back to env)
+//
+// The classifier reuses the judge's provider/key because they are the same
+// LLM endpoint; the only difference is the model (resolveClassifierModel).
+func resolveClassifierProviderKey(ctx context.Context, store SettingsStore) (provider, apiKey string) {
+	if store == nil {
+		return "", ""
+	}
+	settings, err := store.GetSettingsByPrefix(ctx, "judge.")
+	if err != nil {
+		return "", ""
+	}
+	provider = settings["judge.provider"]
+	if provider == "" {
+		return "", ""
+	}
+	key, err := store.GetDecryptedAPIKey(ctx, provider)
+	if err != nil {
+		// sql.ErrNoRows means no key set (e.g. Ollama); other errors are
+		// surfaced via the judge's own buildJudgeConfig log. Either way,
+		// return the provider so the grader at least knows which one to use.
+		return provider, ""
+	}
+	return provider, key
 }
 
 // buildJudgeConfig returns a JudgeConfig proto reflecting current SQLite

@@ -129,3 +129,48 @@ def test_unclassified_long_reason_respects_400_cap():
     assert len(sentinel.rationale) <= 400
     assert sentinel.rationale.startswith("classifier_unavailable: ")
     assert sentinel.primary == FailureCode.NONE
+
+
+def test_classifier_provider_and_api_key_passed_to_load_config(monkeypatch: pytest.MonkeyPatch):
+    """FailureClassifier(provider=..., api_key=...) must forward those values
+    to load_config via the SimpleNamespace override so the real API key
+    (plumbed from SQLite via ClassifyFailureRequest) reaches the LLM client.
+
+    Uses monkeypatch to intercept load_config and build_client without
+    hitting the real Anthropic/OpenAI SDK.
+    """
+    captured: dict = {}
+
+    def fake_load_config(override=None):
+        captured["override"] = override
+        # Return a minimal config-like namespace the real build_client would
+        # accept; build_client is also monkeypatched so it never runs.
+        from types import SimpleNamespace
+        return SimpleNamespace(provider="openrouter", model="test-model", api_key="k")
+
+    class _FakeClient:
+        def create(self, **kwargs: Any) -> FailureClassification:
+            return FailureClassification(
+                primary=FailureCode.HAL_API,
+                secondary=[],
+                evidence=[],
+                confidence=0.9,
+                rationale="fake",
+            )
+
+    def fake_build_client(cfg):
+        return _FakeClient()
+
+    monkeypatch.setattr("grader.llm_client.load_config", fake_load_config, raising=False)
+    monkeypatch.setattr("grader.llm_client.build_client", fake_build_client, raising=False)
+
+    cls = FailureClassifier(model="m", provider="openrouter", api_key="k")
+    # Trigger lazy client init via classify()
+    cls.classify(symptoms={}, task_description="t", transcript_tail="")
+
+    assert "override" in captured, "load_config was never called"
+    override = captured["override"]
+    assert override is not None, "override must be a SimpleNamespace, not None"
+    assert override.provider == "openrouter", f"expected provider='openrouter', got {override.provider!r}"
+    assert override.api_key == "k", f"expected api_key='k', got {override.api_key!r}"
+    assert override.model == "m", f"expected model='m', got {override.model!r}"
