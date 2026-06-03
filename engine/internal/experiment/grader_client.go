@@ -410,10 +410,12 @@ func judgeEnabled(ctx context.Context, store SettingsStore) bool {
 // resolveClassifierModel returns the LLM model to use for failure
 // classification.
 //
-// Precedence (highest to lowest):
-//  1. app_settings['judge.model']
+// The classifier uses the configured judge model — never a hardcoded Anthropic
+// Haiku. Precedence (highest to lowest):
+//  1. app_settings['judge.model']  (e.g. the OpenRouter judge the user set)
 //  2. FRAMEVAL_LLM_MODEL env var
-//  3. "claude-haiku-4-5" — hardcoded fallback
+//  3. "" — empty; combined with the judge provider (passed alongside) the
+//     grader falls back to that provider's preset default model.
 func resolveClassifierModel(ctx context.Context, store SettingsStore) string {
 	if store != nil {
 		settings, err := store.GetSettingsByPrefix(ctx, "judge.")
@@ -423,10 +425,7 @@ func resolveClassifierModel(ctx context.Context, store SettingsStore) string {
 			}
 		}
 	}
-	if m := os.Getenv("FRAMEVAL_LLM_MODEL"); m != "" {
-		return m
-	}
-	return "claude-haiku-4-5"
+	return strings.TrimSpace(os.Getenv("FRAMEVAL_LLM_MODEL"))
 }
 
 // resolveClassifierProviderKey returns the provider and decrypted API key for

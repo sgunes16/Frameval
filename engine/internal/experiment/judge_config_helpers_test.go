@@ -115,11 +115,12 @@ func TestResolveClassifierProviderKey(t *testing.T) {
 func TestResolveClassifierModel(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("hardcoded fallback when nil store and no env", func(t *testing.T) {
+	t.Run("empty when nil store and no env (no haiku default)", func(t *testing.T) {
 		t.Setenv("FRAMEVAL_LLM_MODEL", "")
-		// nil store → no SQLite row → env empty → hardcoded default
-		if m := resolveClassifierModel(ctx, nil); m != "claude-haiku-4-5" {
-			t.Errorf("want claude-haiku-4-5, got %q", m)
+		// nil store → no SQLite row → env empty → "" (grader falls back to the
+		// provider's preset default; never a hardcoded Anthropic Haiku).
+		if m := resolveClassifierModel(ctx, nil); m != "" {
+			t.Errorf("want empty, got %q", m)
 		}
 	})
 
