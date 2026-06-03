@@ -130,7 +130,13 @@ func (h *SpecKit) SandboxPrepCommands(run harness.HarnessRun) []string {
 		cmds = append(cmds, fmt.Sprintf(
 			`uv tool install --force specify-cli --from "git+https://github.com/github/spec-kit.git@%s"`, version))
 	}
-	cmds = append(cmds, `specify init --here --ai opencode --script sh --no-git --force --ignore-agent-tools`)
+	// NOT --no-git: spec-kit's feature workflow (create-new-feature.sh →
+	// specs/<branch>/spec.md, check-prerequisites.sh) needs a git feature
+	// branch. With --no-git the scaffolding fails ("not on a feature branch")
+	// and every stage reports "no spec". The workspace is already a git repo
+	// (setup.sh + baseline tag); the scope test diffs `git diff baseline`
+	// across branches and .specify/specs/AGENTS.md are scope-excluded.
+	cmds = append(cmds, `specify init --here --ai opencode --script sh --force --ignore-agent-tools`)
 	if ext.ExtensionName != "" && ext.InstallURL != "" {
 		// Single-quote the URL for POSIX shell safety (catalog URLs are plain
 		// HTTPS, no single quotes). `yes |` answers the untrusted-URL

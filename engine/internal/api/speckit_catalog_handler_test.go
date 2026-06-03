@@ -21,8 +21,8 @@ func TestSpecKitCatalogHandlerReturnsAllEntries(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode: %v body=%s", err, rec.Body.String())
 	}
-	if len(got) != 6 {
-		t.Errorf("entry count: got %d want 6", len(got))
+	if len(got) != 1 {
+		t.Errorf("entry count: got %d want 1 (canonical only)", len(got))
 	}
 	if got[0].ID != "canonical" {
 		t.Errorf("first id: got %q want canonical", got[0].ID)
