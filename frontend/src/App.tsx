@@ -9,7 +9,7 @@ export default function App() {
       <div className="flex min-h-screen flex-1 flex-col">
         <Header />
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mx-auto max-w-[1180px]">
+          <div className="mx-auto max-w-[1600px]">
             <AppRoutes />
           </div>
         </main>

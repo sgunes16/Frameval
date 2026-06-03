@@ -31,7 +31,7 @@ import { formatTimeAgo, statusLabel, statusTone } from '../../lib/utils';
  *
  * The user flow is:
  *   1. Pick an experiment from the dropdown.
- *   2. Tick 2–5 runs from that experiment's run list (checkboxes,
+ *   2. Tick 2–10 runs from that experiment's run list (checkboxes,
  *      pre-checked for completed runs by default).
  *   3. The five comparison charts render below.
  *
@@ -115,8 +115,8 @@ export function DiagnosticComparePage() {
     const completed = experimentRuns.filter((r) => r.status === 'completed').map((r) => r.id);
     if (completed.length === 0) return;
     autoSelectedRef.current = true;
-    // Cap at 5 to respect the chart-sanity ceiling.
-    setSelected(new Set(completed.slice(0, 5)));
+    // Cap at 10 to respect the chart-sanity ceiling.
+    setSelected(new Set(completed.slice(0, 10)));
   }, [isMatrix, experimentRuns, initialRunIds.length, autoSelectedRef]);
 
   const setExperiment = (next: string) => {
@@ -135,13 +135,13 @@ export function DiagnosticComparePage() {
 
   const selectAllCompleted = () => {
     setSelected(
-      new Set(experimentRuns.filter((r) => r.status === 'completed').map((r) => r.id).slice(0, 5)),
+      new Set(experimentRuns.filter((r) => r.status === 'completed').map((r) => r.id).slice(0, 10)),
     );
   };
   const clearSelection = () => setSelected(new Set());
 
   const runIds = useMemo(() => Array.from(selected), [selected]);
-  const overLimit = runIds.length > 5;
+  const overLimit = runIds.length > 10;
 
   const { data: diagnostics, isLoading: diagLoading, isError, error } = useCompareDiagnostics(
     overLimit ? [] : runIds,
@@ -183,7 +183,7 @@ export function DiagnosticComparePage() {
         <div className="flex items-start justify-between gap-3">
           <CardHeader
             title="Diagnostic Compare"
-            description="Pick an experiment, then choose 2–5 runs to compare their AgentDx profiles side-by-side."
+            description="Pick an experiment, then choose 2–10 runs to compare their AgentDx profiles side-by-side."
           />
           <Link to="/diagnostic/launch">
             <Button size="sm">New diagnostic run</Button>
@@ -240,7 +240,7 @@ export function DiagnosticComparePage() {
         <div className="mt-3 flex items-center justify-between gap-2">
           <span className="text-xs text-fg-muted">
             {overLimit
-              ? 'Pick at most 5 runs. The five charts get noisy beyond that.'
+              ? 'Pick at most 10 runs. The charts get noisy beyond that.'
               : runIds.length < 2 && runIds.length > 0
               ? 'Pick at least one more run to compare.'
               : ''}
@@ -515,7 +515,7 @@ interface GradeComparisonTableProps {
 }
 
 /**
- * Side-by-side grade table for 2-5 selected runs. Each metric is one
+ * Side-by-side grade table for 2-10 selected runs. Each metric is one
  * row; each run is one column. Rows are grouped into four sections
  * matching the grader pipeline's structure (engine/grader/proto):
  *
