@@ -63,17 +63,6 @@ func firstEditTurnIndex(turns []executor.ParsedTurn, pathPredicate func(string) 
 	return min, true
 }
 
-// referencesClaudeMD returns true if a tool turn references CLAUDE.md either
-// in its FilesTouched list or in its Content string.
-func referencesClaudeMD(t executor.ParsedTurn) bool {
-	for _, f := range t.FilesTouched {
-		if strings.EqualFold(f, "CLAUDE.md") || strings.HasSuffix(f, "/CLAUDE.md") {
-			return true
-		}
-	}
-	return strings.Contains(t.Content, "CLAUDE.md")
-}
-
 // isAppSourceFile returns true when path is inside an app/ directory, which
 // we treat as "implementation / source" code.
 func isAppSourceFile(path string) bool {
@@ -124,7 +113,12 @@ func HarnessAdherence(harnessID string, turns []executor.ParsedTurn) Adherence {
 		return scoreChecks(nil)
 
 	case "agent_instructions":
-		return checkAgentInstructions(turns)
+		// No deterministic process check: the harness injects CLAUDE.md and
+		// opencode auto-loads it into the model's context (it is never read via
+		// a tool call), so there is no transcript signature to verify. Whether
+		// the agent actually *followed* the instructions is a semantic judgment
+		// the LLM judge scores, not a process metric. Treat as fully adherent.
+		return scoreChecks(nil)
 
 	case "multiagent":
 		return checkMultiagent(turns)
@@ -139,24 +133,6 @@ func HarnessAdherence(harnessID string, turns []executor.ParsedTurn) Adherence {
 		// Unknown harness → no checks, fully adherent by definition.
 		return scoreChecks(nil)
 	}
-}
-
-// checkAgentInstructions evaluates the "agent_instructions" harness.
-// Single check: at least one tool turn references CLAUDE.md.
-func checkAgentInstructions(turns []executor.ParsedTurn) Adherence {
-	found := false
-	for _, t := range turns {
-		if t.BlockKind != executor.BlockKindToolUse {
-			continue
-		}
-		if referencesClaudeMD(t) {
-			found = true
-			break
-		}
-	}
-	return scoreChecks([]Check{
-		{Name: "instructions_present", Passed: found},
-	})
 }
 
 // checkMultiagent evaluates the "multiagent" harness.
@@ -192,30 +168,42 @@ func checkMultiagent(turns []executor.ParsedTurn) Adherence {
 }
 
 // checkRalph evaluates the "ralph" harness.
-// Single check: the agent both edited a source file AND ran a validation
-// command at a TurnIndex AFTER the first source edit. This is the hallmark
-// of the ralph iteration loop.
+// Single check "iterated": evidence that the ralph loop actually ran more
+// than once. Ralph's Invoke stamps each round's turns with Stage
+// "iteration-N", so ≥2 distinct iteration stages is the direct signal. As a
+// fallback for transcripts without those markers, the edit→validate rhythm
+// (a validation command after the first source edit) also counts — but note
+// ralph often verifies with an inline `python3 -c` smoke check that is NOT in
+// validationPatterns, which is why the iteration-stage signal is primary.
 func checkRalph(turns []executor.ParsedTurn) Adherence {
-	// Find the first turn that touches any file (proxy for "source edit").
-	firstEditIdx := -1
+	// Primary signal: ≥2 distinct "iteration-N" stages.
+	iterStages := make(map[string]struct{})
 	for _, t := range turns {
-		if t.BlockKind != executor.BlockKindToolUse {
-			continue
-		}
-		if len(t.FilesTouched) > 0 {
-			if firstEditIdx < 0 || t.TurnIndex < firstEditIdx {
-				firstEditIdx = t.TurnIndex
-			}
+		if strings.HasPrefix(t.Stage, "iteration-") {
+			iterStages[t.Stage] = struct{}{}
 		}
 	}
+	passed := len(iterStages) >= 2
 
-	passed := false
-	if firstEditIdx >= 0 {
-		// Look for a validation turn that comes AFTER the first source edit.
+	if !passed {
+		// Fallback: first source edit followed by a validation run.
+		firstEditIdx := -1
 		for _, t := range turns {
-			if isValidationTurn(t) && t.TurnIndex > firstEditIdx {
-				passed = true
-				break
+			if t.BlockKind != executor.BlockKindToolUse {
+				continue
+			}
+			if len(t.FilesTouched) > 0 {
+				if firstEditIdx < 0 || t.TurnIndex < firstEditIdx {
+					firstEditIdx = t.TurnIndex
+				}
+			}
+		}
+		if firstEditIdx >= 0 {
+			for _, t := range turns {
+				if isValidationTurn(t) && t.TurnIndex > firstEditIdx {
+					passed = true
+					break
+				}
 			}
 		}
 	}

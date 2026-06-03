@@ -1096,9 +1096,13 @@ func runEnvironment(taskID string) map[string]string {
 // genuinely wrote them.
 func verificationEnvironment(taskID, harnessID string) map[string]string {
 	env := runEnvironment(taskID)
-	if excludes := harnessExcludePathspecs(harnessID); len(excludes) > 0 {
-		env["FRAMEVAL_HARNESS_EXCLUDES"] = strings.Join(excludes, "\n")
-	}
+	// The opencode executor writes opencode.json (and a .opencode/ dir) as its
+	// own project config on every run, independent of harness. These are never
+	// agent drift, so exclude them for ALL harnesses (including bare/ralph/
+	// multiagent, which otherwise contribute no excludes).
+	excludes := []string{":!opencode.json", ":!.opencode", ":!.opencode/**"}
+	excludes = append(excludes, harnessExcludePathspecs(harnessID)...)
+	env["FRAMEVAL_HARNESS_EXCLUDES"] = strings.Join(excludes, "\n")
 	return env
 }
 
@@ -1117,13 +1121,12 @@ func harnessExcludePathspecs(harnessID string) []string {
 		return []string{":!CLAUDE.md"}
 	case "speckit":
 		// spec-kit lays down .specify/memory/constitution.md at Setup,
-		// registers slash commands under .opencode/commands/ via
-		// `specify init` + `specify extension add`, writes the opencode
-		// agent-context file AGENTS.md, and creates specs/<NNN>-<slug>/
-		// {spec,plan,tasks}.md + a memory/ folder during the workflow
-		// stages. All are harness scaffolding, not agent intent.
+		// writes the opencode agent-context file AGENTS.md, and creates
+		// specs/<NNN>-<slug>/{spec,plan,tasks}.md + a memory/ folder during
+		// the workflow stages. All are harness scaffolding, not agent intent.
+		// (.opencode/, where `specify init` registers slash commands, is
+		// already covered by the executor baseline in verificationEnvironment.)
 		return []string{
-			":!.opencode", ":!.opencode/**",
 			":!.specify", ":!.specify/**",
 			":!specs", ":!specs/**",
 			":!memory", ":!memory/**",

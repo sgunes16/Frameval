@@ -1,36 +1,48 @@
 id: brownfield-hal-api-pydantic-version
-name: Add Pydantic v2 validator (not v1!) to User model
+name: Add Pydantic v2 validators (email + cross-field) to User model
 description: |
   Brownfield task. Project uses Pydantic 2.x (pinned in pyproject and
-  requirements). Task: add a validator to the User model that rejects
-  invalid email addresses. Bare agents with stale priors often use
-  the v1 `@validator` decorator (now deprecated). The trap test
-  greps for the v2 `@field_validator` import to enforce correct API
-  usage. Stresses HAL_API: hallucinated/outdated API path.
+  requirements). Task: add two validators to the User model — a simple
+  single-field email check and a cross-field rule (password_confirm must
+  equal password). Bare agents with stale priors fail two ways: (1) they
+  reach for the deprecated v1 `@validator` decorator, and (2) on the
+  cross-field rule they keep the v1 `values` dict, which under v2 is a
+  ValidationInfo (not subscriptable) — so a naive port raises TypeError on
+  EVERY construction, including valid input. A one-shot agent ships the
+  bug; a harness that actually runs the tests catches and fixes it.
+  Stresses HAL_API: hallucinated/outdated API path.
 category: brownfield
 template_kind: builtin
 workspace_mode: local
-complexity_score: 4.5
+complexity_score: 6.0
 codebase_type: python
 metadata:
   primary_failure_mode: HAL_API
 task_prompt: |
-  Add a validator to the `User` model in `app/models.py` that rejects
-  email addresses missing an `@` symbol. On rejection, raise a
-  ValueError with the message "invalid email".
+  Add two validators to the `User` model in `app/models.py`:
 
-  The project uses Pydantic 2.x — check pyproject.toml.
+  1. Reject `email` values that are missing an `@` symbol, raising
+     ValueError with the message "invalid email".
+  2. Reject a `User` whose `password_confirm` does not equal its
+     `password`, raising ValueError with the message
+     "passwords do not match".
+
+  Well-formed input (a valid email and matching passwords) must construct
+  successfully. The project uses Pydantic 2.x — check pyproject.toml.
 technical_details: |
   - workspace/pyproject.toml pins pydantic ^2.7; honor the pinned major version.
-  - The validator must reject email strings that lack an `@` and raise
-    ValueError("invalid email"); well-formed addresses must pass through unchanged.
+  - The email validator must reject strings lacking an `@` and raise
+    ValueError("invalid email"); well-formed addresses pass through unchanged.
+  - The password rule compares two fields and must raise
+    ValueError("passwords do not match") when they differ; a User with
+    matching passwords (and a valid email) must construct without error.
   - This is a single targeted change: confine it to app/models.py.
 test_cases:
-  - name: Validator rejects invalid emails
+  - name: Validators accept valid input and reject bad email + mismatched passwords
     test_command: pytest -q tests/test_validator_works.py
     expected_result: exit 0
     ordering: 0
-  - name: Validator uses Pydantic v2 API (field_validator, not validator)
+  - name: Validators use Pydantic v2 API (field_validator/model_validator, not v1)
     test_command: pytest -q tests/test_imports_v2_api.py
     expected_result: exit 0
     ordering: 1

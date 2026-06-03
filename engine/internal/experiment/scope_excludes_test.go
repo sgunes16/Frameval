@@ -19,7 +19,6 @@ func TestHarnessExcludePathspecs(t *testing.T) {
 		{"multiagent", nil},
 		{"agent_instructions", []string{":!CLAUDE.md"}},
 		{"speckit", []string{
-			":!.opencode", ":!.opencode/**",
 			":!.specify", ":!.specify/**",
 			":!specs", ":!specs/**",
 			":!memory", ":!memory/**",
@@ -51,10 +50,15 @@ func TestVerificationEnvironmentSetsHarnessExcludesEnv(t *testing.T) {
 	}
 }
 
-func TestVerificationEnvironmentOmitsHarnessExcludesForBareHarness(t *testing.T) {
+// TestVerificationEnvironmentBareCarriesOpencodeBaseline asserts that even the
+// bare harness (which contributes no harness-specific excludes) still excludes
+// the opencode executor's own project config, so opencode.json never reads as
+// agent scope drift.
+func TestVerificationEnvironmentBareCarriesOpencodeBaseline(t *testing.T) {
 	env := verificationEnvironment("task-x", "bare")
-	if v, ok := env["FRAMEVAL_HARNESS_EXCLUDES"]; ok && v != "" {
-		t.Errorf("bare harness should not set FRAMEVAL_HARNESS_EXCLUDES; got %q", v)
+	got := env["FRAMEVAL_HARNESS_EXCLUDES"]
+	if !strings.Contains(got, ":!opencode.json") {
+		t.Errorf("bare harness should exclude opencode.json; got %q", got)
 	}
 }
 
