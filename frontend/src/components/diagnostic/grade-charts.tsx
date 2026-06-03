@@ -134,6 +134,9 @@ function RubricRadar({ points, labels }: { points: Point[]; labels: string[] }) 
   const data = dims.map((dim) => {
     const row: Record<string, string | number> = { dimension: prettyDim(dim) };
     points.forEach((p, i) => {
+      // `?? 0` plots a missing dimension at the center. Within one experiment
+      // every run shares the same rubric, so this is a no-op in practice; it
+      // only fires if compared runs were judged on different rubric sets.
       row[labels[i]] = Number((p.grade.judge_scores?.[dim] ?? 0).toFixed(2));
     });
     return row;
@@ -244,7 +247,7 @@ function BarMetric({ points, labels, metric }: { points: Point[]; labels: string
         <BarChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#475569' }} interval={0} angle={-15} textAnchor="end" height={60} />
-          <YAxis domain={metric.max ? [0, metric.max] : [0, 'auto']} tick={{ fontSize: 11, fill: '#475569' }} />
+          <YAxis domain={metric.max != null ? [0, metric.max] : [0, 'auto']} tick={{ fontSize: 11, fill: '#475569' }} />
           <Tooltip
             cursor={{ fill: 'rgba(148,163,184,0.12)' }}
             content={({ active, payload }) =>
