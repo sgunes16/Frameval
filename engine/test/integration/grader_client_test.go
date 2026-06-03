@@ -78,7 +78,7 @@ func TestGraderClient_ClassifyFailure_RoundTripsThroughFakeGrader(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	verdict := client.ClassifyFailure(ctx, "run-1", diagnostic.Symptoms{}, "task description", "tail", "claude-haiku-4-5-20251001")
+	verdict := client.ClassifyFailure(ctx, "run-1", diagnostic.Symptoms{}, "task description", "tail", "claude-haiku-4-5-20251001", "openrouter", "test-key")
 
 	if verdict.Classification.Primary != "HAL_API" {
 		t.Errorf("Primary: want HAL_API, got %q", verdict.Classification.Primary)
