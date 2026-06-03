@@ -1096,9 +1096,13 @@ func runEnvironment(taskID string) map[string]string {
 // genuinely wrote them.
 func verificationEnvironment(taskID, harnessID string) map[string]string {
 	env := runEnvironment(taskID)
-	if excludes := harnessExcludePathspecs(harnessID); len(excludes) > 0 {
-		env["FRAMEVAL_HARNESS_EXCLUDES"] = strings.Join(excludes, "\n")
-	}
+	// The opencode executor writes opencode.json (and a .opencode/ dir) as its
+	// own project config on every run, independent of harness. These are never
+	// agent drift, so exclude them for ALL harnesses (including bare/ralph/
+	// multiagent, which otherwise contribute no excludes).
+	excludes := []string{":!opencode.json", ":!.opencode", ":!.opencode/**"}
+	excludes = append(excludes, harnessExcludePathspecs(harnessID)...)
+	env["FRAMEVAL_HARNESS_EXCLUDES"] = strings.Join(excludes, "\n")
 	return env
 }
 

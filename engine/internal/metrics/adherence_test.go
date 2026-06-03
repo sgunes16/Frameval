@@ -276,6 +276,48 @@ func TestHarnessAdherence_Ralph_ValidationBeforeEdit(t *testing.T) {
 	}
 }
 
+// TestHarnessAdherence_Ralph_IterationStages: ≥2 distinct "iteration-N" stages
+// is the primary signal — it passes even when the agent verified with an inline
+// command not in validationPatterns (the real-world ralph case that previously
+// false-failed).
+func TestHarnessAdherence_Ralph_IterationStages(t *testing.T) {
+	turns := []executor.ParsedTurn{
+		mkStagedToolTurn(0, "iteration-0", "edit app/main.py", []string{"app/main.py"}),
+		mkStagedToolTurn(1, "iteration-0", "python3 -c 'import app.main'", nil),
+		mkStagedToolTurn(2, "iteration-1", "edit app/main.py again", []string{"app/main.py"}),
+	}
+	got := HarnessAdherence("ralph", turns)
+
+	if got.Score != 1.0 {
+		t.Errorf("ralph iteration stages: expected Score=1.0, got %v", got.Score)
+	}
+	check := findCheck(got.Checks, "iterated")
+	if check == nil {
+		t.Fatal("iterated check missing")
+	}
+	if !check.Passed {
+		t.Error("ralph: iterated should PASS with ≥2 distinct iteration-N stages")
+	}
+}
+
+// TestHarnessAdherence_Ralph_SingleIterationNoValidation: one iteration stage and
+// no validation run → iterated FAIL (neither signal satisfied).
+func TestHarnessAdherence_Ralph_SingleIterationNoValidation(t *testing.T) {
+	turns := []executor.ParsedTurn{
+		mkStagedToolTurn(0, "iteration-0", "edit app/main.py", []string{"app/main.py"}),
+		mkStagedToolTurn(1, "iteration-0", "cat app/main.py", nil),
+	}
+	got := HarnessAdherence("ralph", turns)
+
+	check := findCheck(got.Checks, "iterated")
+	if check == nil {
+		t.Fatal("iterated check missing")
+	}
+	if check.Passed {
+		t.Error("ralph: iterated should FAIL with a single iteration and no validation")
+	}
+}
+
 // TestHarnessAdherence_Ralph_GoTest: go test also counts as validation.
 func TestHarnessAdherence_Ralph_GoTest(t *testing.T) {
 	turns := []executor.ParsedTurn{
@@ -295,58 +337,26 @@ func TestHarnessAdherence_Ralph_GoTest(t *testing.T) {
 
 // --- agent_instructions ---
 
-// TestHarnessAdherence_AgentInstructions_Present: a turn references CLAUDE.md → passes.
-func TestHarnessAdherence_AgentInstructions_Present(t *testing.T) {
-	turns := []executor.ParsedTurn{
-		mkToolTurn(0, "read CLAUDE.md", []string{"CLAUDE.md"}),
-		mkToolTurn(2, "edit app/main.py", []string{"app/main.py"}),
+// TestHarnessAdherence_AgentInstructions_NoDeterministicCheck: agent_instructions
+// has no transcript-derived process check (opencode auto-loads CLAUDE.md into
+// context, never reading it via a tool), so it always scores 1.0 with 0 checks —
+// regardless of whether CLAUDE.md is "referenced" in the turns.
+func TestHarnessAdherence_AgentInstructions_NoDeterministicCheck(t *testing.T) {
+	cases := [][]executor.ParsedTurn{
+		// No explicit CLAUDE.md reference (the realistic opencode case).
+		{mkToolTurn(0, "edit app/main.py", []string{"app/main.py"})},
+		// Even an explicit reference yields the same result.
+		{mkToolTurn(0, "read CLAUDE.md", []string{"CLAUDE.md"})},
+		nil,
 	}
-	got := HarnessAdherence("agent_instructions", turns)
-
-	if got.Score != 1.0 {
-		t.Errorf("agent_instructions present: expected Score=1.0, got %v", got.Score)
-	}
-	check := findCheck(got.Checks, "instructions_present")
-	if check == nil {
-		t.Fatal("instructions_present check missing")
-	}
-	if !check.Passed {
-		t.Error("agent_instructions: instructions_present should PASS when CLAUDE.md is referenced")
-	}
-}
-
-// TestHarnessAdherence_AgentInstructions_Absent: no CLAUDE.md reference → FAIL.
-func TestHarnessAdherence_AgentInstructions_Absent(t *testing.T) {
-	turns := []executor.ParsedTurn{
-		mkToolTurn(0, "edit app/main.py", []string{"app/main.py"}),
-	}
-	got := HarnessAdherence("agent_instructions", turns)
-
-	if got.Score >= 1.0 {
-		t.Errorf("agent_instructions absent: expected Score<1.0, got %v", got.Score)
-	}
-	check := findCheck(got.Checks, "instructions_present")
-	if check == nil {
-		t.Fatal("instructions_present check missing")
-	}
-	if check.Passed {
-		t.Error("agent_instructions: instructions_present should FAIL when CLAUDE.md is not referenced")
-	}
-}
-
-// TestHarnessAdherence_AgentInstructions_ContentOnly: CLAUDE.md in Content but not FilesTouched → still passes.
-func TestHarnessAdherence_AgentInstructions_ContentOnly(t *testing.T) {
-	turns := []executor.ParsedTurn{
-		mkToolTurn(0, "cat CLAUDE.md && edit app/main.py", nil),
-	}
-	got := HarnessAdherence("agent_instructions", turns)
-
-	check := findCheck(got.Checks, "instructions_present")
-	if check == nil {
-		t.Fatal("instructions_present check missing")
-	}
-	if !check.Passed {
-		t.Error("agent_instructions: instructions_present should PASS when CLAUDE.md appears in Content")
+	for i, turns := range cases {
+		got := HarnessAdherence("agent_instructions", turns)
+		if got.Score != 1.0 {
+			t.Errorf("case %d: expected Score=1.0, got %v", i, got.Score)
+		}
+		if len(got.Checks) != 0 {
+			t.Errorf("case %d: expected 0 checks, got %v", i, got.Checks)
+		}
 	}
 }
 

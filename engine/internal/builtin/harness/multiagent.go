@@ -119,6 +119,11 @@ func (h *MultiAgent) Invoke(ctx context.Context, run harness.HarnessRun, exec ex
 			turn.Stage = r.Name
 			merged.ParsedTurns = append(merged.ParsedTurns, turn)
 		}
+		// Each role is its own executor invocation; sum real token/cost so the
+		// merged transcript carries the run's true totals (otherwise multiagent
+		// reports 0 tokens).
+		merged.TotalTokens += result.TotalTokens
+		merged.CostUSD += result.CostUSD
 
 		// ctx cancellation aborts immediately — no point spinning up
 		// the next role when the user / scheduler told us to stop.
