@@ -122,7 +122,7 @@ func TestSpecKitInvokeWalksExtensionStages(t *testing.T) {
 	h := NewSpecKit()
 	ws := pkgharness.Workspace{Path: t.TempDir()}
 	exec := &speckitRecordingExec{}
-	cfg := map[string]any{"speckit": map[string]any{"extension_id": "lite"}}
+	cfg := map[string]any{"speckit": map[string]any{"extension_id": "canonical"}}
 	run, err := h.Setup(context.Background(), ws, task.Task{TaskPrompt: "scaffold"}, pkgharness.Budget{}, cfg)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -130,34 +130,15 @@ func TestSpecKitInvokeWalksExtensionStages(t *testing.T) {
 	if _, err := h.Invoke(context.Background(), run, exec); err != nil {
 		t.Fatalf("Invoke: %v", err)
 	}
-	if len(exec.calls) != 2 {
-		t.Fatalf("call count: got %d want 2", len(exec.calls))
+	// canonical = specify → clarify → plan → tasks → analyze → implement
+	if len(exec.calls) != 6 {
+		t.Fatalf("call count: got %d want 6", len(exec.calls))
 	}
-	if exec.calls[0].Stage != "tinyspec" || exec.calls[1].Stage != "tinyspec-implement" {
-		t.Errorf("stage order: got %q,%q want tinyspec,tinyspec-implement", exec.calls[0].Stage, exec.calls[1].Stage)
+	if exec.calls[0].Stage != "specify" || exec.calls[len(exec.calls)-1].Stage != "implement" {
+		t.Errorf("stage order: got first=%q last=%q want specify..implement", exec.calls[0].Stage, exec.calls[len(exec.calls)-1].Stage)
 	}
 	if !strings.Contains(exec.calls[0].Prompt, "scaffold") {
 		t.Errorf("specify prompt should contain task content; got %q", exec.calls[0].Prompt)
-	}
-}
-
-func TestSpecKitDualRoleSetsRoleOnRunConfig(t *testing.T) {
-	h := NewSpecKit()
-	ws := pkgharness.Workspace{Path: t.TempDir()}
-	exec := &speckitRecordingExec{}
-	cfg := map[string]any{"speckit": map[string]any{"extension_id": "dual-role"}}
-	run, _ := h.Setup(context.Background(), ws, task.Task{TaskPrompt: "x"}, pkgharness.Budget{}, cfg)
-	if _, err := h.Invoke(context.Background(), run, exec); err != nil {
-		t.Fatalf("Invoke: %v", err)
-	}
-	if len(exec.calls) != 4 {
-		t.Fatalf("call count: got %d want 4", len(exec.calls))
-	}
-	wantRoles := []string{"architect", "architect", "coder", "coder"}
-	for i, want := range wantRoles {
-		if exec.calls[i].Role != want {
-			t.Errorf("call %d role: got %q want %q", i, exec.calls[i].Role, want)
-		}
 	}
 }
 
@@ -272,19 +253,21 @@ func TestSpecKitSandboxPrepCommands(t *testing.T) {
 		}
 		return run
 	}
-	// canonical: init only (no extension)
-	if got := h.SandboxPrepCommands(mk("canonical", "")); len(got) != 1 || !strings.Contains(got[0], "specify init") {
-		t.Errorf("canonical: want 1 init cmd, got %v", got)
+	// canonical: init only (core flow, no extension add), and NOT --no-git.
+	got := h.SandboxPrepCommands(mk("canonical", ""))
+	if len(got) != 1 || !strings.Contains(got[0], "specify init") {
+		t.Fatalf("canonical: want 1 init cmd, got %v", got)
 	}
-	// lite: init + extension add tinyspec
-	got := h.SandboxPrepCommands(mk("lite", ""))
-	if len(got) != 2 || !strings.Contains(got[0], "specify init") || !strings.Contains(got[1], "extension add tinyspec") {
-		t.Errorf("lite: want init + tinyspec add, got %v", got)
+	if strings.Contains(got[0], "--no-git") {
+		t.Errorf("init must NOT use --no-git (breaks spec-kit feature scaffolding); got %q", got[0])
 	}
-	// non-default version: prepend uv tool install --force
-	gotv := h.SandboxPrepCommands(mk("lite", "v0.8.0"))
-	if len(gotv) != 3 || !strings.Contains(gotv[0], "uv tool install --force") || !strings.Contains(gotv[0], "v0.8.0") {
-		t.Errorf("versioned: want uv install first, got %v", gotv)
+	if strings.Contains(strings.Join(got, " "), "extension add") {
+		t.Errorf("canonical must not install any extension; got %v", got)
+	}
+	// non-default version: prepend uv tool install --force, then init (2 cmds, no extension add).
+	gotv := h.SandboxPrepCommands(mk("canonical", "v0.8.0"))
+	if len(gotv) != 2 || !strings.Contains(gotv[0], "uv tool install --force") || !strings.Contains(gotv[0], "v0.8.0") {
+		t.Errorf("versioned: want uv install first then init, got %v", gotv)
 	}
 }
 
