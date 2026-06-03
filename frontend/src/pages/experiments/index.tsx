@@ -46,6 +46,17 @@ export function ExperimentsPage() {
   const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
   const someSelected = filteredIds.some((id) => selected.has(id));
 
+  // Drop selections that fall out of the current filter/search so the bulk
+  // count, "select all" state, and what Delete acts on stay consistent with
+  // what's actually visible.
+  useEffect(() => {
+    setSelected((prev) => {
+      const visible = new Set(filteredIds);
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filteredIds]);
+
   const toggleOne = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -172,9 +183,8 @@ export function ExperimentsPage() {
                 <th className="w-10 px-4 py-2 text-left font-medium">
                   <Checkbox
                     aria-label="Select all experiments"
-                    checked={allSelected}
-                    indeterminate={someSelected && !allSelected}
-                    onChange={(event) => setMany(filteredIds, event.target.checked)}
+                    checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                    onCheckedChange={(value) => setMany(filteredIds, value === true)}
                   />
                 </th>
                 <th className="px-4 py-2 text-left font-medium">Experiment</th>
@@ -292,7 +302,7 @@ function ExperimentRow({
         <Checkbox
           aria-label={`Select ${experiment.name}`}
           checked={selected}
-          onChange={onToggleSelect}
+          onCheckedChange={() => onToggleSelect()}
         />
       </td>
       <td className="px-4 py-3">
@@ -361,9 +371,8 @@ function GroupBlock({
         <td className="w-10 px-4 py-2">
           <Checkbox
             aria-label={`Select all in ${unit.batchLabel}`}
-            checked={groupAllSelected}
-            indeterminate={groupSomeSelected && !groupAllSelected}
-            onChange={(event) => onSetMany(groupIds, event.target.checked)}
+            checked={groupAllSelected ? true : groupSomeSelected ? 'indeterminate' : false}
+            onCheckedChange={(value) => onSetMany(groupIds, value === true)}
           />
         </td>
         <td colSpan={5} className="px-4 py-2">

@@ -45,7 +45,9 @@ export function useDeleteExperiments() {
   return useMutation({
     mutationFn: (ids: string[]) =>
       Promise.all(ids.map((id) => api.delete<{ ok: boolean }>(`/experiments/${id}`))).then(() => undefined),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['experiments'] }),
+    // Always refresh the list — even on a partial failure some experiments may
+    // already be gone, so onSuccess alone would leave stale rows.
+    onSettled: () => client.invalidateQueries({ queryKey: ['experiments'] }),
   });
 }
 
