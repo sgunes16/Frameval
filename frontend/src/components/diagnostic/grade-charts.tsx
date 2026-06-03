@@ -143,7 +143,7 @@ function RubricRadar({ points, labels }: { points: Point[]; labels: string[] }) 
   });
 
   return (
-    <div className="h-80 w-full">
+    <div className="h-96 w-full">
       <ResponsiveContainer>
         <RadarChart data={data} outerRadius="70%">
           <PolarGrid stroke="#e2e8f0" />
@@ -242,7 +242,7 @@ function AxisSelect({ label, value, onChange }: { label: string; value: string; 
 function BarMetric({ points, labels, metric }: { points: Point[]; labels: string[]; metric: Metric }) {
   const data = points.map((p, i) => ({ label: labels[i], value: metric.get(p.grade) ?? 0 }));
   return (
-    <div className="h-80 w-full">
+    <div className="h-96 w-full">
       <ResponsiveContainer>
         <BarChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -290,7 +290,7 @@ function ScatterMetric({
     color: SERIES_COLORS[i % SERIES_COLORS.length],
   }));
   return (
-    <div className="h-80 w-full">
+    <div className="h-96 w-full">
       <ResponsiveContainer>
         <ScatterChart margin={{ top: 8, right: 12, bottom: 28, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
