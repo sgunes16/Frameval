@@ -36,6 +36,19 @@ export function useExperiment(id?: string) {
   return useQuery({ queryKey: ['experiment', id], enabled: Boolean(id), queryFn: () => api.get<Experiment>(`/experiments/${id}`) });
 }
 
+/**
+ * useDeleteExperiments bulk-deletes experiments by id and refreshes the list.
+ * The engine exposes a single-id DELETE endpoint, so we fan out and await all.
+ */
+export function useDeleteExperiments() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      Promise.all(ids.map((id) => api.delete<{ ok: boolean }>(`/experiments/${id}`))).then(() => undefined),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['experiments'] }),
+  });
+}
+
 export function useRuns(experimentId?: string) {
   return useQuery({ queryKey: ['runs', experimentId], enabled: Boolean(experimentId), queryFn: () => api.get<Run[]>(`/experiments/${experimentId}/runs`) });
 }

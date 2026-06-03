@@ -3,9 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
+import { Checkbox } from '../../components/ui/checkbox';
 import { EmptyState } from '../../components/ui/empty-state';
 import { Input } from '../../components/ui/input';
-import { useExperiments } from '../../lib/hooks';
+import { useDeleteExperiments, useExperiments } from '../../lib/hooks';
 import type { Experiment } from '../../lib/types';
 import { formatCurrency, formatTimeAgo, statusLabel, statusTone } from '../../lib/utils';
 import { groupByBatch, type GroupedExperiment } from './grouping';
@@ -21,6 +22,8 @@ export function ExperimentsPage() {
   const [searchParams] = useSearchParams();
   const focusBatch = searchParams.get('batch') ?? '';
   const [expandedBatches, setExpandedBatches] = useState<Record<string, boolean>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const deleteExperiments = useDeleteExperiments();
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -38,6 +41,39 @@ export function ExperimentsPage() {
   }, [experiments, query, status]);
 
   const grouped = useMemo(() => groupByBatch(filtered), [filtered]);
+
+  const filteredIds = useMemo(() => filtered.map((e) => e.id), [filtered]);
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
+  const someSelected = filteredIds.some((id) => selected.has(id));
+
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const setMany = (ids: string[], on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+
+  const clearSelection = () => setSelected(new Set());
+
+  const handleDelete = () => {
+    const ids = filteredIds.filter((id) => selected.has(id));
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} experiment${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) {
+      return;
+    }
+    deleteExperiments.mutate(ids, { onSuccess: clearSelection });
+  };
 
   useEffect(() => {
     setExpandedBatches((prev) => {
@@ -93,6 +129,27 @@ export function ExperimentsPage() {
         </div>
       </Card>
 
+      {selected.size > 0 && (
+        <div className="flex items-center justify-between rounded-md border border-border bg-bg-elev-2 px-4 py-2 text-sm">
+          <span className="font-medium text-fg">
+            {selected.size} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={clearSelection}>
+              Clear
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={deleteExperiments.isPending}
+              onClick={handleDelete}
+            >
+              {deleteExperiments.isPending ? 'Deleting…' : `Delete ${selected.size}`}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <EmptyState
           title={experiments.length === 0 ? 'No experiments yet' : 'No experiments match'}
@@ -112,6 +169,14 @@ export function ExperimentsPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-bg-elev-2 text-xs uppercase tracking-wider text-fg-muted">
               <tr>
+                <th className="w-10 px-4 py-2 text-left font-medium">
+                  <Checkbox
+                    aria-label="Select all experiments"
+                    checked={allSelected}
+                    indeterminate={someSelected && !allSelected}
+                    onChange={(event) => setMany(filteredIds, event.target.checked)}
+                  />
+                </th>
                 <th className="px-4 py-2 text-left font-medium">Experiment</th>
                 <th className="px-4 py-2 text-left font-medium">Status</th>
                 <th className="px-4 py-2 text-left font-medium">Agent · Model</th>
@@ -123,7 +188,11 @@ export function ExperimentsPage() {
               if (unit.kind === 'solo') {
                 return (
                   <tbody key={unit.experiment.id}>
-                    <ExperimentRow experiment={unit.experiment} />
+                    <ExperimentRow
+                      experiment={unit.experiment}
+                      selected={selected.has(unit.experiment.id)}
+                      onToggleSelect={() => toggleOne(unit.experiment.id)}
+                    />
                   </tbody>
                 );
               }
@@ -135,6 +204,9 @@ export function ExperimentsPage() {
                   unit={unit}
                   expanded={expanded}
                   counts={counts}
+                  selected={selected}
+                  onToggleSelect={toggleOne}
+                  onSetMany={setMany}
                   onToggle={() =>
                     setExpandedBatches((prev) => ({ ...prev, [unit.batchId]: !expanded }))
                   }
@@ -202,19 +274,28 @@ function statusSummary(counts: Record<string, number>, total: number): string {
   return parts.length ? parts.join(' · ') : `${total} experiments`;
 }
 
-function ExperimentRow({ experiment, nested = false }: { experiment: Experiment; nested?: boolean }) {
+function ExperimentRow({
+  experiment,
+  nested = false,
+  selected,
+  onToggleSelect,
+}: {
+  experiment: Experiment;
+  nested?: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
+}) {
   const cost = experiment.estimated_cost_usd ?? 0;
   return (
     <tr className={`border-t border-border ${nested ? 'bg-bg-elev-1/60' : 'bg-bg-elev-1'} hover:bg-bg-elev-2/60`}>
-      <td
-        className={
-          `px-4 py-3 ${
-            nested
-              ? 'border-l-4 border-l-fg-muted/40 pl-6'
-              : ''
-          }`
-        }
-      >
+      <td className={`w-10 px-4 py-3 ${nested ? 'border-l-4 border-l-fg-muted/40 pl-6' : ''}`}>
+        <Checkbox
+          aria-label={`Select ${experiment.name}`}
+          checked={selected}
+          onChange={onToggleSelect}
+        />
+      </td>
+      <td className="px-4 py-3">
         <div className="font-medium text-fg">{experiment.name}</div>
         {experiment.description && (
           <div className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{experiment.description}</div>
@@ -248,15 +329,24 @@ function GroupBlock({
   unit,
   expanded,
   counts,
+  selected,
+  onToggleSelect,
+  onSetMany,
   onToggle,
 }: {
   unit: Extract<GroupedExperiment, { kind: 'group' }>;
   expanded: boolean;
   counts: Record<string, number>;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onSetMany: (ids: string[], on: boolean) => void;
   onToggle: () => void;
 }) {
   const summary = statusSummary(counts, unit.experiments.length);
   const newest = unit.experiments[0];
+  const groupIds = unit.experiments.map((e) => e.id);
+  const groupAllSelected = groupIds.every((id) => selected.has(id));
+  const groupSomeSelected = groupIds.some((id) => selected.has(id));
   // One <tbody> per group so the browser renders natural vertical
   // separation between adjacent units. Combined with the strong top
   // border on the group header + a left accent on each child row, a
@@ -268,6 +358,14 @@ function GroupBlock({
         className="bg-bg-elev-2 hover:bg-bg-elev-2/80"
         data-batch-id={unit.batchId}
       >
+        <td className="w-10 px-4 py-2">
+          <Checkbox
+            aria-label={`Select all in ${unit.batchLabel}`}
+            checked={groupAllSelected}
+            indeterminate={groupSomeSelected && !groupAllSelected}
+            onChange={(event) => onSetMany(groupIds, event.target.checked)}
+          />
+        </td>
         <td colSpan={5} className="px-4 py-2">
           <button
             type="button"
@@ -288,7 +386,13 @@ function GroupBlock({
       </tr>
       {expanded &&
         unit.experiments.map((experiment) => (
-          <ExperimentRow key={experiment.id} experiment={experiment} nested />
+          <ExperimentRow
+            key={experiment.id}
+            experiment={experiment}
+            nested
+            selected={selected.has(experiment.id)}
+            onToggleSelect={() => onToggleSelect(experiment.id)}
+          />
         ))}
     </tbody>
   );
