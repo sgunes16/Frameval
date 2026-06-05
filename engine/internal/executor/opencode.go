@@ -47,7 +47,6 @@ func (e *OpenCodeExecutor) SupportedModes() []ExecutionMode {
 }
 
 func (e *OpenCodeExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResult, error) {
-	prompt := promptWithDefaultCLILanguage(cfg.Prompt)
 	model := fallbackOpenCodeModel(cfg.Model, cfg.Environment)
 
 	// Only the local Ollama path needs us to drop a custom opencode.json
@@ -86,12 +85,41 @@ func (e *OpenCodeExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResu
 		//   and only flushing at process exit — that's what made the
 		//   Inspector "wait until the run finishes, then dump
 		//   everything at once" instead of streaming turn-by-turn.
-		command = `stdbuf -oL opencode run --format json --dangerously-skip-permissions --thinking --model "$OPENCODE_MODEL" "$FRAMEVAL_PROMPT"`
+		// `--` terminates flag parsing so a message that happens to start with
+		// "-" is never mistaken for a flag (opencode/yargs dumps usage + exits
+		// 1 otherwise).
+		command = `stdbuf -oL opencode run --format json --dangerously-skip-permissions --thinking --model "$OPENCODE_MODEL" -- "$FRAMEVAL_PROMPT"`
 	}
+	// A harness can drive an opencode custom command — spec-kit sends
+	// "/speckit.specify\n\n<task>", "/speckit.plan", etc. `opencode run` does
+	// NOT expand a leading "/cmd" in the message (custom commands are a TUI
+	// affordance), so the command is otherwise ignored and the agent just
+	// improvises on the raw text — which is why spec-kit produced no
+	// spec/plan/tasks artifacts. The only non-interactive way to execute one
+	// is the --command flag, with the message supplying $ARGUMENTS. When the
+	// prompt is such an invocation (and no full-command override is set),
+	// switch to the --command form. bare / ralph / multiagent send plain
+	// tasks and take the default path unchanged.
+	slashCmd, cmdArgs := splitOpenCodeSlashCommand(cfg.Prompt)
+	promptArg := promptWithDefaultCLILanguage(cfg.Prompt)
+	if slashCmd != "" && envOrOSGetenv(cfg.Environment, "FRAMEVAL_OPENCODE_COMMAND") == "" {
+		// `--` terminates flag parsing so the message is always positional —
+		// spec-kit's {{TECHNICAL_DETAILS}} starts with a "- " bullet, which
+		// opencode's yargs parser otherwise reads as an unknown flag and bails
+		// with a usage dump + exit 1 (observed on the plan stage).
+		command = `stdbuf -oL opencode run --format json --dangerously-skip-permissions --thinking --model "$OPENCODE_MODEL" --command "$OPENCODE_RUN_COMMAND" -- "$FRAMEVAL_PROMPT"`
+		promptArg = cmdArgs
+	}
+	// OPENAI_API_KEY only satisfies the local Ollama path (Ollama ignores the
+	// value). For opencode's hosted Zen/Go gateways (opencode/*, opencode-go/*)
+	// opencode authenticates via OPENCODE_API_KEY, injected into cfg.Environment
+	// by the orchestrator (Orchestrator.agentStoredKeyEnv); mergeEnv carries it
+	// through. OPENCODE_RUN_COMMAND is consumed only by the --command form above.
 	env := mergeEnv(map[string]string{
-		"FRAMEVAL_PROMPT": prompt,
-		"OPENCODE_MODEL":  model,
-		"OPENAI_API_KEY":  fallbackOllamaKey(cfg.Environment),
+		"FRAMEVAL_PROMPT":      promptArg,
+		"OPENCODE_MODEL":       model,
+		"OPENAI_API_KEY":       fallbackOllamaKey(cfg.Environment),
+		"OPENCODE_RUN_COMMAND": slashCmd,
 	}, cfg.Environment)
 
 	output, err := e.sandbox.RunShellWithOutput(ctx, cfg.WorkspacePath, env, command, cfg.OnOutput)
@@ -546,21 +574,74 @@ func detectTextToolCall(body string) (toolName string, files []string) {
 
 // normalizeOpenCodeModel rewrites bare or LiteLLM-style ids onto the
 // `ollama/` provider (the one writeOpenCodeConfig registers locally).
-// Built-in opencode providers (opencode/*) are passed through
-// unchanged so they reach opencode's bundled cloud transport rather
-// than being misrouted through the local Ollama config.
+// Built-in opencode catalogs are passed through unchanged so they reach
+// opencode's bundled cloud transport rather than being misrouted through
+// the local Ollama config:
+//
+//	opencode/*     → Zen catalog (pay-as-you-go, OPENCODE_API_KEY)
+//	opencode-go/*  → Go catalog (subscription, same OPENCODE_API_KEY)
+//
+// Both share the OPENCODE_API_KEY credential injected by the orchestrator
+// but keep distinct provider ids so opencode routes each to the correct
+// upstream billing.
 func normalizeOpenCodeModel(model string) string {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		return ""
 	}
-	if strings.HasPrefix(model, "opencode/") {
+	if strings.HasPrefix(model, "opencode/") || strings.HasPrefix(model, "opencode-go/") {
 		return model
 	}
 	if idx := strings.Index(model, "/"); idx >= 0 {
 		return "ollama/" + model[idx+1:]
 	}
 	return "ollama/" + model
+}
+
+// splitOpenCodeSlashCommand recognises a harness prompt that drives an
+// opencode custom command — a leading "/<id>" token (e.g. "/speckit.specify")
+// optionally followed by argument text — and returns the bare command id plus
+// the remaining message. Returns ("", "") for an ordinary task prompt so
+// non-spec-kit harnesses are unaffected.
+//
+// The id must be a plain command token (letter then letters/digits/._-);
+// anything containing a path separator or other punctuation (e.g. a prompt
+// that merely starts with "/tmp/...") is treated as ordinary text, never a
+// command.
+func splitOpenCodeSlashCommand(prompt string) (command, args string) {
+	p := strings.TrimLeft(prompt, " \t\r\n")
+	if !strings.HasPrefix(p, "/") {
+		return "", ""
+	}
+	rest := p[1:]
+	token := rest
+	if end := strings.IndexAny(rest, " \t\r\n"); end >= 0 {
+		token = rest[:end]
+		args = strings.TrimSpace(rest[end:])
+	}
+	if !isOpenCodeCommandToken(token) {
+		return "", ""
+	}
+	return token, args
+}
+
+// isOpenCodeCommandToken reports whether s is a bare opencode command id:
+// a leading letter followed by letters, digits, '.', '_' or '-'. The dot
+// covers spec-kit's namespaced ids ("speckit.specify"); the absence of '/'
+// keeps real filesystem paths out.
+func isOpenCodeCommandToken(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+		case i > 0 && (r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-'):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // envOrOSGetenv is a tiny helper local to this package: prefer the

@@ -30,7 +30,9 @@ function allowedProvidersFor(executorId: string): string[] {
     case 'aider':
       return ['ollama', 'openai', 'anthropic', 'google'];
     case 'opencode':
-      return ['opencode', 'ollama'];
+      // opencode runs both bundled cloud catalogs (Zen = opencode/*,
+      // Go = opencode-go/*) plus local Ollama models.
+      return ['opencode', 'opencode-go', 'ollama'];
     default:
       return [];
   }
@@ -101,7 +103,16 @@ export function DiagnosticLaunchPage() {
       for (const p of allowedProvidersFor(eid)) allowed.add(p);
     }
     if (allowed.size === 0) return models;
-    return models.filter((m) => allowed.has(m.provider));
+    return models.filter((m) => {
+      if (!allowed.has(m.provider)) return false;
+      // opencode Zen (opencode/*) is pay-as-you-go; only its *-free models
+      // run without credits. Offer just those, alongside opencode Go
+      // (opencode-go/*, subscription) and local Ollama models — i.e. the
+      // models that actually run in this setup, not the paid Zen catalog
+      // that 401s without a funded balance.
+      if (m.provider === 'opencode' && !m.model_id.endsWith('-free')) return false;
+      return true;
+    });
   }, [models, selectedExecutors]);
 
   useEffect(() => {

@@ -26,7 +26,8 @@ type LaunchVariant struct {
 // starting the experiment in the same call.
 //
 // Defaults match the AgentDx demo profile: 5 runs per variant (matches the
-// minimum enforced in storage), 600s timeout, 1 max concurrent.
+// minimum enforced in storage), 18000s timeout (hard SWE-bench-style tasks
+// need a long agent budget), 1 max concurrent.
 type LaunchDiagnosticRequest struct {
 	TaskID         string          `json:"task_id"`
 	ExecutorID     string          `json:"executor_id"`
@@ -102,7 +103,7 @@ func (s *Service) LaunchDiagnostic(w http.ResponseWriter, r *http.Request) {
 	}
 	timeout := req.TimeoutSeconds
 	if timeout <= 0 {
-		timeout = 600
+		timeout = 18000
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -239,7 +240,7 @@ func (s *Service) LaunchDiagnosticSuite(w http.ResponseWriter, r *http.Request) 
 	}
 	timeout := req.TimeoutSeconds
 	if timeout <= 0 {
-		timeout = 600
+		timeout = 18000
 	}
 	batchID := uuid.NewString()
 	label := strings.TrimSpace(req.BatchLabel)

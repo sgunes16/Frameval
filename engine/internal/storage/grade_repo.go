@@ -102,6 +102,13 @@ func (s *Store) GetGradeByRun(ctx context.Context, runID string) (*models.Grade,
 	grade.RawJudgeResponses = unmarshalJSON(rawJudge, []string{})
 	grade.SpecPerInstruction = unmarshalJSON(perInstruction, []models.InstructionResult{})
 	grade.TestResults = unmarshalJSON(testResults, []models.TestResult{})
+	// Wall-clock time lives on the run, not the grade row; pull it in so the
+	// compare view can offer "Time" as a process metric. Best-effort — a
+	// missing/NULL duration just leaves it at 0 (rendered as no data point).
+	var dur sql.NullFloat64
+	if err := s.DB.QueryRowContext(ctx, `SELECT duration_seconds FROM runs WHERE id = ?`, runID).Scan(&dur); err == nil && dur.Valid {
+		grade.DurationSeconds = dur.Float64
+	}
 	return &grade, nil
 }
 

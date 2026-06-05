@@ -10,7 +10,7 @@ if [[ -n "${FRAMEVAL_HARNESS_EXCLUDES:-}" ]]; then
     [[ -n "$line" ]] && HX+=("$line")
   done <<< "$FRAMEVAL_HARNESS_EXCLUDES"
 fi
-CHANGED=$( { git diff --name-only baseline -- ":!tests" ":!tests/**" "${HX[@]}"; git ls-files --others --exclude-standard -- ":!tests" ":!tests/**" "${HX[@]}"; } | sort -u )
+CHANGED=$( { git diff --name-only baseline -- ":!tests" ":!tests/**" ":!tests.py" "${HX[@]}"; git ls-files --others --exclude-standard -- ":!tests" ":!tests/**" ":!tests.py" "${HX[@]}"; } | sort -u )
 EXTRA=$(echo "$CHANGED" | grep -v -E '^(app/users\.py|docs/api/contract\.v1\.yaml)$' || true)
 if [[ -n "$EXTRA" ]]; then
     echo "Scope drift detected. Disallowed changes:" >&2

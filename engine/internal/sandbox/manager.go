@@ -765,7 +765,7 @@ func runGitCommand(ctx context.Context, workspace string, env map[string]string,
 
 func buildSandboxEnv(env map[string]string) []string {
 	sandboxEnv := make([]string, 0, len(env)+8)
-	for _, key := range []string{"CURSOR_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "FRAMEVAL_CURSOR_COMMAND", "FRAMEVAL_AIDER_COMMAND", "OLLAMA_BASE_URL", "AIDER_MODEL"} {
+	for _, key := range []string{"CURSOR_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "FRAMEVAL_CURSOR_COMMAND", "FRAMEVAL_AIDER_COMMAND", "OLLAMA_BASE_URL", "AIDER_MODEL"} {
 		if value := os.Getenv(key); value != "" {
 			sandboxEnv = append(sandboxEnv, key+"="+value)
 		}
@@ -919,7 +919,18 @@ func extractTarToDir(reader io.Reader, targetDir string, prefixToStrip string) e
 			if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 				return err
 			}
-			output, err := os.Create(destination)
+			// Preserve the recorded file mode — crucially the executable bit.
+			// os.Create would force 0644, which silently strips +x from any
+			// script the workspace carries back from a container (e.g.
+			// spec-kit's .specify/scripts/*.sh, materialized executable by
+			// `specify init`). Without this the next phase's `./script.sh`
+			// fails with "Permission denied" (exit 126) and the harness runs
+			// degraded. Fall back to 0644 when the header carries no perms.
+			mode := os.FileMode(header.Mode).Perm()
+			if mode == 0 {
+				mode = 0o644
+			}
+			output, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 			if err != nil {
 				return err
 			}
@@ -928,6 +939,11 @@ func extractTarToDir(reader io.Reader, targetDir string, prefixToStrip string) e
 				return err
 			}
 			if err := output.Close(); err != nil {
+				return err
+			}
+			// O_CREATE's mode is masked by umask, so an executable bit can
+			// still be dropped; force the exact perms after writing.
+			if err := os.Chmod(destination, mode); err != nil {
 				return err
 			}
 		}

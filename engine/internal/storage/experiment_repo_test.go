@@ -230,3 +230,57 @@ func TestCancelPendingRunsLeavesStartedRunsAlone(t *testing.T) {
 		t.Errorf("pending run must be cancelled, got %q", got[runs[2].ID])
 	}
 }
+
+func TestDeleteExperimentCascadesAndLeavesNoOrphans(t *testing.T) {
+	store := support.TmpStore(t)
+	seedTaskForExperimentTest(t, store, "task-del")
+	ctx := context.Background()
+
+	exp, err := store.CreateExperiment(ctx, models.ExperimentRequest{
+		Name: "del-test", TaskID: "task-del", Model: "claude", AgentCLI: "claude", RunsPerVariant: 1,
+		Variants: []models.VariantRequest{
+			{Name: "a", HarnessID: "bare"},
+			{Name: "b", HarnessID: "bare"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateExperiment: %v", err)
+	}
+	if err := store.EnsureRunsForExperiment(ctx, exp.ID); err != nil {
+		t.Fatalf("EnsureRunsForExperiment: %v", err)
+	}
+	runs, err := store.ListRunsByExperiment(ctx, exp.ID)
+	if err != nil || len(runs) == 0 {
+		t.Fatalf("expected runs, got %d (err %v)", len(runs), err)
+	}
+	// A transcript hangs off a run — deleting the experiment must take it
+	// too, not leave it dangling by run_id.
+	if err := store.SaveTranscript(ctx, models.Transcript{ID: "tr-del-1", RunID: runs[0].ID, RawOutput: "x"}); err != nil {
+		t.Fatalf("SaveTranscript: %v", err)
+	}
+
+	if err := store.DeleteExperiment(ctx, exp.ID); err != nil {
+		t.Fatalf("DeleteExperiment: %v", err)
+	}
+
+	count := func(query, arg string) int {
+		t.Helper()
+		var n int
+		if err := store.DB.QueryRowContext(ctx, query, arg).Scan(&n); err != nil {
+			t.Fatalf("count %q: %v", query, err)
+		}
+		return n
+	}
+	if n := count(`SELECT count(*) FROM experiments WHERE id = ?`, exp.ID); n != 0 {
+		t.Errorf("experiment row remains: %d", n)
+	}
+	if n := count(`SELECT count(*) FROM variants WHERE experiment_id = ?`, exp.ID); n != 0 {
+		t.Errorf("orphan variants remain: %d", n)
+	}
+	if n := count(`SELECT count(*) FROM runs WHERE experiment_id = ?`, exp.ID); n != 0 {
+		t.Errorf("orphan runs remain: %d", n)
+	}
+	if n := count(`SELECT count(*) FROM transcripts WHERE run_id = ?`, runs[0].ID); n != 0 {
+		t.Errorf("orphan transcripts remain: %d", n)
+	}
+}

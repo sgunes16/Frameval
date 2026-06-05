@@ -192,6 +192,10 @@ export type Transcript = {
 };
 
 export type Grade = {
+  // Run wall-clock time (seconds), joined in from the run on read so it can
+  // be charted as a process metric. Absent on runs without a duration.
+  duration_seconds?: number;
+
   // composite — weighted blend driven by `composite_weights` in the
   // experiment config (defaults: code 0.3 / judge 0.3 / process 0.2 /
   // spec 0.2). Range 0..10 since each child axis tops at 10.

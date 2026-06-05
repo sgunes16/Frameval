@@ -3,6 +3,10 @@ package models
 type Grade struct {
 	ID                        string              `json:"id"`
 	RunID                     string              `json:"run_id,omitempty"`
+	// DurationSeconds is the run's wall-clock time, joined in from the runs
+	// table on read so the compare view can plot time alongside the other
+	// process metrics. Not persisted on the grade row itself.
+	DurationSeconds           float64             `json:"duration_seconds,omitempty"`
 	TestPassRate              float64             `json:"test_pass_rate"`
 	TestPassCount             int                 `json:"test_pass_count"`
 	TestFailCount             int                 `json:"test_fail_count"`

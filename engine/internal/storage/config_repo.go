@@ -24,11 +24,15 @@ type OpenCodeModelsRunner interface {
 }
 
 // SeedOpenCodeModels queries `opencode models` inside the sandbox image
-// and upserts every opencode/* id into model_configs as provider="opencode".
+// (authenticated with the stored OPENCODE_API_KEY, if any) and upserts every
+// id into model_configs: opencode/* as provider="opencode" (Zen) and
+// opencode-go/* as provider="opencode-go" (Go).
 // Best-effort: a missing Docker daemon, a slow image pull, or an
 // unauthenticated opencode CLI return nil rather than failing startup —
 // the dropdown still works off the static seed list and the user can
-// pick a local Ollama model.
+// pick a local Ollama model. Without a key opencode lists only its keyless
+// free Zen models, so the full catalog appears once a key is saved and the
+// catalog is re-synced (boot or the launch page's Refresh button).
 //
 // Idempotent thanks to UpsertModelConfig's ON CONFLICT clause, so running
 // this on every boot is safe.
@@ -47,9 +51,21 @@ func (s *Store) SeedOpenCodeModels(ctx context.Context, runner OpenCodeModelsRun
 	}
 	defer os.RemoveAll(tmpDir)
 
+	// Pass the stored opencode key so `opencode models` returns the full
+	// authenticated catalog — both Zen (opencode/*) and Go (opencode-go/*).
+	// Without a key opencode only emits the handful of keyless free Zen
+	// models, so neither the full Zen list nor the Go catalog ever reaches
+	// the picker. Best-effort: no stored key → empty env → the keyless
+	// subset, exactly as before.
+	env := map[string]string{}
+	if key, keyErr := s.GetDecryptedAPIKey(ctx, "opencode"); keyErr == nil {
+		if key = strings.TrimSpace(key); key != "" {
+			env["OPENCODE_API_KEY"] = key
+		}
+	}
 	// Stderr is dropped so opencode's first-run sqlite-migration banner
 	// doesn't pollute the parse.
-	output, err := runner.RunShell(ctx, tmpDir, nil, "opencode models 2>/dev/null")
+	output, err := runner.RunShell(ctx, tmpDir, env, "opencode models 2>/dev/null")
 	if err != nil {
 		slog.Warn("seed opencode models: RunShell failed", "err", err, "output_prefix", truncate(output, 200))
 		return nil
@@ -58,11 +74,25 @@ func (s *Store) SeedOpenCodeModels(ctx context.Context, runner OpenCodeModelsRun
 	inserted := 0
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "opencode/") {
+		// opencode exposes two bundled catalogs that share the
+		// OPENCODE_API_KEY credential but bill separately: Zen
+		// (opencode/*, pay-as-you-go) and Go (opencode-go/*,
+		// subscription). Seed both under distinct providers so the
+		// launch picker can offer each catalog's models independently.
+		// Check the longer prefix first — "opencode-go/" does not start
+		// with "opencode/", but ordering the switch this way keeps intent
+		// obvious.
+		var provider string
+		switch {
+		case strings.HasPrefix(line, "opencode-go/"):
+			provider = "opencode-go"
+		case strings.HasPrefix(line, "opencode/"):
+			provider = "opencode"
+		default:
 			continue
 		}
 		cfg := models.ModelConfig{
-			Provider:    "opencode",
+			Provider:    provider,
 			ModelID:     line,
 			DisplayName: opencodeDisplayName(line),
 		}
@@ -72,10 +102,10 @@ func (s *Store) SeedOpenCodeModels(ctx context.Context, runner OpenCodeModelsRun
 		fresh[line] = struct{}{}
 		inserted++
 	}
-	// Prune opencode/* rows whose ids are no longer in the fresh list.
-	// Without this, a model that opencode upstream stopped supporting
-	// stays in the dropdown forever and 401s the moment the user picks
-	// it. The prune only runs on a successful RunShell — a transient
+	// Prune opencode/* and opencode-go/* rows whose ids are no longer in
+	// the fresh list. Without this, a model that opencode upstream stopped
+	// supporting stays in the dropdown forever and 401s the moment the user
+	// picks it. The prune only runs on a successful RunShell — a transient
 	// failure earlier returns nil with the existing rows intact.
 	pruned, err := s.pruneOrphanOpenCodeModels(ctx, fresh)
 	if err != nil {
@@ -85,10 +115,13 @@ func (s *Store) SeedOpenCodeModels(ctx context.Context, runner OpenCodeModelsRun
 	return nil
 }
 
-// pruneOrphanOpenCodeModels removes provider="opencode" rows whose
-// model_id is not in fresh. Returns the number of rows removed.
+// pruneOrphanOpenCodeModels removes opencode/* and opencode-go/* rows whose
+// model_id is not in fresh. Returns the number of rows removed. model_id is
+// UNIQUE across model_configs, so the delete keys on it alone; the provider
+// filter on the SELECT scopes the prune to the two opencode catalogs and
+// leaves ollama / cursor / cloud rows untouched.
 func (s *Store) pruneOrphanOpenCodeModels(ctx context.Context, fresh map[string]struct{}) (int, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT model_id FROM model_configs WHERE provider = 'opencode'`)
+	rows, err := s.DB.QueryContext(ctx, `SELECT model_id FROM model_configs WHERE provider IN ('opencode', 'opencode-go')`)
 	if err != nil {
 		return 0, fmt.Errorf("list opencode model ids: %w", err)
 	}
@@ -108,7 +141,7 @@ func (s *Store) pruneOrphanOpenCodeModels(ctx context.Context, fresh map[string]
 		return 0, fmt.Errorf("iterate opencode model ids: %w", err)
 	}
 	for _, id := range stale {
-		if _, err := s.DB.ExecContext(ctx, `DELETE FROM model_configs WHERE provider = 'opencode' AND model_id = ?`, id); err != nil {
+		if _, err := s.DB.ExecContext(ctx, `DELETE FROM model_configs WHERE model_id = ?`, id); err != nil {
 			return 0, fmt.Errorf("delete stale opencode model %q: %w", id, err)
 		}
 	}
@@ -122,20 +155,30 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// opencodeDisplayName turns "opencode/deepseek-v4-flash-free" into
-// "Deepseek V4 Flash (opencode free)" for the dropdown. Plain title-
-// casing is enough — the CLI already uses friendly names with `-free`
-// suffixes that we surface explicitly.
+// opencodeDisplayName turns an opencode catalog id into a dropdown label
+// that names the catalog so Zen and Go entries are distinguishable in the
+// flat model list, e.g.:
+//
+//	"opencode/deepseek-v4-flash-free" → "Deepseek V4 Flash (opencode zen free)"
+//	"opencode-go/kimi-k2.6"           → "Kimi K2.6 (opencode go)"
+//
+// Plain title-casing is enough — the CLI already uses friendly names with
+// `-free` suffixes that we surface explicitly.
 func opencodeDisplayName(modelID string) string {
+	catalog := "opencode zen"
 	suffix := strings.TrimPrefix(modelID, "opencode/")
+	if strings.HasPrefix(modelID, "opencode-go/") {
+		catalog = "opencode go"
+		suffix = strings.TrimPrefix(modelID, "opencode-go/")
+	}
 	free := strings.HasSuffix(suffix, "-free")
 	suffix = strings.TrimSuffix(suffix, "-free")
 	pretty := strings.ReplaceAll(suffix, "-", " ")
 	pretty = strings.Title(pretty) //nolint:staticcheck // titles for display only
 	if free {
-		return pretty + " (opencode free)"
+		return pretty + " (" + catalog + " free)"
 	}
-	return pretty + " (opencode)"
+	return pretty + " (" + catalog + ")"
 }
 
 func (s *Store) SeedModelConfigs(ctx context.Context) error {
