@@ -766,6 +766,13 @@ func runGitCommand(ctx context.Context, workspace string, env map[string]string,
 func buildSandboxEnv(env map[string]string) []string {
 	sandboxEnv := make([]string, 0, len(env)+8)
 	for _, key := range []string{"CURSOR_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "FRAMEVAL_CURSOR_COMMAND", "FRAMEVAL_AIDER_COMMAND", "OLLAMA_BASE_URL", "AIDER_MODEL"} {
+		// Skip the host fallback when the caller already supplied the var (e.g.
+		// the orchestrator injects OPENCODE_API_KEY from the SQLite store) —
+		// otherwise the key is appended twice and a plaintext secret shows up
+		// duplicated in the container's Env (docker inspect / daemon logs).
+		if _, alreadySet := env[key]; alreadySet {
+			continue
+		}
 		if value := os.Getenv(key); value != "" {
 			sandboxEnv = append(sandboxEnv, key+"="+value)
 		}

@@ -101,14 +101,20 @@ func (e *OpenCodeExecutor) Execute(ctx context.Context, cfg RunConfig) (*RunResu
 	// switch to the --command form. bare / ralph / multiagent send plain
 	// tasks and take the default path unchanged.
 	slashCmd, cmdArgs := splitOpenCodeSlashCommand(cfg.Prompt)
-	promptArg := promptWithDefaultCLILanguage(cfg.Prompt)
+	var promptArg string
 	if slashCmd != "" && envOrOSGetenv(cfg.Environment, "FRAMEVAL_OPENCODE_COMMAND") == "" {
 		// `--` terminates flag parsing so the message is always positional —
 		// spec-kit's {{TECHNICAL_DETAILS}} starts with a "- " bullet, which
 		// opencode's yargs parser otherwise reads as an unknown flag and bails
 		// with a usage dump + exit 1 (observed on the plan stage).
 		command = `stdbuf -oL opencode run --format json --dangerously-skip-permissions --thinking --model "$OPENCODE_MODEL" --command "$OPENCODE_RUN_COMMAND" -- "$FRAMEVAL_PROMPT"`
+		// The raw args become $ARGUMENTS inside the custom command; the
+		// language-instruction preamble is intentionally NOT prepended here —
+		// it would pollute e.g. spec-kit's spec (the message is the feature
+		// description, not a chat turn).
 		promptArg = cmdArgs
+	} else {
+		promptArg = promptWithDefaultCLILanguage(cfg.Prompt)
 	}
 	// OPENAI_API_KEY only satisfies the local Ollama path (Ollama ignores the
 	// value). For opencode's hosted Zen/Go gateways (opencode/*, opencode-go/*)
