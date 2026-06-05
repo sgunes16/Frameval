@@ -26,9 +26,13 @@ from grader.failure_classifier.taxonomy import (
 # instructor docs for the validation-failure retry semantics.
 INSTRUCTOR_MAX_RETRIES = 2
 
-# Cap response tokens. The classifier output (4 codes + a few short
-# evidence quotes + 400-char rationale) fits in well under 1024 tokens.
-RESPONSE_MAX_TOKENS = 1024
+# Cap response tokens. Reasoning models (Minimax M3, DeepSeek R1, etc.)
+# spend most of their output budget on internal <thinking> tokens before
+# emitting the visible JSON. The classifier output (4 codes + a few short
+# evidence quotes + 400-char rationale) fits in well under 1024 tokens of
+# actual content, but the reasoning phase can consume 2000+ tokens. 4096
+# gives enough headroom for both reasoning and structured output.
+RESPONSE_MAX_TOKENS = 4096
 
 
 logger = logging.getLogger(__name__)

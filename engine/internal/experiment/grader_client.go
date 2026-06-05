@@ -69,7 +69,10 @@ func NewGraderClient(addr string, logger *slog.Logger, settings SettingsStore) *
 	if addr == "" {
 		return &GraderClient{logger: logger, breaker: newGraderBreaker(), settings: settings}
 	}
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(64*1024*1024), grpc.MaxCallSendMsgSize(64*1024*1024)),
+	)
 	if err != nil {
 		logger.Warn("grader dial failed (will fall back to local grading)", "err", err, "addr", addr)
 		return &GraderClient{logger: logger, breaker: newGraderBreaker(), settings: settings}
@@ -98,9 +101,19 @@ func (c *GraderClient) Close() error {
 
 // classifyFailureTimeout caps how long we wait for the LLM classifier to
 // return before logging a warning and persisting the run without a failure
-// label. The classifier is expected to return in ~3-5s on Haiku; the cap
-// is generous to absorb Anthropic API hiccups without losing diagnostic.
-const classifyFailureTimeout = 30 * time.Second
+// label. Reasoning models (Minimax M3, DeepSeek R1) can take 30-60s due to
+// extended thinking. 120s is generous but finite. Override with
+// FRAMEVAL_CLASSIFIER_TIMEOUT_SECONDS for slower providers.
+var classifyFailureTimeout = resolveClassifierTimeout()
+
+func resolveClassifierTimeout() time.Duration {
+	if raw := os.Getenv("FRAMEVAL_CLASSIFIER_TIMEOUT_SECONDS"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return 300 * time.Second
+}
 
 // gradeRunTimeout caps the end-to-end GradeRun gRPC call. Real LLM judge
 // calls on free-tier providers regularly take 30-90s; cumulative grading
@@ -174,6 +187,10 @@ func (c *GraderClient) ClassifyFailure(
 	if err != nil || response == nil || response.Classification == nil {
 		if errors.Is(err, ErrGraderUnavailable) {
 			c.logger.Warn("classify_failure: breaker open, returning unclassified", "run_id", runID, "err", err)
+		} else if ctx.Err() != nil {
+			c.logger.Warn("classify_failure: timeout, returning unclassified", "run_id", runID, "timeout_seconds", classifyFailureTimeout.Seconds())
+		} else {
+			c.logger.Error("classify_failure: gRPC call failed, returning unclassified", "run_id", runID, "err", err)
 		}
 		return fallback
 	}
@@ -228,12 +245,12 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 	ctx, cancel := context.WithTimeout(ctx, gradeRunTimeout)
 	defer cancel()
 	request := &graderpb.GradeRunRequest{
-		RunId:                transcript.RunID,
-		TranscriptJson:       transcript.RawOutput,
-		FilesystemDiff:       transcript.FilesystemDiff,
-		Task:                 &graderpb.TaskSpec{Id: task.ID, Prompt: task.TaskPrompt, CodebaseType: task.CodebaseType, SetupScript: task.SetupScript},
-		JudgeConfig:          c.buildJudgeConfig(ctx),
-		VerifiedTestResults:  buildVerifiedTestResults(verifiedTests),
+		RunId:               transcript.RunID,
+		TranscriptJson:      transcript.RawOutput,
+		FilesystemDiff:      transcript.FilesystemDiff,
+		Task:                &graderpb.TaskSpec{Id: task.ID, Prompt: task.TaskPrompt, CodebaseType: task.CodebaseType, SetupScript: task.SetupScript},
+		JudgeConfig:         c.buildJudgeConfig(ctx),
+		VerifiedTestResults: buildVerifiedTestResults(verifiedTests),
 	}
 	for _, testCase := range task.TestCases {
 		if strings.EqualFold(strings.TrimSpace(testCase.Visibility), "hidden") || strings.TrimSpace(testCase.SetupScript) != "" {
@@ -261,6 +278,8 @@ func (c *GraderClient) GradeRun(ctx context.Context, task models.Task, artifact 
 			if c.graderDownLogged.CompareAndSwap(false, true) {
 				c.logger.Warn("grade_run: grader unavailable, returning fallback grade for this and subsequent runs until the grader returns", "run_id", transcript.RunID, "err", err)
 			}
+		} else {
+			c.logger.Error("grade_run: gRPC call failed, returning fallback grade", "run_id", transcript.RunID, "err", err)
 		}
 		return fallbackGrade(transcript), nil
 	}
