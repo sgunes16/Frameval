@@ -149,3 +149,57 @@ func TestOpenCodeFallbackModelTranslatesAiderEnv(t *testing.T) {
 		t.Errorf("got %q, want ollama/llama3.1:8b", got)
 	}
 }
+
+func TestNormalizeOpenCodeModel(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		// Built-in opencode catalogs pass through untouched so they reach
+		// the bundled cloud transport (Zen pay-as-you-go, Go subscription)
+		// rather than being misrouted onto the local Ollama provider.
+		{"zen passthrough", "opencode/deepseek-v4-flash-free", "opencode/deepseek-v4-flash-free"},
+		{"go passthrough", "opencode-go/deepseek-v4-flash", "opencode-go/deepseek-v4-flash"},
+		{"go passthrough kimi", "opencode-go/kimi-k2.6", "opencode-go/kimi-k2.6"},
+		// Everything else is rewritten onto the local ollama/ provider.
+		{"bare id", "qwen2.5-coder:7b", "ollama/qwen2.5-coder:7b"},
+		{"litellm style", "openai/llama3.1:8b", "ollama/llama3.1:8b"},
+		{"empty", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := normalizeOpenCodeModel(tc.in); got != tc.want {
+				t.Errorf("normalizeOpenCodeModel(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSplitOpenCodeSlashCommand(t *testing.T) {
+	cases := []struct {
+		name    string
+		in      string
+		wantCmd string
+		wantArg string
+	}{
+		// spec-kit drives stages as a leading "/cmd" + optional args. These
+		// must route to `opencode run --command <cmd>` (args become $ARGUMENTS).
+		{"specify with task", "/speckit.specify\n\nAdd a created_at field", "speckit.specify", "Add a created_at field"},
+		{"clarify no args", "/speckit.clarify", "speckit.clarify", ""},
+		{"plan with details", "/speckit.plan\n\nUse FastAPI", "speckit.plan", "Use FastAPI"},
+		{"leading whitespace", "  /speckit.tasks", "speckit.tasks", ""},
+		// Ordinary task prompts (bare/ralph/etc.) must NOT be treated as commands.
+		{"plain task", "Add a created_at field to GET /users", "", ""},
+		{"path-like not a command", "/tmp/output the result", "", ""},
+		{"empty", "", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd, arg := splitOpenCodeSlashCommand(tc.in)
+			if cmd != tc.wantCmd || arg != tc.wantArg {
+				t.Errorf("splitOpenCodeSlashCommand(%q) = (%q, %q), want (%q, %q)", tc.in, cmd, arg, tc.wantCmd, tc.wantArg)
+			}
+		})
+	}
+}

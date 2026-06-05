@@ -67,6 +67,12 @@ const METRICS: Metric[] = [
   },
   { key: 'harness_adherence', label: 'Harness adherence', get: (g) => g.harness_adherence_score ?? null, max: 1, format: (v) => v.toFixed(2) },
   { key: 'spec_compliance', label: 'Instruction compliance', get: (g) => g.spec_instruction_compliance ?? null, max: 1, format: (v) => v.toFixed(2) },
+  {
+    key: 'duration',
+    label: 'Time (s)',
+    get: (g) => g.duration_seconds ?? null,
+    format: (v) => (v >= 120 ? `${(v / 60).toFixed(1)}m` : `${v.toFixed(1)}s`),
+  },
   { key: 'tokens', label: 'Tokens', get: (g) => g.total_tokens ?? null, format: (v) => v.toLocaleString() },
   { key: 'cost', label: 'Cost (USD)', get: (g) => g.cost_usd ?? null, format: (v) => `$${v.toFixed(4)}` },
   { key: 'turns', label: 'Turns', get: (g) => g.turn_count ?? null, format: (v) => `${v}` },

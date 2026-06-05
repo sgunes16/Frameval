@@ -6,9 +6,11 @@ import { Card, CardHeader } from '../ui/card';
 import { Input } from '../ui/input';
 
 // Providers the panel always shows a row for, even with no stored key.
-// Keep this in sync with grader/llm_client.py _PRESETS plus the existing
-// 'cursor' provider already accepted by the api_keys CHECK constraint.
-const KNOWN_PROVIDERS = ['openrouter', 'zai', 'ollama', 'openai', 'anthropic', 'cursor'] as const;
+// Keep this in sync with grader/llm_client.py _PRESETS plus the agent-side
+// providers accepted by the api_keys CHECK constraint: 'cursor' (host env)
+// and 'opencode' (opencode zen — injected into the sandbox as
+// OPENCODE_API_KEY by the orchestrator at run time).
+const KNOWN_PROVIDERS = ['openrouter', 'zai', 'ollama', 'openai', 'anthropic', 'cursor', 'opencode'] as const;
 
 export function ApiKeysPanel({ keys }: { keys: APIKey[] }) {
   const stored = new Map(keys.map((k) => [k.provider, k]));

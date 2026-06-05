@@ -404,10 +404,14 @@ func (o *Orchestrator) executeRun(ctx context.Context, runID string) error {
 		broadcast:    o.broadcast,
 		ctx:          ctx,
 	}
+	runEnv := runEnvironment(task.ID)
+	for k, v := range o.agentStoredKeyEnv(ctx, execImpl.Name()) {
+		runEnv[k] = v
+	}
 	hRun.BaseRunConfig = pkgexec.RunConfig{
 		WorkspacePath: workspace,
 		Model:         experiment.Model,
-		Environment:   runEnvironment(task.ID),
+		Environment:   runEnv,
 		OnOutput: func(line string) {
 			o.broadcastRunLog(*experiment, *run, "executor", line)
 			stream.append(line)
@@ -1078,6 +1082,27 @@ func speckitVersionOrDefault(ctx context.Context, store *storage.Store) string {
 		return v
 	}
 	return "v0.9.1"
+}
+
+// agentStoredKeyEnv returns the API-key env vars a sandboxed agent CLI
+// needs, sourced from the encrypted api_keys table. Most agents read
+// their provider key straight from the host environment (see
+// sandbox.buildSandboxEnv); opencode is the first to pull its key from
+// Frameval's own settings store: opencode's hosted "zen" gateway
+// (opencode/* models) authenticates via OPENCODE_API_KEY, which the user
+// sets on the Settings page. Returns an empty map when no key is stored,
+// so a missing key degrades to opencode's other auth paths rather than
+// erroring here.
+func (o *Orchestrator) agentStoredKeyEnv(ctx context.Context, agentName string) map[string]string {
+	out := map[string]string{}
+	if agentName == "opencode" {
+		if key, err := o.store.GetDecryptedAPIKey(ctx, "opencode"); err == nil {
+			if key = strings.TrimSpace(key); key != "" {
+				out["OPENCODE_API_KEY"] = key
+			}
+		}
+	}
+	return out
 }
 
 func runEnvironment(taskID string) map[string]string {

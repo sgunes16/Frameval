@@ -69,7 +69,7 @@ type ExperimentRequest struct {
 	ExecutionMode       string             `json:"execution_mode"`
 	RunsPerVariant      int                `json:"runs_per_variant" validate:"min=1,max=200"`
 	Temperature         float64            `json:"temperature" validate:"gte=0,lte=2"`
-	TimeoutSeconds      int                `json:"timeout_seconds" validate:"min=60,max=7200"`
+	TimeoutSeconds      int                `json:"timeout_seconds" validate:"min=60,max=18000"`
 	MaxConcurrent       int                `json:"max_concurrent" validate:"min=1,max=16"`
 	JudgeModel          string             `json:"judge_model"`
 	Seed                *int               `json:"seed"`

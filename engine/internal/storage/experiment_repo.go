@@ -136,11 +136,35 @@ func (s *Store) UpdateExperiment(ctx context.Context, experimentID string, req m
 	return s.GetExperiment(ctx, experimentID)
 }
 
+// DeleteExperiment removes an experiment and its entire subtree: runs and
+// their transcripts/grades/diagnostic/validation rows, and variants with
+// their artifact versions.
+//
+// SQLite foreign keys are not enabled on the engine's connection, so the
+// schema's ON DELETE CASCADE never fires — a bare `DELETE FROM experiments`
+// left every child row orphaned (no parent experiment), which is exactly
+// how the DB accumulated thousands of dangling runs/variants/transcripts.
+// We delete the subtree explicitly, child tables first, inside a single
+// transaction so a mid-delete failure can't leave a half-removed experiment.
 func (s *Store) DeleteExperiment(ctx context.Context, experimentID string) error {
-	if _, err := s.DB.ExecContext(ctx, `DELETE FROM experiments WHERE id = ?`, experimentID); err != nil {
-		return fmt.Errorf("delete experiment: %w", err)
-	}
-	return nil
+	return s.Tx(ctx, func(tx *sql.Tx) error {
+		stmts := []string{
+			`DELETE FROM transcripts      WHERE run_id IN (SELECT id FROM runs WHERE experiment_id = ?)`,
+			`DELETE FROM grades           WHERE run_id IN (SELECT id FROM runs WHERE experiment_id = ?)`,
+			`DELETE FROM diagnostic       WHERE run_id IN (SELECT id FROM runs WHERE experiment_id = ?)`,
+			`DELETE FROM validation_label WHERE run_id IN (SELECT id FROM runs WHERE experiment_id = ?)`,
+			`DELETE FROM artifact_versions WHERE variant_id IN (SELECT id FROM variants WHERE experiment_id = ?)`,
+			`DELETE FROM runs             WHERE experiment_id = ?`,
+			`DELETE FROM variants         WHERE experiment_id = ?`,
+			`DELETE FROM experiments      WHERE id = ?`,
+		}
+		for _, q := range stmts {
+			if _, err := tx.ExecContext(ctx, q, experimentID); err != nil {
+				return fmt.Errorf("delete experiment subtree: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Store) UpdateExperimentStatus(ctx context.Context, experimentID string, status string) error {
