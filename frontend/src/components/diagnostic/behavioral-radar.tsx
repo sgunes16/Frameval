@@ -35,7 +35,7 @@ export function BehavioralRadar({ series }: Props) {
   return (
     <div className="space-y-3">
       {/* Legend — single row */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
         {series.map((s, i) => (
           <div key={s.label} className="flex items-center gap-1.5">
             <div
@@ -53,7 +53,7 @@ export function BehavioralRadar({ series }: Props) {
       <div className="grid grid-cols-3 gap-x-6 gap-y-2">
         {DIMENSIONS.map(({ key, label }) => (
           <div key={key} className="space-y-1">
-            <div className="text-[11px] font-medium text-fg">{label}</div>
+            <div className="text-xs font-medium text-fg">{label}</div>
             <div className="flex items-center gap-1 h-5">
               {series.map((s, i) => {
                 const value = Number((s.diagnostic.fingerprint[key] ?? 0).toFixed(3));
