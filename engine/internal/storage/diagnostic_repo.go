@@ -15,14 +15,14 @@ import (
 // the classifier was unavailable (no API key, network error, timeout) it
 // stays nil rather than carrying a meaningless NONE row.
 type DiagnosticRecord struct {
-	ID                  string
-	RunID               string
-	Fingerprint         diagnostic.Fingerprint
-	Symptoms            diagnostic.Symptoms
-	Recovery            diagnostic.RecoveryProfile
-	FailureLabel        *diagnostic.FailureClassification
-	ClassifierModel     string
-	ClassifierLatencyMs int32
+	ID                  string                             `json:"id"`
+	RunID               string                             `json:"run_id"`
+	Fingerprint         diagnostic.Fingerprint             `json:"fingerprint"`
+	Symptoms            diagnostic.Symptoms                `json:"symptoms"`
+	Recovery            diagnostic.RecoveryProfile         `json:"recovery"`
+	FailureLabel        *diagnostic.FailureClassification  `json:"failure_label,omitempty"`
+	ClassifierModel     string                             `json:"classifier_model,omitempty"`
+	ClassifierLatencyMs int32                              `json:"classifier_latency_ms,omitempty"`
 }
 
 // SaveDiagnostic writes a Diagnostic row. Existing rows for the same run

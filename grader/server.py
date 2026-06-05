@@ -200,7 +200,16 @@ class GraderService(grader_pb2_grpc.GraderServiceServicer):
 
 def serve() -> None:
     settings = get_settings()
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=8))
+    # 64MB max message size — transcripts with large output files can exceed
+    # the default 4MB limit. Both send and receive limits are set to the same
+    # value for symmetry.
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=8),
+        options=[
+            ("grpc.max_receive_message_length", 64 * 1024 * 1024),
+            ("grpc.max_send_message_length", 64 * 1024 * 1024),
+        ],
+    )
     grader_pb2_grpc.add_GraderServiceServicer_to_server(GraderService(), server)
     server.add_insecure_port(f"[::]:{settings.port}")
     server.start()

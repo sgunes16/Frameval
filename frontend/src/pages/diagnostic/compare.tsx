@@ -345,7 +345,7 @@ export function DiagnosticComparePage() {
                 <Card>
                   <CardHeader
                     title="Behavioral fingerprint"
-                    description="9 of the 10 fingerprint dimensions overlaid; recovery latency is unbounded (turn count) so it appears in the recovery timeline below instead of on this normalized radar."
+                    description="9 normalized fingerprint dimensions compared across selected runs. Recovery latency appears in the timeline below."
                   />
                   <BehavioralRadar series={series} />
                 </Card>
@@ -365,13 +365,6 @@ export function DiagnosticComparePage() {
                 <RecoveryTimeline series={series} />
               </Card>
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
-                  <CardHeader
-                    title="Pass rate vs wall clock"
-                    description="Higher / faster is better. Eyeball the Pareto frontier."
-                  />
-                  <CostQualityScatter series={series} />
-                </Card>
                 <Card>
                   <CardHeader
                     title="Transcript evidence"

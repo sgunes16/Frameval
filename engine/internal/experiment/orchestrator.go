@@ -145,16 +145,20 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 	// judge sees the real test_pass_rate (its own grade_code would otherwise
 	// return 0/N — see grader_client.go:buildVerifiedTestResults).
 	verified := loadVerifiedTestResults(ctx, o.store, run.ID)
+	slog.Info("regrade.start", "run_id", run.ID, "task_id", task.ID, "has_artifact", artifact != nil)
 	grade, err := o.grader.GradeRun(ctx, *task, artifact, *run.Transcript, verified)
 	if err != nil {
+		slog.Error("regrade.grader_error", "run_id", run.ID, "err", err)
 		return err
 	}
+	slog.Info("regrade.grade_received", "run_id", run.ID, "source", grade.Source, "composite", grade.CompositeScore)
 	// Re-grade is supposed to replace the existing grade with a fresh
 	// real verdict. If the grader was unavailable and GradeRun returned
 	// a synthetic fallback, refuse to overwrite the existing grade and
 	// surface ErrGraderUnavailable so the HTTP handler can return 503
 	// instead of silently persisting placeholder data.
 	if grade.Source != models.GradeSourceGrader {
+		slog.Warn("regrade.fallback_detected", "run_id", run.ID, "source", grade.Source)
 		return ErrGraderUnavailable
 	}
 	// Wire in engine-side process + harness-adherence on the regrade path too.
@@ -182,23 +186,33 @@ func (o *Orchestrator) RegradeRun(ctx context.Context, runID string) error {
 	grade.CompositeScore = computeComposite(grade)
 	grade.ID = uuid.NewString()
 	grade.RunID = run.ID
-	return o.store.SaveGrade(ctx, grade)
+	if err := o.store.SaveGrade(ctx, grade); err != nil {
+		return err
+	}
+	o.persistDiagnostic(ctx, *experiment, *run, *task, *variant, *run.Transcript, grade, grade.TestPassCount, grade.TestFailCount)
+	return nil
 }
 
 func (o *Orchestrator) RegradeRunPayload(ctx context.Context, runID string, task models.Task, artifact *models.ArtifactVersion, transcript models.Transcript) (*models.Grade, error) {
-	// JudgeConfig is populated from SQLite settings by GradeRun itself;
-	// the grader falls back to its env defaults when the settings store
-	// has no judge configuration or judge.enabled is not "true".
 	verified := loadVerifiedTestResults(ctx, o.store, runID)
 	grade, err := o.grader.GradeRun(ctx, task, artifact, transcript, verified)
 	if err != nil {
 		return nil, err
 	}
-	// Engine-side process + harness-adherence + composite (mirror executeRun/RegradeRun).
 	harnessID := "bare"
+	var runRec *models.Run
+	var expRec *models.Experiment
+	var varRec *models.Variant
 	if run, rerr := o.store.GetRun(ctx, runID); rerr == nil {
-		if variant, verr := o.store.GetVariant(ctx, run.VariantID); verr == nil && variant.HarnessID != "" {
-			harnessID = variant.HarnessID
+		runRec = run
+		if exp, eerr := o.store.GetExperiment(ctx, run.ExperimentID); eerr == nil {
+			expRec = exp
+		}
+		if variant, verr := o.store.GetVariant(ctx, run.VariantID); verr == nil {
+			varRec = variant
+			if variant.HarnessID != "" {
+				harnessID = variant.HarnessID
+			}
 		}
 	}
 	pm := metrics.Process(transcript.ParsedTurns)
@@ -228,6 +242,9 @@ func (o *Orchestrator) RegradeRunPayload(ctx context.Context, runID string, task
 	grade.GradedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := o.store.SaveGrade(ctx, grade); err != nil {
 		return nil, err
+	}
+	if runRec != nil && expRec != nil && varRec != nil {
+		o.persistDiagnostic(ctx, *expRec, *runRec, task, *varRec, transcript, grade, grade.TestPassCount, grade.TestFailCount)
 	}
 	return &grade, nil
 }
@@ -657,6 +674,7 @@ func (o *Orchestrator) persistDiagnostic(
 	// FRAMEVAL_ENABLE_LLM_JUDGE env → false). Model is resolved via the same
 	// precedence as the judge: app_settings['judge.model'] → FRAMEVAL_LLM_MODEL
 	// → "claude-haiku-4-5".
+	slog.Info("persist_diagnostic.check_judge", "run_id", run.ID, "judge_enabled", judgeEnabled(ctx, o.store))
 	if judgeEnabled(ctx, o.store) {
 		tail := transcript.RawOutput
 		if len(tail) > 4000 {
@@ -664,13 +682,17 @@ func (o *Orchestrator) persistDiagnostic(
 		}
 		classifierModel := resolveClassifierModel(ctx, o.store)
 		classifierProvider, classifierAPIKey := resolveClassifierProviderKey(ctx, o.store)
+		slog.Info("persist_diagnostic.classifier_start", "run_id", run.ID, "model", classifierModel, "provider", classifierProvider)
 		clsResult := o.grader.ClassifyFailure(ctx, run.ID, symptoms, taskRec.Description, tail, classifierModel, classifierProvider, classifierAPIKey)
+		slog.Info("persist_diagnostic.classifier_done", "run_id", run.ID, "confidence", clsResult.Classification.Confidence, "primary", clsResult.Classification.Primary, "latency_ms", clsResult.LatencyMs)
 		if clsResult.Classification.Confidence > 0 {
 			label := clsResult.Classification
 			rec.FailureLabel = &label
 			rec.ClassifierModel = clsResult.ClassifierModel
 			rec.ClassifierLatencyMs = clsResult.LatencyMs
 		}
+	} else {
+		slog.Warn("persist_diagnostic.judge_disabled", "run_id", run.ID)
 	}
 
 	if err := o.store.SaveDiagnostic(ctx, rec); err != nil {

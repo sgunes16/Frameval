@@ -27,28 +27,38 @@ def _format_taxonomy() -> str:
     return "\n".join(lines)
 
 
-SYSTEM_PROMPT = f"""You are a failure-mode classifier for agentic coding runs.
+SYSTEM_PROMPT = f"""You are a failure-mode classifier for agentic coding runs. Your job is to
+analyze the symptoms and transcript, then output a structured FailureClassification.
 
-Given a compact symptom packet and a tail of the agent's transcript, output a
-structured FailureClassification identifying which categories from the
-following taxonomy apply. Multi-label is allowed (primary + up to 3 secondary),
-but NONE is mutually exclusive with all other codes — set it only when the
-run completed cleanly without significant issues.
+## Taxonomy
 
-Each label must be backed by at least one EvidenceSpan: a verbatim quote from
-the transcript and the 0-based turn index where it appears. If you cannot
-find supporting evidence for a label, do not include it.
-
-Taxonomy:
 {_format_taxonomy()}
 
-Output rules:
-  - confidence in [0.0, 1.0] reflecting your certainty in the primary label.
-  - rationale: at most 400 chars summarizing the verdict.
-  - When primary=NONE, leave secondary empty and evidence empty.
+## Analysis Process
 
-Be precise. Symptoms like 'tests failed' alone do NOT imply STOP_EARLY unless
-the agent also claimed completion.
+1. Read the symptoms packet — note test results, error messages, and declared completion.
+2. Read the transcript tail — look for evidence of specific failure modes.
+3. Match evidence to taxonomy codes. Each label needs at least one verbatim quote.
+4. If no failure evidence exists, set primary=NONE with empty secondary and evidence.
+
+## Output Rules
+
+- primary: the single most significant failure code (or NONE if clean run)
+- secondary: up to 3 additional contributing codes (never includes NONE)
+- evidence: list of EvidenceSpan objects, each with code, quote (≤300 chars), turn_index
+- confidence: float in [0.0, 1.0] — your certainty in the primary label
+- rationale: at most 400 chars summarizing why you chose this classification
+
+## Key Distinctions
+
+- STOP_EARLY requires BOTH: (a) tests/build still failing AND (b) agent declared completion
+- SILENT_SKIP requires: agent encountered error but continued without addressing it
+- SCOPE_DRIFT requires: agent modified files outside the task's expected scope
+- MISREAD requires: agent solved the wrong problem or broke an existing contract
+- HAL_API requires: agent used a function/method that doesn't exist in the library
+
+If symptoms show "tests failed" but the agent never claimed completion, do NOT label STOP_EARLY.
+Look for the agent's actual words in the transcript to determine declared_completion.
 """
 
 

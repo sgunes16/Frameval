@@ -1,13 +1,3 @@
-import {
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-  Legend,
-  Tooltip,
-} from 'recharts';
 import type { Diagnostic } from '../../lib/types';
 
 const DIMENSIONS: Array<{ key: keyof Diagnostic['fingerprint']; label: string }> = [
@@ -22,11 +12,7 @@ const DIMENSIONS: Array<{ key: keyof Diagnostic['fingerprint']; label: string }>
   { key: 'idle_thinking_ratio', label: 'Idle thinking' },
 ];
 
-// recovery_latency is on a turn-count scale, not [0,1]. Display it elsewhere
-// (in RecoveryTimeline) — the radar is for the 9 normalized dimensions so
-// every series uses the same axis.
-
-const SERIES_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#ca8a04', '#7c3aed'];
+const SERIES_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#ca8a04', '#7c3aed', '#0891b2', '#be185d'];
 
 export type BehavioralRadarSeries = {
   label: string;
@@ -38,51 +24,65 @@ type Props = {
 };
 
 /**
- * Overlaid radar showing the 9 normalized fingerprint dimensions for up to
- * 5 runs side-by-side. Recovery latency is excluded from this view because
- * its scale is unbounded (turn count) and would distort the [0,1] axis.
+ * Compact grid of mini bar-charts. Each cell = one dimension, each colored
+ * segment = one variant. Fits in ~200px height regardless of series count.
  */
 export function BehavioralRadar({ series }: Props) {
   if (series.length === 0) {
     return <EmptyState />;
   }
-  const data = DIMENSIONS.map(({ key, label }) => {
-    const row: Record<string, string | number> = { dimension: label };
-    series.forEach((s) => {
-      row[s.label] = Number((s.diagnostic.fingerprint[key] ?? 0).toFixed(3));
-    });
-    return row;
-  });
 
   return (
-    <div className="h-80 w-full">
-      <ResponsiveContainer>
-        <RadarChart data={data} outerRadius="75%">
-          <PolarGrid stroke="#e2e8f0" />
-          <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 11, fill: '#475569' }} />
-          <PolarRadiusAxis angle={90} domain={[0, 1]} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-          {series.map((s, i) => (
-            <Radar
-              key={s.label}
-              name={s.label}
-              dataKey={s.label}
-              stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-              fill={SERIES_COLORS[i % SERIES_COLORS.length]}
-              fillOpacity={0.15}
+    <div className="space-y-3">
+      {/* Legend — single row */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+        {series.map((s, i) => (
+          <div key={s.label} className="flex items-center gap-1.5">
+            <div
+              className="h-2 w-2 rounded-sm shrink-0"
+              style={{ backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length] }}
             />
-          ))}
-          <Tooltip />
-          <Legend />
-        </RadarChart>
-      </ResponsiveContainer>
+            <span className="truncate max-w-36 text-fg-muted" title={s.label}>
+              {s.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* 3-column grid of dimension rows */}
+      <div className="grid grid-cols-3 gap-x-6 gap-y-2">
+        {DIMENSIONS.map(({ key, label }) => (
+          <div key={key} className="space-y-1">
+            <div className="text-[11px] font-medium text-fg">{label}</div>
+            <div className="flex items-center gap-1 h-5">
+              {series.map((s, i) => {
+                const value = Number((s.diagnostic.fingerprint[key] ?? 0).toFixed(3));
+                const pct = Math.round(value * 100);
+                return (
+                  <div
+                    key={s.label}
+                    className="h-3 rounded-sm transition-all duration-300"
+                    style={{
+                      width: `${Math.max(pct, 2)}%`,
+                      backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length],
+                      opacity: 0.85,
+                    }}
+                    title={`${s.label}: ${pct}%`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 function EmptyState() {
   return (
-    <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-border bg-bg-elev-2/50 text-sm text-fg-muted">
-      Select 2+ runs to overlay their behavioral fingerprints.
+    <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border bg-bg-elev-2/50 text-xs text-fg-muted">
+      Select 2+ runs to compare their behavioral fingerprints.
     </div>
   );
 }
